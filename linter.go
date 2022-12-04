@@ -235,7 +235,7 @@ func (l *Linter) checkLoops() {
 		}
 
 		func() {
-			if i >= len(l.l)-1 {
+			if i == 0 {
 				return
 			}
 
@@ -250,7 +250,6 @@ func (l *Linter) checkLoops() {
 						}
 
 						n := l.l[j]
-						j -= 1
 
 						switch n := n.(type) {
 						case *compiledLabelExpr:
@@ -261,6 +260,7 @@ func (l *Linter) checkLoops() {
 								return
 							}
 						}
+						j -= 1
 					}
 				}()
 			default:

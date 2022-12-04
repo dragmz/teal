@@ -6,11 +6,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/textproto"
 	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/dragmz/teal"
@@ -18,7 +16,6 @@ import (
 )
 
 type args struct {
-	Path string
 }
 
 type jsonRpcHeader struct {
@@ -54,8 +51,7 @@ type lspInitializeResult struct {
 }
 
 type lsp struct {
-	docs  map[string]string
-	debug *bufio.Writer
+	docs map[string]string
 }
 
 type lspDidOpenTextDocument struct {
@@ -142,9 +138,6 @@ type lspNotification struct {
 }
 
 func (l *lsp) handle(h jsonRpcHeader, b []byte) (interface{}, error) {
-	l.debug.WriteString(fmt.Sprintf("%#v %s\n", h, b))
-	l.debug.Flush()
-
 	doDiagnostic := func(uri string) (interface{}, error) {
 		text := l.docs[uri]
 		p, err := teal.Parse(text)
@@ -273,100 +266,56 @@ func (l *lsp) run(rd io.Reader, wr io.Writer) error {
 			return err
 		}
 
-		l.debug.WriteString(fmt.Sprintf("Req: %s\n", string(data)))
-		l.debug.Flush()
-
 		var jh jsonRpcHeader
 		err = json.Unmarshal(data, &jh)
 		if err != nil {
 			return err
 		}
 
-		go func() {
-			err := func() error {
-				resp, err := l.handle(jh, data)
+		go func() error {
+			resp, err := l.handle(jh, data)
+			if err != nil {
+				return err
+			}
+
+			if resp != nil {
+				rb, err := json.Marshal(resp)
 				if err != nil {
 					return err
 				}
 
-				if resp != nil {
-					rb, err := json.Marshal(resp)
-					if err != nil {
-						return err
-					}
+				h := http.Header{}
+				h.Set("Content-Length", strconv.Itoa(len(rb)))
 
-					h := http.Header{}
-					h.Set("Content-Length", strconv.Itoa(len(rb)))
-
-					err = h.Write(wr)
-					if err != nil {
-						return err
-					}
-
-					_, err = wr.Write([]byte("\r\n"))
-					if err != nil {
-						return err
-					}
-
-					_, err = wr.Write(rb)
-					if err != nil {
-						return err
-					}
+				err = h.Write(wr)
+				if err != nil {
+					return err
 				}
 
-				return nil
-			}()
+				_, err = wr.Write([]byte("\r\n"))
+				if err != nil {
+					return err
+				}
 
-			if err != nil {
-				l.debug.WriteString(err.Error())
-				l.debug.Flush()
+				_, err = wr.Write(rb)
+				if err != nil {
+					return err
+				}
 			}
+
+			return nil
 		}()
 	}
 }
 
 func run(a args) error {
-	fi, err := os.Stat(a.Path)
+	l := &lsp{
+		docs: map[string]string{},
+	}
+
+	err := l.run(os.Stdin, os.Stdout)
 	if err != nil {
-		return errors.Wrap(err, "failed to get TEAL file info")
-	}
-
-	var paths []string
-
-	if fi.IsDir() {
-		infos, err := ioutil.ReadDir(a.Path)
-		if err != nil {
-			return errors.Wrap(err, "failed to read source directory")
-		}
-
-		for _, info := range infos {
-			if info.IsDir() {
-				continue
-			}
-
-			paths = append(paths, filepath.Join(a.Path, info.Name()))
-		}
-	} else {
-		paths = append(paths, a.Path)
-	}
-
-	for _, path := range paths {
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return errors.Wrap(err, "failed to read TEAL file")
-		}
-
-		p, err := teal.Parse(string(b))
-		if err != nil {
-			return errors.Wrap(err, "failed to parse TEAL program")
-		}
-
-		l := teal.Compile(p)
-
-		errs := l.Lint()
-		for _, err := range errs {
-			fmt.Printf("%s:%d: %s\n", path, err.Line(), err)
-		}
+		return err
 	}
 
 	return nil
@@ -374,14 +323,7 @@ func run(a args) error {
 
 func main() {
 	var a args
-
-	flag.StringVar(&a.Path, "path", "", "source TEAL file path")
 	flag.Parse()
-
-	if a.Path == "" {
-		flag.Usage()
-		return
-	}
 
 	err := run(a)
 	if err != nil {
