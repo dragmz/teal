@@ -14,7 +14,7 @@ require (
 	github.com/algorand/go-codec/codec v1.1.9 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	golang.org/x/crypto v0.3.0 // indirect
-	golang.org/x/exp v0.0.0-20221126150942-6ab00d035af9 // indirect
+	golang.org/x/exp v0.0.0-20221204150635-6dcec336b2bb // indirect
 	golang.org/x/mod v0.7.0 // indirect
-	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
 )
