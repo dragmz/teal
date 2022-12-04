@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -12,41 +13,17 @@ import (
 )
 
 type args struct {
-	Path string
+	Path  string
+	Stdin bool
 }
 
 func run(a args) error {
-	fi, err := os.Stat(a.Path)
-	if err != nil {
-		return errors.Wrap(err, "failed to get TEAL file info")
-	}
-
-	var paths []string
-
-	if fi.IsDir() {
-		infos, err := ioutil.ReadDir(a.Path)
+	if a.Stdin {
+		bs, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return errors.Wrap(err, "failed to read source directory")
+			return errors.Wrap(err, "failed to read from stdin")
 		}
-
-		for _, info := range infos {
-			if info.IsDir() {
-				continue
-			}
-
-			paths = append(paths, filepath.Join(a.Path, info.Name()))
-		}
-	} else {
-		paths = append(paths, a.Path)
-	}
-
-	for _, path := range paths {
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return errors.Wrap(err, "failed to read TEAL file")
-		}
-
-		p, err := teal.Parse(string(b))
+		p, err := teal.Parse(string(bs))
 		if err != nil {
 			return errors.Wrap(err, "failed to parse TEAL program")
 		}
@@ -55,7 +32,50 @@ func run(a args) error {
 
 		errs := l.Lint()
 		for _, err := range errs {
-			fmt.Printf("%s:%d: %s\n", path, err.Line(), err)
+			fmt.Printf("%d: %s\n", err.Line(), err)
+		}
+	} else {
+		fi, err := os.Stat(a.Path)
+		if err != nil {
+			return errors.Wrap(err, "failed to get TEAL file info")
+		}
+
+		var paths []string
+
+		if fi.IsDir() {
+			infos, err := ioutil.ReadDir(a.Path)
+			if err != nil {
+				return errors.Wrap(err, "failed to read source directory")
+			}
+
+			for _, info := range infos {
+				if info.IsDir() {
+					continue
+				}
+
+				paths = append(paths, filepath.Join(a.Path, info.Name()))
+			}
+		} else {
+			paths = append(paths, a.Path)
+		}
+
+		for _, path := range paths {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return errors.Wrap(err, "failed to read TEAL file")
+			}
+
+			p, err := teal.Parse(string(b))
+			if err != nil {
+				return errors.Wrap(err, "failed to parse TEAL program")
+			}
+
+			l := teal.Compile(p)
+
+			errs := l.Lint()
+			for _, err := range errs {
+				fmt.Printf("%s:%d: %s\n", path, err.Line(), err)
+			}
 		}
 	}
 
@@ -66,9 +86,15 @@ func main() {
 	var a args
 
 	flag.StringVar(&a.Path, "path", "", "source TEAL file path")
+	flag.BoolVar(&a.Stdin, "stdin", false, "read from stdin; cannot be used with path")
 	flag.Parse()
 
-	if a.Path == "" {
+	if a.Path == "" && !a.Stdin {
+		flag.Usage()
+		return
+	}
+
+	if a.Path != "" && a.Stdin {
 		flag.Usage()
 		return
 	}
