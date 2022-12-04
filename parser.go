@@ -432,10 +432,6 @@ func readBytes(s *bufio.Scanner) ([]byte, error) {
 	return val, nil
 }
 
-func readHex(s *bufio.Scanner) ([]byte, error) {
-	return hex.DecodeString(s.Text()[2:])
-}
-
 func readEcdsaCurveIndex(s string) (EcdsaCurve, error) {
 	var curve EcdsaCurve
 
