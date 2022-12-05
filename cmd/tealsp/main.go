@@ -36,11 +36,6 @@ type lspDiagnosticProvider struct {
 	WorkspaceDiagnostics  bool `json:"workspaceDiagnostics"`
 }
 
-type lspTextDocumentSync struct {
-	OpenClose bool `json:"openClose"`
-	Change    int  `json:"change"`
-}
-
 type lspServerCapabilities struct {
 	TextDocumentSync   int                    `json:"textDocumentSync,omitempty"`
 	DiagnosticProvider *lspDiagnosticProvider `json:"diagnosticProvider,omitempty"`
