@@ -22,8 +22,8 @@ func TestParser(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err = Parse(string(bs))
-		if err != nil {
+		_, errs := Parse(string(bs))
+		for _, err := range errs {
 			t.Errorf("failed to parse - file: %s, error: %s", f.Name(), err)
 		}
 	}

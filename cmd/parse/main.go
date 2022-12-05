@@ -19,10 +19,12 @@ func main() {
 		panic(err)
 	}
 
-	p, err := teal.Parse(string(s))
-	if err != nil {
-		panic(err)
+	p, errs := teal.Parse(string(s))
+	for _, err := range errs {
+		fmt.Printf("%d: %s\n", err.Line(), err)
 	}
 
-	fmt.Println(p)
+	if len(errs) == 0 {
+		fmt.Println(p)
+	}
 }

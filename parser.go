@@ -10,6 +10,19 @@ import (
 	"github.com/pkg/errors"
 )
 
+type ParserError struct {
+	error
+	l int
+}
+
+func (e ParserError) Line() int {
+	return e.l
+}
+
+func (e ParserError) Error() string {
+	return e.error.Error()
+}
+
 func readInt8(s string) (int8, error) {
 	v, err := strconv.ParseInt(s, 10, 8)
 	if err != nil {
@@ -415,7 +428,6 @@ func readInt(s *bufio.Scanner) (uint64, error) {
 	}
 
 	return val, nil
-
 }
 
 func readBytes(s *bufio.Scanner) ([]byte, error) {
@@ -451,7 +463,7 @@ func readEcdsaCurveIndex(s string) (EcdsaCurve, error) {
 	return curve, nil
 }
 
-func Parse(source string) (Program, error) {
+func Parse(source string) (Program, []ParserError) {
 	var res Program
 
 	line := 0
@@ -459,10 +471,11 @@ func Parse(source string) (Program, error) {
 	r := bufio.NewScanner(strings.NewReader(source))
 	r.Split(bufio.ScanLines)
 
-	err := func() error {
-		for r.Scan() {
-			line++
+	var errs []ParserError
 
+	for r.Scan() {
+		line++
+		err := func() error {
 			var e Expr
 
 			s := bufio.NewScanner(strings.NewReader(r.Text()))
@@ -1309,14 +1322,14 @@ func Parse(source string) (Program, error) {
 				}
 			}
 			res = append(res, e)
+
+			return nil
+		}()
+
+		if err != nil {
+			errs = append(errs, ParserError{error: err, l: line})
 		}
-
-		return nil
-	}()
-
-	if err != nil {
-		return Program{}, errors.Wrapf(err, "error parsing line: %d", line)
 	}
 
-	return res, nil
+	return res, errs
 }

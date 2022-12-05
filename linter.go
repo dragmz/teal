@@ -5,21 +5,21 @@ import (
 	"sort"
 )
 
-type LinterError interface {
+type LineError interface {
 	Line() int
 }
 
-type LinterErrors []LinterError
+type LineErrors []LineError
 
-func (e LinterErrors) Len() int {
+func (e LineErrors) Len() int {
 	return len(e)
 }
 
-func (e LinterErrors) Less(i, j int) bool {
+func (e LineErrors) Less(i, j int) bool {
 	return e[i].Line() < e[j].Line()
 }
 
-func (e LinterErrors) Swap(i, j int) {
+func (e LineErrors) Swap(i, j int) {
 	tmp := e[i]
 	e[i] = e[j]
 	e[j] = tmp
@@ -27,7 +27,7 @@ func (e LinterErrors) Swap(i, j int) {
 
 type Linter struct {
 	l   Listing
-	res LinterErrors
+	res LineErrors
 }
 
 type UnusedLabelError struct {
