@@ -1,35 +1,17 @@
 package teal
 
 import (
-	"unicode"
 	"unicode/utf8"
 )
-
-type Lexer struct {
-	p int // previous index
-	i int // current index
-
-	l  int // current line index
-	li int // current index in the current line
-	lb int // current line begin index in source
-
-	ts   []Token      // tokens
-	errs []LexerError // errors
-
-	Source []byte
-}
 
 type TokenType string
 
 const (
-	TokenEol     = "EOL"   // end of line
-	TokenHash    = "#"     // #name
-	TokenId      = "Id"    // name
-	TokenInt     = "Int"   // int
-	TokenBytes   = "Bytes" // bytes
-	TokenComment = "Comment"
-	TokenString  = "String"
-	TokenLabel   = "Label"
+	TokenEol = "EOL"
+
+	TokenValue = "Value" // value
+
+	TokenComment = "Comment" // value
 )
 
 type Token struct {
@@ -60,6 +42,31 @@ func (t Token) End() int {
 
 func (t Token) Type() TokenType {
 	return t.t
+}
+
+type Lexer struct {
+	p int // previous index
+	i int // current index
+
+	l  int // current line index
+	lb int // current line begin index in source
+	li int // current index in the current line
+
+	ts  []Token // tokens
+	tsi int     // tokens index
+
+	diag []lexerError // errors
+
+	Source []byte
+}
+
+func (z *Lexer) fail(msg string) {
+	z.diag = append(z.diag, lexerError{
+		l:  z.l,
+		li: z.li,
+
+		msg: msg,
+	})
 }
 
 func (z *Lexer) inc(n int) {
@@ -100,98 +107,44 @@ func isTerminating(c rune) bool {
 	return true
 }
 
-type LexerError struct {
-	p   int
+type lexerError struct {
+	l  int
+	li int
+
 	msg string
 }
 
-func (e LexerError) Error() string {
+func (e lexerError) Line() int {
+	return e.l
+}
+
+func (e lexerError) Begin() int {
+	return e.li
+}
+
+func (e lexerError) End() int {
+	return e.li
+}
+
+func (e lexerError) String() string {
 	return e.msg
 }
 
-const (
-	numberInt = iota
-	numberHex
-	numberBin
-	numberOct
-)
+func (e lexerError) Severity() DiagnosticSeverity {
+	return DiagErr
+}
 
-func (z *Lexer) readInt() {
-	mode := numberInt
-
+func (z *Lexer) readValue() {
 	for {
 		if z.i == len(z.Source) {
-			z.emit(TokenInt)
+			z.emit(TokenValue)
 			return
 		}
 
 		c, n := utf8.DecodeRune(z.Source[z.i:])
 		if isTerminating(c) {
-			z.emit(TokenInt)
+			z.emit(TokenValue)
 			return
-		}
-
-		switch mode {
-		case numberInt:
-			if !unicode.IsDigit(c) {
-				if z.i-z.p == 1 {
-					switch c {
-					case 'x':
-						mode = numberHex
-					case 'b':
-						mode = numberBin
-					default:
-						z.errs = append(z.errs, LexerError{p: z.i, msg: "unexpected non-digit"})
-						return
-					}
-				} else {
-					z.errs = append(z.errs, LexerError{p: z.i, msg: "unexpected non-digit"})
-					return
-				}
-			}
-		case numberBin:
-			if c != '0' && c != '1' {
-				z.errs = append(z.errs, LexerError{p: z.i, msg: "unexpected non-binary"})
-				return
-			}
-		case numberOct:
-			if c < '0' || c > '8' {
-				z.errs = append(z.errs, LexerError{p: z.i, msg: "unexpected non-octal"})
-				return
-			}
-		case numberHex:
-			if !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F') {
-				z.errs = append(z.errs, LexerError{p: z.i, msg: "unexpected non-hex"})
-				return
-			}
-		}
-
-		z.inc(n)
-	}
-}
-
-func (z *Lexer) readIdOrLabel() {
-	for {
-		if z.i == len(z.Source) {
-			z.emit(TokenId)
-			return
-		}
-
-		c, n := utf8.DecodeRune(z.Source[z.i:])
-		if z.i-z.p < 1 {
-			if unicode.IsDigit(c) {
-				z.errs = append(z.errs, LexerError{p: z.i, msg: "unexpected non-letter"})
-			}
-		} else {
-			if c != '_' && !unicode.IsLetter(c) && !unicode.IsDigit(c) {
-				if c == ':' {
-					z.emit(TokenLabel)
-					z.inc(n)
-				} else {
-					z.emit(TokenId)
-				}
-				return
-			}
 		}
 
 		z.inc(n)
@@ -219,7 +172,7 @@ func (z *Lexer) readComment() {
 		l := z.i - z.p
 		if z.i == len(z.Source) {
 			if l < 2 {
-				z.errs = append(z.errs, LexerError{p: z.p, msg: "incomplete comment"})
+				z.fail("incomplete comment")
 				return
 			}
 			z.p += 2
@@ -230,7 +183,7 @@ func (z *Lexer) readComment() {
 		c, n := utf8.DecodeRune(z.Source[z.i:])
 		if l < 2 {
 			if c != '/' {
-				z.errs = append(z.errs, LexerError{p: z.p, msg: "incomplete comment"})
+				z.fail("incomplete comment")
 				return
 			}
 		} else {
@@ -275,38 +228,6 @@ func (z *Lexer) readEol() {
 	}
 }
 
-func (z *Lexer) readHash() {
-	for {
-		l := z.i - z.p
-		if z.i == len(z.Source) {
-			if l < 2 {
-				z.errs = append(z.errs, LexerError{p: z.p, msg: "missing hash name"})
-				return
-			}
-			z.p += 1
-			z.emit(TokenHash)
-			return
-		}
-
-		c, n := utf8.DecodeRune(z.Source[z.i:])
-
-		if l == 0 {
-			if c != '#' {
-				z.errs = append(z.errs, LexerError{p: z.p, msg: "unexpected non-#"})
-				return
-			}
-		} else {
-			if isTerminating(c) {
-				z.p += 1
-				z.emit(TokenHash)
-				return
-			}
-		}
-
-		z.inc(n)
-	}
-}
-
 func (z *Lexer) readTokens() {
 	z.skipWhitespace()
 
@@ -318,23 +239,12 @@ func (z *Lexer) readTokens() {
 			nc, _ = utf8.DecodeRune(z.Source[z.i+n:])
 		}
 
-		if z.li == 0 {
-			if c == '#' {
-				z.readHash()
-				return
-			}
-		}
-
 		if c == '/' && nc == '/' {
 			z.readComment()
 		} else if c == '\n' || c == '\r' {
 			z.readEol()
-		} else if unicode.IsDigit(c) {
-			z.readInt()
-		} else if !unicode.IsDigit(c) {
-			z.readIdOrLabel()
 		} else {
-			z.errs = append(z.errs, LexerError{p: z.i, msg: "cannot tokenize"})
+			z.readValue()
 		}
 	}
 }
@@ -347,26 +257,36 @@ func (z *Lexer) read() {
 	z.readTokens()
 }
 
-func (z *Lexer) Next() bool {
-	if len(z.ts) > 0 {
-		z.ts = z.ts[1:]
+func (z *Lexer) Return() bool {
+	if z.tsi == 0 {
+		return false
 	}
 
-	if len(z.ts) == 0 {
+	z.tsi--
+
+	return true
+}
+
+func (z *Lexer) Scan() bool {
+	if len(z.ts) > z.tsi {
+		z.tsi++
+	}
+
+	if len(z.ts) == z.tsi {
 		z.read()
 	}
 
-	return len(z.ts) > 0
+	return len(z.ts) > z.tsi
 }
 
 func (z *Lexer) Curr() Token {
-	if len(z.ts) == 0 {
+	if len(z.ts) == z.tsi {
 		return Token{}
 	}
 
-	return z.ts[0]
+	return z.ts[z.tsi]
 }
 
-func (z *Lexer) Errors() []LexerError {
-	return z.errs
+func (z *Lexer) Errors() []lexerError {
+	return z.diag
 }

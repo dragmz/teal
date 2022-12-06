@@ -6,14 +6,17 @@ import (
 )
 
 type compiler struct {
-	labels map[string]*compiledLabelExpr
+}
+
+type complexExpr interface {
+	Compile(c *compiler) []Op
 }
 
 type Program []Expr
 type Listing []Op
 
 type usesLabels interface {
-	Labels() []*compiledLabelExpr
+	Labels() []*LabelExpr
 }
 
 type Terminator interface {
@@ -24,28 +27,11 @@ type Op interface {
 	fmt.Stringer
 }
 
-type complexExpr interface {
-	Compile(c *compiler) []Op
-}
-
 type Expr interface {
 }
 
-func (c *compiler) getLabel(name string) *compiledLabelExpr {
-	l, ok := c.labels[name]
-
-	if !ok {
-		l = &compiledLabelExpr{Name: name}
-		c.labels[name] = l
-	}
-
-	return l
-}
-
 func Compile(exprs []Expr) Listing {
-	c := &compiler{
-		labels: make(map[string]*compiledLabelExpr),
-	}
+	c := &compiler{}
 
 	l := Program{exprs}.Compile(c)
 
@@ -59,7 +45,7 @@ func removeOpsAfterUnconditionalBranch(l Listing) Listing {
 		o := l[i]
 		skip := false
 		switch o.(type) {
-		case *compiledBExpr:
+		case *BExpr:
 			skip = true
 		case *ReturnExpr:
 			skip = true
@@ -76,7 +62,7 @@ func removeOpsAfterUnconditionalBranch(l Listing) Listing {
 				switch o2.(type) {
 				case Nop:
 					res = append(res, o2)
-				case *compiledLabelExpr:
+				case *LabelExpr:
 					res = append(res, o2)
 					break loop
 				}
@@ -97,7 +83,7 @@ func removeBJustBeforeItsTargetLabel(l Listing) Listing {
 			}
 
 			switch o := o.(type) {
-			case *compiledBExpr:
+			case *BExpr:
 				j := i + 1
 
 				func() {
@@ -112,7 +98,7 @@ func removeBJustBeforeItsTargetLabel(l Listing) Listing {
 
 						switch n := n.(type) {
 						case Nop:
-						case *compiledLabelExpr:
+						case *LabelExpr:
 							if n.Name == o.Label.Name {
 								return
 							}
@@ -151,7 +137,7 @@ func removeUnused(l Listing) Listing {
 
 	for i, o := range l {
 		switch o := o.(type) {
-		case *compiledLabelExpr:
+		case *LabelExpr:
 			keep := used[o.Name]
 			if !keep {
 			loop:
@@ -201,10 +187,10 @@ func mergeLabels(l Listing) Listing {
 	for _, o := range l {
 		func() {
 			switch o := o.(type) {
-			case *compiledLabelExpr:
+			case *LabelExpr:
 				if prev != nil {
 					switch p := prev.(type) {
-					case *compiledLabelExpr:
+					case *LabelExpr:
 						o.Name = p.Name
 						return
 					}

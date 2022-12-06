@@ -905,20 +905,12 @@ func (e *ProtoExpr) String() string {
 	return fmt.Sprintf("proto %d %d", e.Args, e.Results)
 }
 
-type compiledLabelExpr struct {
-	Name string
-}
-
-func (e *compiledLabelExpr) String() string {
-	return fmt.Sprintf("%s:", e.Name)
-}
-
 type LabelExpr struct {
 	Name string
 }
 
-func (e *LabelExpr) Compile(c *compiler) []Op {
-	return []Op{c.getLabel(e.Name)}
+func (e *LabelExpr) String() string {
+	return fmt.Sprintf("%s:", e.Name)
 }
 
 func (e *LabelExpr) GetLabel() *LabelExpr {
@@ -928,20 +920,6 @@ func (e *LabelExpr) GetLabel() *LabelExpr {
 type NestedExpr struct {
 	Label *LabelExpr
 	Body  []Expr
-}
-
-func (e *NestedExpr) Compile(c *compiler) []Op {
-	var ops []Op
-
-	if e.Label != nil {
-		ops = c.compile(ops, c.getLabel(e.Label.Name))
-	}
-
-	if e.Body != nil {
-		ops = c.compile(ops, e.Body)
-	}
-
-	return ops
 }
 
 type FuncExpr struct {
@@ -957,26 +935,6 @@ func (e *FuncExpr) Call(args ...Expr) Expr {
 	exprs = append(exprs, &CallSubExpr{Label: e.Label})
 
 	return &NestedExpr{Body: exprs}
-}
-
-func (e *FuncExpr) Compile(c *compiler) []Op {
-	var ops []Op
-
-	if e.Label != nil {
-		ops = c.compile(ops, c.getLabel(e.Label.Name))
-	}
-
-	if e.Proto != nil {
-		ops = c.compile(ops, e.Proto)
-	}
-
-	if e.Block != nil {
-		ops = c.compile(ops, e.Block)
-	}
-
-	ops = append(ops, RetSub)
-
-	return ops
 }
 
 func (e *FuncExpr) GetLabel() *LabelExpr {
@@ -1129,21 +1087,13 @@ type BnzExpr struct {
 	Label *LabelExpr
 }
 
-type compiledBnzExpr struct {
-	Label *compiledLabelExpr
+func (e *BnzExpr) IsBranch() {}
+
+func (e *BnzExpr) Labels() []*LabelExpr {
+	return []*LabelExpr{e.Label}
 }
 
-func (e *compiledBnzExpr) IsBranch() {}
-
-func (e *BnzExpr) Compile(c *compiler) []Op {
-	return []Op{&compiledBnzExpr{Label: c.getLabel(e.Label.Name)}}
-}
-
-func (e *compiledBnzExpr) Labels() []*compiledLabelExpr {
-	return []*compiledLabelExpr{e.Label}
-}
-
-func (e *compiledBnzExpr) String() string {
+func (e *BnzExpr) String() string {
 	return fmt.Sprintf("bnz %s", e.Label.Name)
 }
 
@@ -1151,21 +1101,13 @@ type BzExpr struct {
 	Label *LabelExpr
 }
 
-type compiledBzExpr struct {
-	Label *compiledLabelExpr
+func (e *BzExpr) IsBranch() {}
+
+func (e *BzExpr) Labels() []*LabelExpr {
+	return []*LabelExpr{e.Label}
 }
 
-func (e *compiledBzExpr) IsBranch() {}
-
-func (e *compiledBzExpr) Labels() []*compiledLabelExpr {
-	return []*compiledLabelExpr{e.Label}
-}
-
-func (e *BzExpr) Compile(c *compiler) []Op {
-	return []Op{&compiledBzExpr{Label: c.getLabel(e.Label.Name)}}
-}
-
-func (e *compiledBzExpr) String() string {
+func (e *BzExpr) String() string {
 	return fmt.Sprintf("bz %s", e.Label.Name)
 }
 
@@ -1173,21 +1115,13 @@ type BExpr struct {
 	Label *LabelExpr
 }
 
-type compiledBExpr struct {
-	Label *compiledLabelExpr
+func (e *BExpr) IsBranch() {}
+
+func (e *BExpr) Labels() []*LabelExpr {
+	return []*LabelExpr{e.Label}
 }
 
-func (e *compiledBExpr) IsBranch() {}
-
-func (e *compiledBExpr) Labels() []*compiledLabelExpr {
-	return []*compiledLabelExpr{e.Label}
-}
-
-func (e *BExpr) Compile(c *compiler) []Op {
-	return []Op{&compiledBExpr{Label: c.getLabel(e.Label.Name)}}
-}
-
-func (e *compiledBExpr) String() string {
+func (e *BExpr) String() string {
 	return fmt.Sprintf("b %s", e.Label.Name)
 }
 
@@ -1286,39 +1220,25 @@ func (e *ReturnExpr) String() string {
 func (e *ReturnExpr) IsTerminator() {}
 
 type SwitchExpr struct {
-	Labels []*LabelExpr
+	Targets []*LabelExpr
 }
 
-type compiledSwitchExpr struct {
-	labels []*compiledLabelExpr
+func (e *SwitchExpr) IsBranch() {}
+
+func (e *SwitchExpr) Labels() []*LabelExpr {
+	return e.Targets
 }
 
-func (e *compiledSwitchExpr) IsBranch() {}
-
-func (e *compiledSwitchExpr) Labels() []*compiledLabelExpr {
-	return e.labels
-}
-
-func (e *SwitchExpr) Compile(c *compiler) []Op {
-	labels := make([]*compiledLabelExpr, len(e.Labels))
-
-	for i, l := range e.Labels {
-		labels[i] = c.getLabel(l.Name)
-	}
-
-	return []Op{&compiledSwitchExpr{labels: labels}}
-}
-
-func (e *compiledSwitchExpr) String() string {
+func (e *SwitchExpr) String() string {
 	var b strings.Builder
 
 	b.WriteString("switch")
 
-	if len(e.labels) > 0 {
+	if len(e.Targets) > 0 {
 		b.WriteString(" ")
 
-		names := make([]string, len(e.labels))
-		for i, l := range e.labels {
+		names := make([]string, len(e.Targets))
+		for i, l := range e.Targets {
 			names[i] = l.Name
 		}
 
@@ -1331,39 +1251,25 @@ func (e *compiledSwitchExpr) String() string {
 }
 
 type MatchExpr struct {
-	Labels []*LabelExpr
+	Targets []*LabelExpr
 }
 
-type compiledMatchExpr struct {
-	labels []*compiledLabelExpr
+func (e *MatchExpr) IsBranch() {}
+
+func (e *MatchExpr) Labels() []*LabelExpr {
+	return e.Targets
 }
 
-func (e *compiledMatchExpr) IsBranch() {}
-
-func (e *compiledMatchExpr) Labels() []*compiledLabelExpr {
-	return e.labels
-}
-
-func (e *MatchExpr) Compile(c *compiler) []Op {
-	labels := make([]*compiledLabelExpr, len(e.Labels))
-
-	for i, l := range e.Labels {
-		labels[i] = c.getLabel(l.Name)
-	}
-
-	return []Op{&compiledMatchExpr{labels}}
-}
-
-func (e *compiledMatchExpr) String() string {
+func (e *MatchExpr) String() string {
 	var b strings.Builder
 
 	b.WriteString("match")
 
-	if len(e.labels) > 0 {
+	if len(e.Targets) > 0 {
 		b.WriteString(" ")
 
-		names := make([]string, len(e.labels))
-		for i, l := range e.labels {
+		names := make([]string, len(e.Targets))
+		for i, l := range e.Targets {
 			names[i] = l.Name
 		}
 
@@ -1379,21 +1285,13 @@ type CallSubExpr struct {
 	Label *LabelExpr
 }
 
-type compiledCallSubExpr struct {
-	Label *compiledLabelExpr
+func (e *CallSubExpr) IsBranch() {}
+
+func (e *CallSubExpr) Labels() []*LabelExpr {
+	return []*LabelExpr{e.Label}
 }
 
-func (e *compiledCallSubExpr) IsBranch() {}
-
-func (e *compiledCallSubExpr) Labels() []*compiledLabelExpr {
-	return []*compiledLabelExpr{e.Label}
-}
-
-func (e *CallSubExpr) Compile(c *compiler) []Op {
-	return []Op{&compiledCallSubExpr{Label: c.getLabel(e.Label.Name)}}
-}
-
-func (e *compiledCallSubExpr) String() string {
+func (e *CallSubExpr) String() string {
 	return fmt.Sprintf("callsub %s", e.Label.Name)
 }
 
@@ -2133,11 +2031,11 @@ func Label(name string) *LabelExpr {
 }
 
 func Match(labels ...*LabelExpr) *MatchExpr {
-	return &MatchExpr{Labels: labels}
+	return &MatchExpr{Targets: labels}
 }
 
 func Switch(labels ...*LabelExpr) *SwitchExpr {
-	return &SwitchExpr{Labels: labels}
+	return &SwitchExpr{Targets: labels}
 }
 
 func Txn(f TxnField) *TxnExpr {

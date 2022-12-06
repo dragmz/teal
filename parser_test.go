@@ -3,11 +3,13 @@ package teal
 import (
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 )
 
 func TestParser(t *testing.T) {
-	fs, err := os.ReadDir("examples")
+	p := filepath.Join("examples", "ok")
+	fs, err := os.ReadDir(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,12 +19,12 @@ func TestParser(t *testing.T) {
 			continue
 		}
 
-		bs, err := os.ReadFile(path.Join("examples", f.Name()))
+		bs, err := os.ReadFile(path.Join(p, f.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		_, errs := Parse(string(bs))
+		errs := Lint(string(bs))
 		for _, err := range errs {
 			t.Errorf("failed to parse - file: %s, error: %s", f.Name(), err)
 		}

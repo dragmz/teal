@@ -77,21 +77,10 @@ func run(a args) error {
 					//fmt.Println("Disassembled program:")
 					//fmt.Println(resp.Result)
 
-					p, errs := teal.Parse(resp.Result)
+					errs := teal.Lint(resp.Result)
 					if len(errs) > 0 {
 						for _, err := range errs {
 							fmt.Printf("%d:%d:%d: %s\n", b.Round, txidx, err.Line(), err)
-						}
-					} else {
-						l := teal.Compile(p)
-
-						errs := l.Lint()
-						if len(errs) == 0 {
-							fmt.Println("Linter found no errors.")
-						} else {
-							for _, err := range errs {
-								fmt.Printf("%d:%d:%d: %s\n", b.Round, txidx, err.Line(), err)
-							}
 						}
 					}
 

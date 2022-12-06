@@ -13,19 +13,19 @@ func TestLexer(t *testing.T) {
 	tests := []test{
 		{
 			i: "bytecblock 0x6f 0x65 0x70 0x6131 0x6132 0x6c74 0x73776170 0x6d696e74 0x74 0x7031 0x7032",
-			o: []TokenType{TokenId, TokenInt, TokenInt, TokenInt, TokenInt, TokenInt, TokenInt, TokenInt, TokenInt, TokenInt, TokenInt, TokenInt},
+			o: []TokenType{TokenValue, TokenValue, TokenValue, TokenValue, TokenValue, TokenValue, TokenValue, TokenValue, TokenValue, TokenValue, TokenValue, TokenValue},
 		},
 		{
 			i: "12345 0x123",
-			o: []TokenType{TokenInt, TokenInt},
+			o: []TokenType{TokenValue, TokenValue},
 		},
 		{
 			i: "12345",
-			o: []TokenType{TokenInt},
+			o: []TokenType{TokenValue},
 		},
 		{
 			i: "a12345",
-			o: []TokenType{TokenId},
+			o: []TokenType{TokenValue},
 		},
 		{
 			i: "\r\n",
@@ -53,7 +53,7 @@ func TestLexer(t *testing.T) {
 		},
 		{
 			i: "#pragma version 8",
-			o: []TokenType{TokenHash, TokenId, TokenInt},
+			o: []TokenType{TokenValue, TokenValue, TokenValue},
 		},
 	}
 
@@ -63,7 +63,7 @@ func TestLexer(t *testing.T) {
 		}
 
 		var a []Token
-		for z.Next() {
+		for z.Scan() {
 			if len(z.Errors()) > 0 {
 				for _, err := range z.Errors() {
 					t.Error(err)

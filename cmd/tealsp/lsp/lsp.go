@@ -188,46 +188,26 @@ func read[T any](b []byte) (T, error) {
 func (l *lsp) doDiagnostic(uri string) error {
 	text := l.docs[uri]
 
-	diags := []lspDiagnostic{}
+	lds := []lspDiagnostic{}
 
-	p, errs := teal.Parse(text)
-	if len(errs) > 0 {
-		for _, pe := range errs {
-			sev := new(int)
-			*sev = 1
+	ds := teal.Lint(text)
+	for _, d := range ds {
+		sev := int(d.Severity())
 
-			diags = append(diags, lspDiagnostic{
-				Range: lspRange{
-					Start: lspPosition{
-						Line: pe.Line() - 1,
-					},
-					End: lspPosition{
-						Line: pe.Line() - 1,
-					},
+		lds = append(lds, lspDiagnostic{
+			Range: lspRange{
+				Start: lspPosition{
+					Line:      d.Line(),
+					Character: d.Begin(),
 				},
-				Severity: sev,
-				Message:  fmt.Sprintf("%s", pe),
-			})
-		}
-	} else {
-		ls := teal.Compile(p)
-		for _, le := range ls.Lint() {
-			sev := new(int)
-			*sev = 2
-
-			diags = append(diags, lspDiagnostic{
-				Range: lspRange{
-					Start: lspPosition{
-						Line: le.Line() - 1,
-					},
-					End: lspPosition{
-						Line: le.Line() - 1,
-					},
+				End: lspPosition{
+					Line:      d.Line(),
+					Character: d.End(),
 				},
-				Severity: sev,
-				Message:  fmt.Sprintf("%s", le),
-			})
-		}
+			},
+			Severity: &sev,
+			Message:  d.String(),
+		})
 	}
 
 	return l.write(lspNotification{
@@ -235,7 +215,7 @@ func (l *lsp) doDiagnostic(uri string) error {
 		Method:  "textDocument/publishDiagnostics",
 		Params: &lspPublishDiagnostic{
 			Uri:         uri,
-			Diagnostics: diags,
+			Diagnostics: lds,
 		},
 	})
 }

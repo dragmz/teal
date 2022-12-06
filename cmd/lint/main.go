@@ -19,12 +19,8 @@ func main() {
 		panic(err)
 	}
 
-	p, errs := teal.Parse(string(s))
-	for _, err := range errs {
-		fmt.Printf("%d: %s\n", err.Line(), err)
-	}
-
-	if len(errs) == 0 {
-		fmt.Println(p)
+	ds := teal.Lint(string(s))
+	for _, d := range ds {
+		fmt.Printf("%d:%d-%d:%s %s\n", d.Line(), d.Begin(), d.End(), d.Severity(), d)
 	}
 }

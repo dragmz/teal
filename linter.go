@@ -2,32 +2,16 @@ package teal
 
 import (
 	"fmt"
-	"sort"
 )
 
 type LineError interface {
+	error
 	Line() int
-}
-
-type LineErrors []LineError
-
-func (e LineErrors) Len() int {
-	return len(e)
-}
-
-func (e LineErrors) Less(i, j int) bool {
-	return e[i].Line() < e[j].Line()
-}
-
-func (e LineErrors) Swap(i, j int) {
-	tmp := e[i]
-	e[i] = e[j]
-	e[j] = tmp
 }
 
 type Linter struct {
 	l   Listing
-	res LineErrors
+	res []LineError
 }
 
 type UnusedLabelError struct {
@@ -124,7 +108,7 @@ func (l *Linter) getAllLabels() map[string][]int {
 
 	for i, o := range l.l {
 		switch o := o.(type) {
-		case *compiledLabelExpr:
+		case *LabelExpr:
 			all[o.Name] = append(all[o.Name], i)
 		}
 	}
@@ -150,7 +134,7 @@ func (l *Linter) checkOpsAfterUnconditionalBranch() {
 		o := l.l[i]
 		unused := false
 		switch o.(type) {
-		case *compiledBExpr:
+		case *BExpr:
 			unused = true
 		case *ReturnExpr:
 			unused = true
@@ -164,7 +148,7 @@ func (l *Linter) checkOpsAfterUnconditionalBranch() {
 				o2 := l.l[i]
 				switch o2 := o2.(type) {
 				case Nop:
-				case *compiledLabelExpr:
+				case *LabelExpr:
 					if len(used[o2.Name]) > 0 {
 						break loop
 					}
@@ -184,7 +168,7 @@ func (l *Linter) checkBranchJustBeforeLabel() {
 			}
 
 			switch o := o.(type) {
-			case *compiledBExpr:
+			case *BExpr:
 				j := i + 1
 
 				func() {
@@ -199,7 +183,7 @@ func (l *Linter) checkBranchJustBeforeLabel() {
 
 						switch n := n.(type) {
 						case Nop:
-						case *compiledLabelExpr:
+						case *LabelExpr:
 							if n.Name == o.Label.Name {
 								l.res = append(l.res, BJustBeforeLabelError{l: i + 1})
 								return
@@ -240,7 +224,7 @@ func (l *Linter) checkLoops() {
 			}
 
 			switch o := o.(type) {
-			case *compiledBExpr:
+			case *BExpr:
 				j := i - 1
 
 				func() {
@@ -252,7 +236,7 @@ func (l *Linter) checkLoops() {
 						n := l.l[j]
 
 						switch n := n.(type) {
-						case *compiledLabelExpr:
+						case *LabelExpr:
 							if n.Name == o.Label.Name {
 								if !l.canEscape(j, i) {
 									l.res = append(l.res, InfiniteLoopError{l: i + 1})
@@ -296,6 +280,4 @@ func (l *Linter) Lint() {
 	l.checkOpsAfterUnconditionalBranch()
 	l.checkBranchJustBeforeLabel()
 	l.checkLoops()
-
-	sort.Sort(l.res)
 }

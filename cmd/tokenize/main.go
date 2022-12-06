@@ -20,7 +20,7 @@ func run(a args) error {
 	}
 
 	z := teal.Lexer{Source: bs}
-	for z.Next() {
+	for z.Scan() {
 		t := z.Curr()
 		switch t.Type() {
 		case teal.TokenEol:
