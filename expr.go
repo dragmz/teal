@@ -1974,6 +1974,14 @@ func (e *BandExpr) String() string {
 
 var Band = &BandExpr{}
 
+type BxorExpr struct{}
+
+func (e *BxorExpr) String() string {
+	return "b^"
+}
+
+var Bxor = &BxorExpr{}
+
 type AppOptedInExpr struct{}
 
 func (e *AppOptedInExpr) String() string {

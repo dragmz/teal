@@ -276,6 +276,8 @@ func Process(source string) ProcessResult {
 				e = Blt
 			case "b&":
 				e = Band
+			case "b^":
+				e = Bxor
 			case "bsqrt":
 				e = Bsqrt
 			case "app_opted_in":
