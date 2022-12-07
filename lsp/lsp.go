@@ -453,10 +453,6 @@ func (l *lsp) doDiagnostic(uri string) []lspDiagnostic {
 }
 
 func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
-	if l.shutdown {
-		return errors.New("server is shut down")
-	}
-
 	switch h.Method {
 	case "initialized":
 	case "$/cancelRequest":
@@ -465,6 +461,15 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 		l.exit = true
 	case "shutdown":
 		l.shutdown = true
+
+		err := l.write(jsonRpcResponse{
+			JsonRpc: "2.0",
+			Id:      h.Id,
+		})
+
+		if err != nil {
+			return err
+		}
 
 	case "textDocument/didSave":
 		_, err := read[lspDidSave](b)
