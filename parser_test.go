@@ -30,26 +30,3 @@ func TestParser(t *testing.T) {
 		}
 	}
 }
-
-func TestReadHexInt(t *testing.T) {
-	tests := []struct {
-		In  string
-		Out uint64
-	}{
-		{In: "0x01", Out: 1},
-		{In: "0x0001", Out: 256},
-		{In: "0xff", Out: 255},
-		{In: "0xFF", Out: 255},
-	}
-
-	for _, test := range tests {
-		v, err := readHexInt(test.In)
-		if err != nil {
-			t.Error(err)
-		}
-
-		if v != test.Out {
-			t.Errorf("unexpected value: %d != 1", v)
-		}
-	}
-}

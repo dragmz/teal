@@ -7,11 +7,29 @@ import (
 type LineError interface {
 	error
 	Line() int
+	Severity() DiagnosticSeverity
 }
 
 type Linter struct {
 	l   Listing
 	res []LineError
+}
+
+type DuplicateLabelError struct {
+	l    int
+	name string
+}
+
+func (e DuplicateLabelError) Line() int {
+	return e.l
+}
+
+func (e DuplicateLabelError) Error() string {
+	return fmt.Sprintf("duplicate label: \"%s\"", e.name)
+}
+
+func (e DuplicateLabelError) Severity() DiagnosticSeverity {
+	return DiagErr
 }
 
 type UnusedLabelError struct {
@@ -27,6 +45,10 @@ func (e UnusedLabelError) Error() string {
 	return fmt.Sprintf("unused label: \"%s\"", e.name)
 }
 
+func (e UnusedLabelError) Severity() DiagnosticSeverity {
+	return DiagWarn
+}
+
 type UnreachableCodeError struct {
 	l int
 }
@@ -37,6 +59,10 @@ func (e UnreachableCodeError) Line() int {
 
 func (e UnreachableCodeError) Error() string {
 	return "unreachable code"
+}
+
+func (e UnreachableCodeError) Severity() DiagnosticSeverity {
+	return DiagWarn
 }
 
 type BJustBeforeLabelError struct {
@@ -51,6 +77,10 @@ func (e BJustBeforeLabelError) Error() string {
 	return "unconditional branch just before the target label"
 }
 
+func (e BJustBeforeLabelError) Severity() DiagnosticSeverity {
+	return DiagWarn
+}
+
 type EmptyLoopError struct {
 	l int
 }
@@ -61,6 +91,10 @@ func (e EmptyLoopError) Line() int {
 
 func (e EmptyLoopError) Error() string {
 	return "empty loop"
+}
+
+func (e EmptyLoopError) Severity() DiagnosticSeverity {
+	return DiagWarn
 }
 
 type MissingLabelError struct {
@@ -76,6 +110,10 @@ func (e MissingLabelError) Error() string {
 	return fmt.Sprintf("missing label: \"%s\"", e.name)
 }
 
+func (e MissingLabelError) Severity() DiagnosticSeverity {
+	return DiagErr
+}
+
 type InfiniteLoopError struct {
 	l int
 }
@@ -86,6 +124,26 @@ func (e InfiniteLoopError) Line() int {
 
 func (e InfiniteLoopError) Error() string {
 	return "infinite loop"
+}
+
+func (e InfiniteLoopError) Severity() DiagnosticSeverity {
+	return DiagErr
+}
+
+type PragmaVersionAfterInstrError struct {
+	l int
+}
+
+func (e PragmaVersionAfterInstrError) Line() int {
+	return e.l
+}
+
+func (e PragmaVersionAfterInstrError) Error() string {
+	return "#pragma version is only allowed before instructions"
+}
+
+func (e PragmaVersionAfterInstrError) Severity() DiagnosticSeverity {
+	return DiagErr
 }
 
 func (l *Linter) getLabelsUsers() map[string][]int {
@@ -275,9 +333,40 @@ func (l *Linter) canEscape(from, to int) bool {
 	return false
 }
 
+func (l *Linter) checkDuplicatedLabels() {
+	labels := l.getAllLabels()
+	for name, lines := range labels {
+		if len(lines) > 1 {
+			for _, line := range lines {
+				l.res = append(l.res, DuplicateLabelError{l: line, name: name})
+			}
+		}
+	}
+}
+
+func (l *Linter) checkPragma() {
+	var prev Op
+	for i, op := range l.l {
+		switch op := op.(type) {
+		case Nop:
+		case *PragmaExpr:
+			if prev != nil {
+				l.res = append(l.res, PragmaVersionAfterInstrError{
+					l: i,
+				})
+			}
+			prev = op
+		default:
+			prev = op
+		}
+	}
+}
+
 func (l *Linter) Lint() {
+	l.checkDuplicatedLabels()
 	l.checkUnusedLabels()
 	l.checkOpsAfterUnconditionalBranch()
 	l.checkBranchJustBeforeLabel()
 	l.checkLoops()
+	l.checkPragma()
 }

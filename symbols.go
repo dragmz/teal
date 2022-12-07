@@ -10,6 +10,8 @@ type Symbol interface {
 type labelSymbol struct {
 	n string
 	l int
+	b int
+	e int
 }
 
 func (s labelSymbol) Name() string {
@@ -21,9 +23,9 @@ func (s labelSymbol) Line() int {
 }
 
 func (s labelSymbol) Begin() int {
-	return 0
+	return s.b
 }
 
 func (s labelSymbol) End() int {
-	return len(s.n) + 1
+	return s.e
 }

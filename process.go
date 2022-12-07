@@ -1,7 +1,7 @@
 package teal
 
 import (
-	"strconv"
+	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -10,9 +10,33 @@ import (
 type ProcessResult struct {
 	Diagnostics []Diagnostic
 	Symbols     []Symbol
+	SymbolRefs  []Symbol
+	Tokens      []Token
+	Listing     Listing
+	Lines       [][]Token
+}
+
+func readTokens(source string) ([]Token, []Diagnostic) {
+	s := &Lexer{Source: []byte(source)}
+
+	ts := []Token{}
+
+	for s.Scan() {
+		ts = append(ts, s.Curr())
+	}
+
+	diags := make([]Diagnostic, len(s.diag))
+
+	for i, diag := range s.diag {
+		diags[i] = diag
+	}
+
+	return ts, diags
 }
 
 func Process(source string) ProcessResult {
+	type recoverable struct{}
+
 	ts, diag := readTokens(source)
 
 	lines := [][]Token{}
@@ -37,19 +61,22 @@ func Process(source string) ProcessResult {
 
 	for li, l := range lines {
 		for i := 0; i < len(l); i++ {
-			if l[i].Type() == TokenComment {
+			t := l[i]
+			if t.Type() == TokenComment {
 				lines[li] = l[:i]
 			}
 		}
 	}
 
+	var lts [][]Token
 	var res Listing
 
-	for li, l := range lines {
+	for _, l := range lines {
 		args := &arguments{ts: l}
 
 		failAt := func(l int, b int, e int, err error) {
 			diag = append(diag, parseError{l: l, b: b, e: e, error: err})
+			panic(recoverable{})
 		}
 
 		failToken := func(t Token, err error) {
@@ -60,17 +87,23 @@ func Process(source string) ProcessResult {
 			failToken(args.Curr(), err)
 		}
 
-		failEol := func(err error) {
-			p := args.Prev()
-			failAt(p.l, p.e, p.e, err)
-		}
-
-		failLine := func(err error) {
-			diag = append(diag, lineError{l: li, error: err})
+		failPrev := func(err error) {
+			failToken(args.Prev(), err)
 		}
 
 		var e Op
 		func() {
+			defer func() {
+				switch v := recover().(type) {
+				case recoverable:
+					e = Empty // consider replacing with Raw string expr
+				case nil:
+				default:
+					fmt.Printf("unrecoverable: %v", v)
+					panic(v)
+				}
+			}()
+
 			if !args.Scan() {
 				e = Empty
 				return
@@ -89,57 +122,118 @@ func Process(source string) ProcessResult {
 
 			v := args.Text()
 
-			mustArg := func(name string) bool {
-				result := args.Scan()
-				if !result {
-					failEol(errors.Errorf("missing %s argument: %s", v, name))
+			mustReadArg := func(name string) {
+				if !args.Scan() {
+					failPrev(errors.Errorf("missing arg: %s", name))
 				}
-				return result
+			}
+
+			parseUint64 := func(name string) uint64 {
+				v, err := readInt(args)
+				if err != nil {
+					failCurr(errors.Wrapf(err, "failed to parse uint64: %s", name))
+				}
+
+				return v
+			}
+
+			parseUint8 := func(name string) uint8 {
+				v, err := readUint8(args.Text())
+				if err != nil {
+					failCurr(errors.Wrapf(err, "failed to parse uint8: %s", name))
+				}
+				return v
+			}
+
+			parseInt8 := func(name string) int8 {
+				v, err := readInt8(args.Text())
+				if err != nil {
+					failCurr(errors.Wrapf(err, "failed to parse int8: %s", name))
+				}
+				return v
+			}
+
+			parseTxnField := func(name string) TxnField {
+				v, err := readTxnField(args.Text())
+				if err != nil {
+					failCurr(errors.Wrapf(err, "failed to parse txn field: %s", name))
+				}
+				return v
+			}
+
+			parseBytes := func(name string) []byte {
+				v, err := readBytes(args)
+				if err != nil {
+					failCurr(errors.Wrapf(err, "failed to parse bytes: %s", name))
+				}
+				return v
+			}
+
+			parseEcdsaCurveIndex := func(name string) EcdsaCurve {
+				v, err := readEcdsaCurveIndex(args.Text())
+				if err != nil {
+					failCurr(errors.Wrapf(err, "failed to parse ESCDS curve index: %s", name))
+				}
+				return v
+			}
+
+			mustReadBytes := func(name string) []byte {
+				mustReadArg(name)
+				return parseBytes(name)
+			}
+
+			mustReadInt := func(name string) uint64 {
+				mustReadArg(name)
+				return parseUint64(name)
+			}
+
+			mustReadUint8 := func(name string) uint8 {
+				mustReadArg(name)
+				return parseUint8(name)
+			}
+
+			mustReadInt8 := func(name string) int8 {
+				mustReadArg(name)
+				return parseInt8(name)
+			}
+
+			mustRead := func(name string) string {
+				mustReadArg(name)
+				return args.Text()
+			}
+
+			mustReadTxnField := func(name string) TxnField {
+				mustReadArg(name)
+				return parseTxnField(name)
+			}
+
+			mustReadEcdsaCurveIndex := func(name string) EcdsaCurve {
+				mustReadArg(name)
+				return parseEcdsaCurveIndex(name)
 			}
 
 			switch v {
 			case "":
 				e = Empty
 			case "#pragma":
-				if !mustArg("name") {
-					return
-				}
-
-				switch args.Text() {
+				name := mustRead("name")
+				switch name {
 				case "version":
-					if !mustArg("version value") {
-						return
-					}
-
-					version, err := strconv.Atoi(args.Text())
-					if err != nil {
-						failLine(errors.Wrap(err, "failed to parse pragma version"))
-						return
-					}
-
+					version := mustReadUint8("version value")
 					e = &PragmaExpr{Version: uint8(version)}
 				default:
-					failLine(errors.Errorf("unexpected #pragma: %s", args.Text()))
+					failCurr(errors.Errorf("unexpected #pragma: %s", args.Text()))
 					return
 				}
 			case "bnz":
-				if !mustArg("label name") {
-					return
-				}
-
-				e = &BnzExpr{Label: &LabelExpr{Name: args.Text()}}
+				name := mustRead("label name")
+				e = &BnzExpr{Label: &LabelExpr{Name: name}}
 			case "bz":
-				if !mustArg("label name") {
-					return
-				}
-
-				e = &BzExpr{Label: &LabelExpr{Name: args.Text()}}
+				name := mustRead("label name")
+				e = &BzExpr{Label: &LabelExpr{Name: name}}
 			case "b":
-				if !mustArg("label name") {
-					return
-				}
-
-				e = &BExpr{Label: &LabelExpr{Name: args.Text()}}
+				name := mustRead("label name")
+				e = &BExpr{Label: &LabelExpr{Name: name}}
 			case "bzero":
 				e = Bzero
 			case "getbyte":
@@ -159,36 +253,13 @@ func Process(source string) ProcessResult {
 			case "ed25519verify":
 				e = ED25519Verify
 			case "ecdsa_verify":
-				if !mustArg("curve index") {
-					return
-				}
-
-				curve, err := readEcdsaCurveIndex(args.Text())
-				if err != nil {
-					failLine(errors.Wrap(err, "failed to read ecdsa_verify curve index"))
-					return
-				}
+				curve := mustReadEcdsaCurveIndex("curve index")
 				e = &EcdsaVerifyExpr{Index: curve}
 			case "ecdsa_pk_decompress":
-				if !mustArg("curve index") {
-					return
-				}
-
-				curve, err := readEcdsaCurveIndex(args.Text())
-				if err != nil {
-					failLine(errors.Wrap(err, "failed to read ecdsa_pk_decompress curve index"))
-				}
+				curve := mustReadEcdsaCurveIndex("curve index")
 				e = &EcdsaPkDecompressExpr{Index: curve}
 			case "ecdsa_pk_recover":
-				if !mustArg("curve index") {
-					return
-				}
-
-				curve, err := readEcdsaCurveIndex(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read ecdsa_pk_recover curve index"))
-					return
-				}
+				curve := mustReadEcdsaCurveIndex("curve index")
 				e = &EcdsaPkRecoverExpr{Index: curve}
 			case "+":
 				e = PlusOp
@@ -258,27 +329,13 @@ func Process(source string) ProcessResult {
 				var values []uint64
 
 				for args.Scan() {
-					value, err := readInt(args)
-					if err != nil {
-						failCurr(errors.Wrap(err, "failed to read int"))
-						return
-					}
-
+					value := parseUint64("value")
 					values = append(values, value)
 				}
 
 				e = &IntcBlockExpr{Values: values}
 			case "intc":
-				if !mustArg("value") {
-					return
-				}
-
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse intc value"))
-					return
-				}
-
+				value := mustReadUint8("value")
 				e = &IntcExpr{Index: uint8(value)}
 			case "intc_0":
 				e = Intc0
@@ -292,25 +349,13 @@ func Process(source string) ProcessResult {
 				var values [][]byte
 
 				for args.Scan() {
-					b, err := readBytes(args)
-					if err != nil {
-						failCurr(errors.Wrap(err, "failed to read bytes"))
-						return
-					}
-
+					b := parseBytes("value")
 					values = append(values, b)
 				}
 
 				e = &BytecBlockExpr{Values: values}
 			case "bytec":
-				if !mustArg("index") {
-					return
-				}
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse bytec index"))
-					return
-				}
+				value := mustReadUint8("index")
 				e = &BytecExpr{Index: uint8(value)}
 			case "bytec_0":
 				e = Bytec0
@@ -321,14 +366,7 @@ func Process(source string) ProcessResult {
 			case "bytec_3":
 				e = Bytec3
 			case "arg":
-				if !mustArg("index") {
-					return
-				}
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse arg index"))
-					return
-				}
+				value := mustReadUint8("index")
 				e = &ArgExpr{Index: uint8(value)}
 			case "arg_0":
 				e = Arg0
@@ -341,76 +379,20 @@ func Process(source string) ProcessResult {
 			case "dup2":
 				e = Dup2
 			case "gitxna":
-				if !mustArg("t") {
-					return
-				}
+				t := mustReadInt("t")
+				f := mustReadTxnField("f")
+				i := mustReadUint8("i")
 
-				t, err := strconv.ParseUint(args.Text(), 10, 64)
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse gitxna t: %s", args.Text()))
-					return
-				}
-
-				if !mustArg("f") {
-					return
-				}
-
-				f, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse gitxna f: %s", args.Text()))
-					return
-				}
-
-				if !mustArg("i") {
-					return
-				}
-
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gitxna i"))
-					return
-				}
-
-				e = &GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(value)}
+				e = &GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)}
 			case "gtxn":
-				if !mustArg("t") {
-					return
-				}
-
-				t, err := strconv.ParseUint(args.Text(), 10, 64)
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse gtxn t: %s", args.Text()))
-					return
-				}
-
-				if !mustArg("f") {
-					return
-				}
-
-				f, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse gtxn f: %s", args.Text()))
-					return
-				}
-
+				t := mustReadInt("t")
+				f := mustReadTxnField("f")
 				e = &GtxnExpr{Index: uint8(t), Field: f}
 			case "txn":
-				if !mustArg("field") {
-					return
-				}
-
-				field, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse txn field: %s", args.Text()))
-					return
-				}
-
-				// TODO: check the field value
-				e = &TxnExpr{Field: field}
+				f := mustReadTxnField("f")
+				e = &TxnExpr{Field: f}
 			case "global":
-				if !mustArg("field") {
-					return
-				}
+				mustReadArg("field")
 
 				field, err := readGlobalField(args.Text())
 				if err != nil {
@@ -420,265 +402,66 @@ func Process(source string) ProcessResult {
 
 				e = &GlobalExpr{Index: field}
 			case "load":
-				if !mustArg("index") {
-					return
-				}
-
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse load i"))
-					return
-				}
-
+				value := mustReadUint8("i")
 				e = &LoadExpr{Index: uint8(value)}
 			case "gload":
-				if !mustArg("t") {
-					return
-				}
-
-				t, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gload t"))
-					return
-				}
-
-				if !mustArg("i") {
-					return
-				}
-
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gload i"))
-					return
-				}
+				t := mustReadUint8("t")
+				value := mustReadUint8("i")
 
 				e = &GloadExpr{Group: uint8(t), Index: uint8(value)}
 			case "gloads":
-				if !mustArg("i") {
-					return
-				}
-
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gloads i"))
-					return
-				}
-
+				value := mustReadUint8("i")
 				e = &GloadsExpr{Index: uint8(value)}
 			case "store":
-				if !mustArg("i") {
-					return
-				}
-
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse store i"))
-					return
-				}
-
+				value := mustReadUint8("i")
 				e = &StoreExpr{Index: uint8(value)}
 			case "txna":
-				if !mustArg("f") {
-					return
-				}
-
-				field, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse txna field: %s", args.Text()))
-					return
-				}
-
-				e = &TxnaExpr{Field: field}
+				f := mustReadTxnField("f")
+				i := mustReadUint8("i")
+				e = &TxnaExpr{Field: f, Index: i}
 			case "gtxns":
-				if !mustArg("f") {
-					return
-				}
-
-				field, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse gtxns field: %s", args.Text()))
-					return
-				}
-
-				e = &GtxnsExpr{Field: field}
+				f := mustReadTxnField("f")
+				e = &GtxnsExpr{Field: f}
 			case "gaid":
-				if !mustArg("t") {
-					return
-				}
-
-				t, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gitxn t"))
-					return
-				}
-
+				t := mustReadUint8("t")
 				e = &GaidExpr{Group: uint8(t)}
 			case "gtxna":
-				if !mustArg("t") {
-					return
-				}
-
-				t, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gitxn t"))
-					return
-				}
-
-				if !mustArg("f") {
-					return
-				}
-
-				f, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse gtxnsa f: %s", args.Text()))
-					return
-				}
-
-				if !mustArg("i") {
-					return
-				}
-
-				i, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gtxnsa i"))
-					return
-				}
-
+				t := mustReadUint8("t")
+				f := mustReadTxnField("f")
+				i := mustReadUint8("i")
 				e = &GtxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)}
 			case "gtxnsa":
-				if !mustArg("f") {
-					return
-				}
-
-				f, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse gtxnsa f: %s", args.Text()))
-					return
-				}
-
-				if !mustArg("i") {
-					return
-				}
-
-				i, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gtxnsa i"))
-					return
-				}
-
+				f := mustReadTxnField("f")
+				i := mustReadUint8("i")
 				e = &GtxnsaExpr{Field: f, Index: uint8(i)}
 			case "txnas":
-				if !mustArg("f") {
-					return
-				}
-
-				f, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse txnas f: %s", args.Text()))
-					return
-				}
-
+				f := mustReadTxnField("f")
 				e = &TxnasExpr{Field: f}
 			case "extract":
-				if !mustArg("s") {
-					return
-				}
-				start, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read extract s"))
-					return
-				}
-
-				if !mustArg("l") {
-					return
-				}
-
-				length, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read extract l"))
-					return
-				}
+				start := mustReadUint8("s")
+				length := mustReadUint8("l")
 
 				e = &ExtractExpr{Start: uint8(start), Length: uint8(length)}
 			case "substring":
-				if !mustArg("s") {
-					return
-				}
-				start, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read substract s"))
-					return
-				}
-
-				if !mustArg("e") {
-					return
-				}
-
-				end, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read substract e"))
-					return
-				}
-
+				start := mustReadUint8("s")
+				end := mustReadUint8("e")
 				e = &SubstringExpr{Start: uint8(start), End: uint8(end)}
 			case "proto":
-				if !mustArg("a") {
-					return
-				}
-				a, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read proto a"))
-					return
-				}
-
-				if !mustArg("r") {
-					return
-				}
-
-				r, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read proto r"))
-					return
-				}
+				a := mustReadUint8("a")
+				r := mustReadUint8("r")
 
 				e = &ProtoExpr{Args: uint8(a), Results: uint8(r)}
 			case "byte":
-				if !mustArg("value") {
-					return
-				}
-
-				value, err := readBytes(args)
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse byte value"))
-					return
-				}
+				value := mustReadBytes("value")
 				e = &ByteExpr{Value: value}
 			case "pushbytes":
-				if !mustArg("value") {
-					return
-				}
-
-				value, err := readBytes(args)
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse pushbytes value"))
-					return
-				}
+				value := mustReadBytes("value")
 				e = &PushBytesExpr{Value: value}
 			case "pushint":
-				if !mustArg("value") {
-					return
-				}
-
-				value, err := readInt(args)
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse pushint value"))
-					return
-				}
+				value := mustReadInt("value")
 				e = &PushIntExpr{Value: value}
 			case "asset_params_get":
-				if !mustArg("f") {
-					return
-				}
+				mustReadArg("f")
 
 				field, err := readAssetField(args.Text())
 				if err != nil {
@@ -688,14 +471,7 @@ func Process(source string) ProcessResult {
 
 				e = &AssetParamsGetExpr{Field: field}
 			case "int":
-				if !mustArg("value") {
-					return
-				}
-				value, err := readInt(args)
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read int value"))
-					return
-				}
+				value := mustReadInt("value")
 				e = &IntExpr{Value: value}
 			case "sqrt":
 				e = Sqrt
@@ -750,55 +526,17 @@ func Process(source string) ProcessResult {
 			case "b+":
 				e = Bplus
 			case "dig":
-				if !mustArg("n") {
-					return
-				}
-
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read dig n"))
-					return
-				}
-
+				value := mustReadUint8("n")
 				e = &DigExpr{Index: uint8(value)}
 			case "gtxnsas":
-				if !mustArg("f") {
-					return
-				}
-
-				f, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to read gtxnsas f: %s", args.Text()))
-					return
-				}
-
+				f := mustReadTxnField("f")
 				e = &GtxnsasExpr{Field: f}
 			case "gitxn":
-				if !mustArg("t") {
-					return
-				}
-
-				t, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse gitxn t"))
-					return
-				}
-
-				if !mustArg("f") {
-					return
-				}
-
-				f, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read gitxn f"))
-					return
-				}
-
+				t := mustReadUint8("t")
+				f := mustReadTxnField("f")
 				e = &GitxnExpr{Index: uint8(t), Field: f}
 			case "asset_holding_get":
-				if !mustArg("f") {
-					return
-				}
+				mustReadArg("f")
 
 				f, err := readAssetHoldingField(args.Text())
 				if err != nil {
@@ -808,9 +546,7 @@ func Process(source string) ProcessResult {
 
 				e = &AssetHoldingGetExpr{Field: f}
 			case "acct_params_get":
-				if !mustArg("f") {
-					return
-				}
+				mustReadArg("f")
 
 				f, err := readAcctParams(args.Text())
 				if err != nil {
@@ -821,9 +557,7 @@ func Process(source string) ProcessResult {
 				e = &AcctParamsGetExpr{Field: f}
 
 			case "app_params_get":
-				if !mustArg("f") {
-					return
-				}
+				mustReadArg("f")
 
 				f, err := readAppField(args.Text())
 				if err != nil {
@@ -849,9 +583,7 @@ func Process(source string) ProcessResult {
 			case "extract_uint64":
 				e = ExtractUint64
 			case "vrf_verify":
-				if !mustArg("f") {
-					return
-				}
+				mustReadArg("f")
 				f, err := readVrfVerifyField(args.Text())
 				if err != nil {
 					failCurr(errors.Wrapf(err, "failed to parse vrf_verify f: %s", args.Text()))
@@ -860,9 +592,7 @@ func Process(source string) ProcessResult {
 
 				e = &VrfVerifyExpr{Field: f}
 			case "block":
-				if !mustArg("f") {
-					return
-				}
+				mustReadArg("f")
 
 				f, err := readBlockField(args.Text())
 				if err != nil {
@@ -884,58 +614,25 @@ func Process(source string) ProcessResult {
 				}
 				e = &MatchExpr{Targets: labels}
 			case "callsub":
-				if !mustArg("label name") {
-					return
-				}
-				e = &CallSubExpr{Label: &LabelExpr{Name: args.Text()}}
+				name := mustRead("label name")
+				e = &CallSubExpr{Label: &LabelExpr{Name: name}}
 			case "assert":
 				e = Assert
 			case "dup":
 				e = Dup
 			case "frame_bury":
-				if !mustArg("index") {
-					return
-				}
-				value, err := readInt8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse frame_bury i"))
-					return
-				}
+				value := mustReadInt8("index")
 				e = &FrameBuryExpr{Index: value}
 			case "frame_dig":
-				if !mustArg("index") {
-					return
-				}
-				value, err := readInt8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse frame_dig i"))
-					return
-				}
-
+				value := mustReadInt8("index")
 				e = &FrameDigExpr{Index: value}
 			case "setbyte":
 				e = SetByte
 			case "uncover":
-				if !mustArg("index") {
-					return
-				}
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to parse uncover i"))
-					return
-				}
+				value := mustReadUint8("index")
 				e = &UncoverExpr{Index: uint8(value)}
 			case "cover":
-				if !mustArg("n") {
-					return
-				}
-
-				value, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrap(err, "failed to read cover n"))
-					return
-				}
-
+				value := mustReadUint8("n")
 				e = &CoverExpr{Index: uint8(value)}
 			case "concat":
 				e = Concat
@@ -944,29 +641,11 @@ func Process(source string) ProcessResult {
 			case "itxn_submit":
 				e = ItxnSubmit
 			case "itxn":
-				if !mustArg("f") {
-					return
-				}
-
-				field, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse itxn f: %s", args.Text()))
-					return
-				}
-
-				e = &ItxnExpr{Field: field}
+				f := mustReadTxnField("f")
+				e = &ItxnExpr{Field: f}
 			case "itxn_field":
-				if !mustArg("f") {
-					return
-				}
-
-				field, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to read itxn_field f: %s", args.Text()))
-					return
-				}
-
-				e = &ItxnFieldExpr{Field: field}
+				f := mustReadTxnField("f")
+				e = &ItxnFieldExpr{Field: f}
 			default:
 				failCurr(errors.Errorf("unexpected opcode: %s", args.Text()))
 				return
@@ -975,6 +654,7 @@ func Process(source string) ProcessResult {
 
 		if e != nil {
 			res = append(res, e)
+			lts = append(lts, args.ts)
 		}
 	}
 
@@ -982,24 +662,62 @@ func Process(source string) ProcessResult {
 	l.Lint()
 
 	for _, le := range l.res {
-		diag = append(diag, lintError{l: le.Line(), error: le})
+		var b int
+		var e int
+
+		lt := lts[le.Line()]
+		if len(lt) > 0 {
+			b = lt[0].b
+			e = lt[len(lt)-1].e
+		}
+
+		diag = append(diag, lintError{
+			error: le,
+			l:     le.Line(),
+			b:     b,
+			e:     e,
+			s:     le.Severity(),
+		})
 	}
 
 	syms := []Symbol{}
+	refs := []Symbol{}
 
 	for i, op := range res {
 		switch op := op.(type) {
 		case *LabelExpr:
+			// TODO: hack - assumes label is the first token on the line
+			ts := lts[i]
+			t := ts[0]
 			syms = append(syms, labelSymbol{
 				n: op.Name,
 				l: i,
+				b: t.b, // TODO: what about whitespaces before label name?
+				e: t.e,
 			})
+		case usesLabels:
+			// TODO: this is a hack that assumes label tokens start right after the op which seems to be the case currently but may be changed in the future
+			ts := lts[i]
+			lbls := op.Labels()
+			for j, lbl := range lbls {
+				t := ts[j+1]
+				refs = append(refs, labelSymbol{
+					n: lbl.Name,
+					l: i,
+					b: t.b,
+					e: t.e,
+				})
+			}
 		}
 	}
 
 	result := ProcessResult{
 		Diagnostics: diag,
 		Symbols:     syms,
+		SymbolRefs:  refs,
+		Tokens:      ts,
+		Listing:     res,
+		Lines:       lts,
 	}
 
 	return result

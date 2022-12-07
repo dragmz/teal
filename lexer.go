@@ -175,8 +175,17 @@ func (z *Lexer) readComment() {
 				z.fail("incomplete comment")
 				return
 			}
-			z.p += 2
-			z.emit(TokenComment)
+
+			z.ts = append(z.ts, Token{
+				l: z.l,
+				b: z.p - z.lb,
+				e: z.i - z.lb,
+
+				v: z.Source[z.p+2 : z.i],
+				t: TokenComment,
+			})
+
+			z.p = z.i
 			return
 		}
 
@@ -188,8 +197,16 @@ func (z *Lexer) readComment() {
 			}
 		} else {
 			if c == '\r' || c == '\n' {
-				z.p += 2
-				z.emit(TokenComment)
+				z.ts = append(z.ts, Token{
+					l: z.l,
+					b: z.p - z.lb,
+					e: z.i - z.lb,
+
+					v: z.Source[z.p+2 : z.i],
+					t: TokenComment,
+				})
+
+				z.p = z.i
 				return
 			}
 		}

@@ -1,10 +1,7 @@
 package teal
 
 import (
-	"encoding/binary"
-	"encoding/hex"
 	"strconv"
-	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -39,7 +36,12 @@ func (e parseError) Severity() DiagnosticSeverity {
 
 type lintError struct {
 	error
-	l int
+
+	l int // line index
+	b int
+	e int
+
+	s DiagnosticSeverity
 }
 
 func (e lintError) Line() int {
@@ -47,11 +49,11 @@ func (e lintError) Line() int {
 }
 
 func (e lintError) Begin() int {
-	return 0
+	return e.b
 }
 
 func (e lintError) End() int {
-	return 0
+	return e.e
 }
 
 func (e lintError) String() string {
@@ -59,38 +61,13 @@ func (e lintError) String() string {
 }
 
 func (e lintError) Severity() DiagnosticSeverity {
-	return DiagWarn
-}
-
-type lineError struct {
-	error
-	l int
-}
-
-func (e lineError) Line() int {
-	return e.l
-}
-
-func (e lineError) Begin() int {
-	return 0
-}
-
-func (e lineError) End() int {
-	return 0
-}
-
-func (e lineError) String() string {
-	return e.error.Error()
-}
-
-func (e lineError) Severity() DiagnosticSeverity {
-	return DiagErr
+	return e.s
 }
 
 func readInt8(s string) (int8, error) {
 	v, err := strconv.ParseInt(s, 10, 8)
 	if err != nil {
-		return 0, errors.Wrapf(err, "failed to parse int8: %s", s)
+		return 0, err
 	}
 
 	return int8(v), nil
@@ -99,7 +76,7 @@ func readInt8(s string) (int8, error) {
 func readUint8(s string) (uint8, error) {
 	v, err := strconv.ParseUint(s, 10, 8)
 	if err != nil {
-		return 0, errors.Wrapf(err, "failed to parse uint8: %s", s)
+		return 0, err
 	}
 
 	return uint8(v), nil
@@ -443,33 +420,6 @@ func readTxnField(s string) (TxnField, error) {
 	}
 }
 
-func readHexInt(s string) (uint64, error) {
-	if !strings.HasPrefix(s, "0x") {
-		return 0, errors.Errorf("unexpected hex int: %s", s)
-	}
-
-	const maxLen = 16
-	const minLen = 2
-
-	l := len(s[2:])
-	if l < minLen {
-		return 0, errors.Errorf("hex int too short - got: %d, min: %d", l, minLen)
-	}
-	if l > maxLen {
-		return 0, errors.Errorf("hex int too long - got: %d, max: %d", l, maxLen)
-	}
-
-	var dst [8]byte
-	_, err := hex.Decode(dst[:], []byte(s[2:]))
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to decode hex int")
-	}
-
-	v := binary.LittleEndian.Uint64(dst[:])
-
-	return v, nil
-}
-
 func readInt(a *arguments) (uint64, error) {
 	switch a.Text() {
 	case "pay":
@@ -488,7 +438,7 @@ func readInt(a *arguments) (uint64, error) {
 
 	val, err := strconv.ParseUint(a.Text(), 0, 64)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse uint64")
+		return 0, err
 	}
 
 	return val, nil
@@ -559,22 +509,4 @@ func (a *arguments) Curr() Token {
 
 func (a *arguments) Text() string {
 	return a.Curr().String()
-}
-
-func readTokens(source string) ([]Token, []Diagnostic) {
-	s := &Lexer{Source: []byte(source)}
-
-	ts := []Token{}
-
-	for s.Scan() {
-		ts = append(ts, s.Curr())
-	}
-
-	diags := make([]Diagnostic, len(s.diag))
-
-	for i, diag := range s.diag {
-		diags[i] = diag
-	}
-
-	return ts, diags
 }
