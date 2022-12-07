@@ -19,8 +19,8 @@ func main() {
 		panic(err)
 	}
 
-	ds := teal.Lint(string(s))
-	for _, d := range ds {
+	res := teal.Process(string(s))
+	for _, d := range res.Diagnostics {
 		fmt.Printf("%d:%d-%d:%s %s\n", d.Line(), d.Begin(), d.End(), d.Severity(), d)
 	}
 }

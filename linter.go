@@ -121,7 +121,7 @@ func (l *Linter) checkUnusedLabels() {
 	for name, lines := range l.getAllLabels() {
 		if len(used[name]) == 0 {
 			for _, line := range lines {
-				l.res = append(l.res, &UnusedLabelError{l: line + 1, name: name})
+				l.res = append(l.res, &UnusedLabelError{l: line, name: name})
 			}
 		}
 	}
@@ -153,7 +153,7 @@ func (l *Linter) checkOpsAfterUnconditionalBranch() {
 						break loop
 					}
 				default:
-					l.res = append(l.res, UnreachableCodeError{i + 1})
+					l.res = append(l.res, UnreachableCodeError{i})
 				}
 			}
 		}
@@ -185,7 +185,7 @@ func (l *Linter) checkBranchJustBeforeLabel() {
 						case Nop:
 						case *LabelExpr:
 							if n.Name == o.Label.Name {
-								l.res = append(l.res, BJustBeforeLabelError{l: i + 1})
+								l.res = append(l.res, BJustBeforeLabelError{l: i})
 								return
 							}
 							break loop
@@ -208,7 +208,7 @@ func (l *Linter) checkLoops() {
 		_, ok := all[name]
 		if !ok {
 			for _, user := range users {
-				l.res = append(l.res, MissingLabelError{l: user + 1, name: name})
+				l.res = append(l.res, MissingLabelError{l: user, name: name})
 			}
 		}
 	}
@@ -239,7 +239,7 @@ func (l *Linter) checkLoops() {
 						case *LabelExpr:
 							if n.Name == o.Label.Name {
 								if !l.canEscape(j, i) {
-									l.res = append(l.res, InfiniteLoopError{l: i + 1})
+									l.res = append(l.res, InfiniteLoopError{l: i})
 								}
 								return
 							}

@@ -63,6 +63,11 @@ type jsonRpcResponse struct {
 	Id      interface{} `json:"id"`
 }
 
+type lspFullDocumentDiagnosticReport struct {
+	Kind  string          `json:"kind"`
+	Items []lspDiagnostic `json:"items"`
+}
+
 type lspRequest[T any] struct {
 	Params T `json:"params"`
 }
@@ -72,13 +77,40 @@ type lspDiagnosticProvider struct {
 	WorkspaceDiagnostics  bool `json:"workspaceDiagnostics"`
 }
 
+type lspCompletionItem struct {
+	LabelDetailsSupport *bool `json:"labelDetailsSupport,omitempty"`
+}
+
+type lspCompletionProvider struct {
+	TriggerCharacters   []string           `json:"triggerCharacters,omitempty"`
+	AllCommitCharacters []string           `json:"allCommitCharacters,omitempty"`
+	ResolveProvider     *bool              `json:"resolveProvider,omitempty"`
+	CompletionItem      *lspCompletionItem `json:"completionItem,omitempty"`
+}
+
 type lspServerCapabilities struct {
-	TextDocumentSync   int                    `json:"textDocumentSync,omitempty"`
-	DiagnosticProvider *lspDiagnosticProvider `json:"diagnosticProvider,omitempty"`
+	TextDocumentSync       *int                   `json:"textDocumentSync,omitempty"`
+	DiagnosticProvider     *lspDiagnosticProvider `json:"diagnosticProvider,omitempty"`
+	CompletionProvider     *lspCompletionProvider `json:"completionProvider,omitempty"`
+	DocumentSymbolProvider *bool                  `json:"documentSymbolProvider,omitempty"`
 }
 
 type lspInitializeResult struct {
 	Capabilities *lspServerCapabilities `json:"capabilities"`
+}
+
+type lspSymbolKind int
+
+const (
+	lspSymbolKindMethod   = 6
+	lspSymbolKindOperator = 25
+)
+
+type lspDocumentSymbol struct {
+	Name           string        `json:"name"`
+	Kind           lspSymbolKind `json:"kind"`
+	Range          lspRange      `json:"range"`
+	SelectionRange lspRange      `json:"selectionRange"`
 }
 
 type lspInitializeClientInfo struct {
@@ -123,9 +155,21 @@ type lspDidSaveParams struct {
 	TextDocument *lspDidSaveTextDocument `json:"textDocument"`
 }
 
+type lspDocumentSymbolTextDocument struct {
+	Uri string `json:"uri"`
+}
+
+type lspDocumentSymbolParams struct {
+	TextDocument *lspDocumentSymbolTextDocument `json:"textDocument"`
+}
+
+// notifications
 type lspDidChange lspRequest[*lspDidChangeParams]
 type lspDidOpen lspRequest[*lspDidOpenParams]
 type lspDidSave lspRequest[*lspDidSaveParams]
+
+// requests
+type lspDocumentSymbolRequest lspRequest[*lspDocumentSymbolParams]
 
 type lspDiagnosticRequestTextDocument struct {
 	Uri string `json:"uri"`
@@ -185,13 +229,24 @@ func read[T any](b []byte) (T, error) {
 	return v, nil
 }
 
-func (l *lsp) doDiagnostic(uri string) error {
+func (l *lsp) notifyDiagnostics(uri string, lds []lspDiagnostic) error {
+	return l.write(lspNotification{
+		JsonRpc: "2.0",
+		Method:  "textDocument/publishDiagnostics",
+		Params: &lspPublishDiagnostic{
+			Uri:         uri,
+			Diagnostics: lds,
+		},
+	})
+}
+
+func (l *lsp) doDiagnostic(uri string) []lspDiagnostic {
 	text := l.docs[uri]
 
 	lds := []lspDiagnostic{}
 
-	ds := teal.Lint(text)
-	for _, d := range ds {
+	res := teal.Process(text)
+	for _, d := range res.Diagnostics {
 		sev := int(d.Severity())
 
 		lds = append(lds, lspDiagnostic{
@@ -210,14 +265,7 @@ func (l *lsp) doDiagnostic(uri string) error {
 		})
 	}
 
-	return l.write(lspNotification{
-		JsonRpc: "2.0",
-		Method:  "textDocument/publishDiagnostics",
-		Params: &lspPublishDiagnostic{
-			Uri:         uri,
-			Diagnostics: lds,
-		},
-	})
+	return lds
 }
 
 func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
@@ -235,12 +283,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 		l.shutdown = true
 
 	case "textDocument/didSave":
-		req, err := read[lspDidSave](b)
+		_, err := read[lspDidSave](b)
 		if err != nil {
 			return err
 		}
 
-		return l.doDiagnostic(req.Params.TextDocument.Uri)
+		// TODO: handle save
 
 	case "textDocument/didClose":
 		req, err := read[lspDidCloseRequest](b)
@@ -256,7 +304,16 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			return err
 		}
 
-		return l.doDiagnostic(req.Params.TextDocument.Uri)
+		ds := l.doDiagnostic(req.Params.TextDocument.Uri)
+
+		return l.write(jsonRpcResponse{
+			JsonRpc: "2.0",
+			Id:      h.Id,
+			Result: &lspFullDocumentDiagnosticReport{
+				Kind:  "full",
+				Items: ds,
+			},
+		})
 
 	case "textDocument/didOpen":
 		req, err := read[lspDidOpen](b)
@@ -265,7 +322,6 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 		}
 
 		l.docs[req.Params.TextDocument.Uri] = req.Params.TextDocument.Text
-		return l.doDiagnostic(req.Params.TextDocument.Uri)
 
 	case "textDocument/didChange":
 		req, err := read[lspDidChange](b)
@@ -277,15 +333,56 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			l.docs[req.Params.TextDocument.Uri] = ch.Text
 		}
 
-		return l.doDiagnostic(req.Params.TextDocument.Uri)
+	case "textDocument/documentSymbol":
+		req, err := read[lspDocumentSymbolRequest](b)
+		if err != nil {
+			return err
+		}
+
+		syms := []lspDocumentSymbol{}
+
+		text := l.docs[req.Params.TextDocument.Uri]
+		res := teal.Process(text)
+		for _, s := range res.Symbols {
+			r := lspRange{
+				Start: lspPosition{
+					Line:      s.Line(),
+					Character: s.Begin(),
+				},
+				End: lspPosition{
+					Line:      s.Line(),
+					Character: s.End(),
+				},
+			}
+			syms = append(syms, lspDocumentSymbol{
+				Name:           s.Name(),
+				Kind:           lspSymbolKindMethod,
+				Range:          r,
+				SelectionRange: r,
+			})
+		}
+
+		l.write(&jsonRpcResponse{
+			JsonRpc: "2.0",
+			Id:      h.Id,
+			Result:  syms,
+		})
 
 	case "initialize":
+		sync := new(int)
+		*sync = 1
+
+		symbol := new(bool)
+		*symbol = true
+
 		return l.write(&jsonRpcResponse{
 			JsonRpc: "2.0",
 			Id:      h.Id,
 			Result: &lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
-					TextDocumentSync: 1,
+					TextDocumentSync:       sync,
+					DiagnosticProvider:     &lspDiagnosticProvider{},
+					DocumentSymbolProvider: symbol,
 				},
 			},
 		})

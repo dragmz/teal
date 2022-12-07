@@ -24,9 +24,9 @@ func TestParser(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		errs := Lint(string(bs))
-		for _, err := range errs {
-			t.Errorf("failed to parse - file: %s, error: %s", f.Name(), err)
+		res := Process(string(bs))
+		for _, d := range res.Diagnostics {
+			t.Errorf("failed to parse - file: %s, error: %s", f.Name(), d)
 		}
 	}
 }

@@ -77,9 +77,9 @@ func run(a args) error {
 					//fmt.Println("Disassembled program:")
 					//fmt.Println(resp.Result)
 
-					errs := teal.Lint(resp.Result)
-					if len(errs) > 0 {
-						for _, err := range errs {
+					res := teal.Process(resp.Result)
+					if len(res.Diagnostics) > 0 {
+						for _, err := range res.Diagnostics {
 							fmt.Printf("%d:%d:%d: %s\n", b.Round, txidx, err.Line(), err)
 						}
 					}
