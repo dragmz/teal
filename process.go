@@ -87,40 +87,12 @@ func Process(source string) ProcessResult {
 				return
 			}
 
-			if strings.HasPrefix(args.Text(), "#") {
-				if !args.Scan() {
-					failEol(errors.New("missing pragma name"))
-					return
-				}
-
-				switch args.Text() {
-				case "version":
-					if !args.Scan() {
-						failEol(errors.New("missing pragma version value"))
-						return
-					}
-
-					version, err := strconv.Atoi(args.Text())
-					if err != nil {
-						failLine(errors.Wrap(err, "failed to parse pragma version"))
-						return
-					}
-
-					e = &PragmaExpr{Version: uint8(version)}
-				default:
-					failLine(errors.Errorf("unexpected #pragma: %s", args.Text()))
-					return
-				}
-
-				return
-			}
-
 			v := args.Text()
 
 			mustArg := func(name string) bool {
 				result := args.Scan()
 				if !result {
-					failEol(errors.Errorf("missing %s argument %s", v, name))
+					failEol(errors.Errorf("missing %s argument: %s", v, name))
 				}
 				return result
 			}
