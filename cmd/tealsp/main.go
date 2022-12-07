@@ -6,7 +6,8 @@ import (
 	"net"
 	"os"
 
-	"github.com/dragmz/teal/cmd/tealsp/lsp"
+	"github.com/dragmz/teal/lsp"
+
 	"github.com/pkg/errors"
 )
 
