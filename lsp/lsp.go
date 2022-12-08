@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"strconv"
+	"strings"
 
 	"github.com/dragmz/teal"
 	"github.com/pkg/errors"
@@ -117,15 +118,46 @@ type lspDiagnosticProvider struct {
 	WorkspaceDiagnostics  bool `json:"workspaceDiagnostics"`
 }
 
-type lspCompletionItem struct {
+type lspCompletionProviderItem struct {
 	LabelDetailsSupport *bool `json:"labelDetailsSupport,omitempty"`
 }
 
+type lspCompletionItemLabelDetails struct {
+	Detail      string `json:"detail,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+type lspCompletionItem struct {
+	Label               string                         `json:"label"`
+	LabelDetails        *lspCompletionItemLabelDetails `json:"labelDetails,omitempty"`
+	Kind                *int                           `json:"kind,omitempty"`
+	Detail              string                         `json:"detail,omitempty"`
+	Documentation       string                         `json:"documentation,omitempty"`
+	Deprecated          *bool                          `json:"deprecated,omitempty"`
+	Preselect           *bool                          `json:"preselect,omitempty"`
+	SortText            string                         `json:"sortText,omitempty"`
+	FilterText          string                         `json:"filterText,omitempty"`
+	InsertText          string                         `json:"insertText,omitempty"`
+	InsertTextFormat    *int                           `json:"insertTextFormat,omitempty"`
+	InsertTextMode      *int                           `json:"insertTextMode,omitempty"`
+	TextEdit            *lspTextEdit                   `json:"textEdit,omitempty"`
+	TextEditText        string                         `json:"textEditText,omitempty"`
+	AdditionalTextEdits []lspTextEdit                  `json:"additionalTextEdits,omitempty"`
+	CommitCharacters    []string                       `json:"commitCharacters,omitempty"`
+	Command             *lspCommand                    `json:"command,omitempty"`
+	Data                interface{}                    `json:"data,omitempty"`
+}
+
+type lspCompletionList struct {
+	IsIncomplete bool                `json:"isIncomplete"`
+	Items        []lspCompletionItem `json:"items"`
+}
+
 type lspCompletionProvider struct {
-	TriggerCharacters   []string           `json:"triggerCharacters,omitempty"`
-	AllCommitCharacters []string           `json:"allCommitCharacters,omitempty"`
-	ResolveProvider     *bool              `json:"resolveProvider,omitempty"`
-	CompletionItem      *lspCompletionItem `json:"completionItem,omitempty"`
+	TriggerCharacters   []string                   `json:"triggerCharacters,omitempty"`
+	AllCommitCharacters []string                   `json:"allCommitCharacters,omitempty"`
+	ResolveProvider     *bool                      `json:"resolveProvider,omitempty"`
+	CompletionItem      *lspCompletionProviderItem `json:"completionItem,omitempty"`
 }
 
 type lspExecuteCommandProvider struct {
@@ -420,6 +452,11 @@ type lspSemanticTokensFullRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
 }
 
+type lspCompletionRequestParams struct {
+	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
+	Position     lspPosition               `json:"position"`
+}
+
 // notifications
 type lspDidChange lspRequest[*lspDidChangeParams]
 type lspDidOpen lspRequest[*lspDidOpenParams]
@@ -436,6 +473,7 @@ type lspDocumentColorRequest lspRequest[*lspDocumentColorRequestParams]
 type lspDidCloseRequest lspRequest[*lspDidCloseRequestParams]
 type lspDocumentHighlightRequest lspRequest[*lspDocumentHighlightRequestParams]
 type lspSemanticTokensFullRequest lspRequest[*lspSemanticTokensFullRequestParams]
+type lspCompletionRequest lspRequest[*lspCompletionRequestParams]
 
 func readInto(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, &v)
@@ -814,6 +852,66 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				},
 			})
 
+		case "textDocument/completion":
+			req, err := read[lspCompletionRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			res := doc.Results()
+
+			var ln []teal.Token
+			if len(res.Lines) > req.Params.Position.Line {
+				ln = res.Lines[req.Params.Position.Line]
+			}
+
+			var prefix string
+
+			ok := len(ln) == 0
+			if !ok {
+				if len(ln) > 0 {
+					if req.Params.Position.Character <= ln[0].End() {
+						ok = true
+						prefix = ln[0].String()
+					}
+				}
+			}
+
+			ccs := []lspCompletionItem{
+				{
+					Label: "#pragma",
+				},
+			}
+
+			operator := new(int)
+			*operator = 25
+
+			if ok {
+				for name := range teal.PseudoOps {
+					if strings.HasPrefix(name, prefix) {
+						ccs = append(ccs, lspCompletionItem{
+							Label: name,
+						})
+					}
+				}
+				for _, spec := range teal.OpSpecs {
+					if spec.Version <= res.Version && strings.HasPrefix(spec.Name, prefix) {
+						ccs = append(ccs, lspCompletionItem{
+							Label:         spec.Name,
+							Documentation: teal.OpDocByName[spec.Name],
+							Kind:          operator,
+						})
+					}
+				}
+			}
+
+			return l.success(h.Id, ccs)
+
 		case "textDocument/codeAction":
 			req, err := read[lspCodeActionRequest](b)
 			if err != nil {
@@ -1055,6 +1153,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							TokenModifiers: []string{},
 						},
 					},
+					CompletionProvider: &lspCompletionProvider{},
 				},
 			})
 		default:

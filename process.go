@@ -7,7 +7,724 @@ import (
 	"github.com/pkg/errors"
 )
 
+var PseudoOps = pseudoOps
+var OpDocByName = opDocByName
+var OpDocExtras = opDocExtras
+
+type parserContext struct{}
+
+type parserFunc func(c *parserContext) error
+type protoFunc func(p string)
+
+type OpSpecProto struct{}
+type OpSpecDetails struct{}
+
+type OpSpec struct {
+	Code      byte
+	Name      string
+	Parse     parserFunc
+	Proto     OpSpecProto
+	Version   uint8
+	OpDetails OpSpecDetails
+}
+
+// TODO
+func assembler(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+func costly(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+// TODO
+func detDefault() OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+func detSwitch() OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+// TODO
+
+func costByField(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+func typed(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+// TODO
+const (
+	modeSig = 1
+)
+
+// TODO
+func (d OpSpecDetails) only(vs ...interface{}) OpSpecDetails {
+	return d
+}
+
+func (d OpSpecDetails) assembler(vs ...interface{}) OpSpecDetails {
+	return d
+}
+
+func only(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+var asmInt = []interface{}{}
+var asmByte = []interface{}{}
+var asmIntC = []interface{}{}
+var asmArg = []interface{}{}
+var asmAddr = []interface{}{}
+var asmMethod = []interface{}{}
+
+var typeLoads = []interface{}{}
+var typeStores = []interface{}{}
+
+var asmByteCBlock = []interface{}{}
+var checkByteImmArgs = []interface{}{}
+var immBytess = []interface{}{}
+var typeTxField = []interface{}{}
+var TxnFields = []interface{}{}
+
+func field(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+func detBranch(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+var typeBury = []interface{}{}
+
+func (d OpSpecDetails) costs(vs ...interface{}) OpSpecDetails {
+	return d
+}
+
+func (d OpSpecDetails) field(vs ...interface{}) OpSpecDetails {
+	return d
+}
+
+func (d OpSpecDetails) typed(vs ...interface{}) OpSpecDetails {
+	return d
+}
+
+func (d OpSpecDetails) trust(vs ...interface{}) OpSpecDetails {
+	return d
+}
+
+func (d OpSpecDetails) costByLength(vs ...interface{}) OpSpecDetails {
+	return d
+}
+
+var typeLoad = []interface{}{}
+var typeStore = []interface{}{}
+
+var asmByteC = []interface{}{}
+var asmItxn = []interface{}{}
+var asmGitxn = []interface{}{}
+var TxnScalarFields = []interface{}{}
+var GlobalFields = []interface{}{}
+var TxnArrayFields = []interface{}{}
+var modeApp = []interface{}{}
+var AssetHoldingFields = []interface{}{}
+var AssetParamsFields = []interface{}{}
+var AppParamsFields = []interface{}{}
+var AcctParamsFields = []interface{}{}
+
+var asmPushBytes = []interface{}{}
+var immBytes = []interface{}{}
+var asmPushInt = []interface{}{}
+var immInt = []interface{}{}
+var asmPushBytess = []interface{}{}
+var asmPushInts = []interface{}{}
+var VrfStandards = []interface{}{}
+var BlockFields = []interface{}{}
+
+// TODO
+func proto(vs ...interface{}) OpSpecProto {
+	return OpSpecProto{}
+}
+
+// TODO
+func opErr(c *parserContext) error {
+	return nil
+}
+
+func opSHA256(c *parserContext) error {
+	return nil
+}
+
+func opKeccak256(c *parserContext) error {
+	return nil
+}
+func opSHA512_256(c *parserContext) error {
+	return nil
+}
+func opEd25519Verify(c *parserContext) error {
+	return nil
+}
+func opEcdsaVerify(c *parserContext) error {
+	return nil
+}
+func opEcdsaPkDecompress(c *parserContext) error {
+	return nil
+}
+func opEcdsaPkRecover(c *parserContext) error {
+	return nil
+}
+func opPlus(c *parserContext) error {
+	return nil
+}
+func opMinus(c *parserContext) error {
+	return nil
+}
+func opDiv(c *parserContext) error {
+	return nil
+}
+func opMul(c *parserContext) error {
+	return nil
+}
+func opLt(c *parserContext) error {
+	return nil
+}
+func opGt(c *parserContext) error {
+	return nil
+}
+func opLe(c *parserContext) error {
+	return nil
+}
+func opGe(c *parserContext) error {
+	return nil
+}
+func opAnd(c *parserContext) error {
+	return nil
+}
+func opOr(c *parserContext) error {
+	return nil
+}
+func opEq(c *parserContext) error {
+	return nil
+}
+func opNeq(c *parserContext) error {
+	return nil
+}
+func opNot(c *parserContext) error {
+	return nil
+}
+func opLen(c *parserContext) error {
+	return nil
+}
+func opItob(c *parserContext) error {
+	return nil
+}
+func opBtoi(c *parserContext) error {
+	return nil
+}
+func opModulo(c *parserContext) error {
+	return nil
+}
+func opBitOr(c *parserContext) error {
+	return nil
+}
+func opBitAnd(c *parserContext) error {
+	return nil
+}
+func opBitXor(c *parserContext) error {
+	return nil
+}
+func opBitNot(c *parserContext) error {
+	return nil
+}
+func opMulw(c *parserContext) error {
+	return nil
+}
+func opAddw(c *parserContext) error {
+	return nil
+}
+func opDivModw(c *parserContext) error {
+	return nil
+}
+func opIntConstBlock(c *parserContext) error {
+	return nil
+}
+func opIntConstLoad(c *parserContext) error {
+	return nil
+}
+func opIntConst0(c *parserContext) error {
+	return nil
+}
+func opIntConst1(c *parserContext) error {
+	return nil
+}
+func opIntConst2(c *parserContext) error {
+	return nil
+}
+func opIntConst3(c *parserContext) error {
+	return nil
+}
+func opByteConstBlock(c *parserContext) error {
+	return nil
+}
+func opByteConstLoad(c *parserContext) error {
+	return nil
+}
+func opByteConst0(c *parserContext) error {
+	return nil
+}
+func opByteConst1(c *parserContext) error {
+	return nil
+}
+func opByteConst2(c *parserContext) error {
+	return nil
+}
+func opByteConst3(c *parserContext) error {
+	return nil
+}
+func opArg(c *parserContext) error {
+	return nil
+}
+func opArg0(c *parserContext) error {
+	return nil
+}
+func opArg1(c *parserContext) error {
+	return nil
+}
+func opArg2(c *parserContext) error {
+	return nil
+}
+func opArg3(c *parserContext) error {
+	return nil
+}
+func opTxn(c *parserContext) error {
+	return nil
+}
+func opGlobal(c *parserContext) error {
+	return nil
+}
+func opGtxn(c *parserContext) error {
+	return nil
+}
+func opLoad(c *parserContext) error {
+	return nil
+}
+func opStore(c *parserContext) error {
+	return nil
+}
+func opTxna(c *parserContext) error {
+	return nil
+}
+func opGtxna(c *parserContext) error {
+	return nil
+}
+func opGtxns(c *parserContext) error {
+	return nil
+}
+func opGtxnsa(c *parserContext) error {
+	return nil
+}
+func opGload(c *parserContext) error {
+	return nil
+}
+func opGloads(c *parserContext) error {
+	return nil
+}
+func opGaid(c *parserContext) error {
+	return nil
+}
+func opGaids(c *parserContext) error {
+	return nil
+}
+func opLoads(c *parserContext) error {
+	return nil
+}
+func opStores(c *parserContext) error {
+	return nil
+}
+func opBnz(c *parserContext) error {
+	return nil
+}
+func opBz(c *parserContext) error {
+	return nil
+}
+func opB(c *parserContext) error {
+	return nil
+}
+func opReturn(c *parserContext) error {
+	return nil
+}
+func opAssert(c *parserContext) error {
+	return nil
+}
+func opBury(c *parserContext) error {
+	return nil
+}
+func opPopN(c *parserContext) error {
+	return nil
+}
+func opDupN(c *parserContext) error {
+	return nil
+}
+
+func opPop(c *parserContext) error {
+	return nil
+}
+func opDup(c *parserContext) error {
+	return nil
+}
+func opDup2(c *parserContext) error {
+	return nil
+}
+func opDig(c *parserContext) error {
+	return nil
+}
+func opSwap(c *parserContext) error {
+	return nil
+}
+func opSelect(c *parserContext) error {
+	return nil
+}
+func opCover(c *parserContext) error {
+	return nil
+}
+func opUncover(c *parserContext) error {
+	return nil
+}
+func opConcat(c *parserContext) error {
+	return nil
+}
+func opSubstring(c *parserContext) error {
+	return nil
+}
+func opSubstring3(c *parserContext) error {
+	return nil
+}
+func opGetBit(c *parserContext) error {
+	return nil
+}
+func opSetBit(c *parserContext) error {
+	return nil
+}
+func opGetByte(c *parserContext) error {
+	return nil
+}
+func opSetByte(c *parserContext) error {
+	return nil
+}
+func opExtract(c *parserContext) error {
+	return nil
+}
+func opExtract3(c *parserContext) error {
+	return nil
+}
+func opExtract16Bits(c *parserContext) error {
+	return nil
+}
+func opExtract32Bits(c *parserContext) error {
+	return nil
+}
+func opExtract64Bits(c *parserContext) error {
+	return nil
+}
+func opReplace2(c *parserContext) error {
+	return nil
+}
+func opReplace3(c *parserContext) error {
+	return nil
+}
+func opBase64Decode(c *parserContext) error {
+	return nil
+}
+func opJSONRef(c *parserContext) error {
+	return nil
+}
+func opBalance(c *parserContext) error {
+	return nil
+}
+func opAppOptedIn(c *parserContext) error {
+	return nil
+}
+func opAppLocalGet(c *parserContext) error {
+	return nil
+}
+func opAppLocalGetEx(c *parserContext) error {
+	return nil
+}
+func opAppGlobalGet(c *parserContext) error {
+	return nil
+}
+func opAppGlobalGetEx(c *parserContext) error {
+	return nil
+}
+func opAppLocalPut(c *parserContext) error {
+	return nil
+}
+func opAppGlobalPut(c *parserContext) error {
+	return nil
+}
+func opAppLocalDel(c *parserContext) error {
+	return nil
+}
+func opAppGlobalDel(c *parserContext) error {
+	return nil
+}
+func opAssetHoldingGet(c *parserContext) error {
+	return nil
+}
+func opAssetParamsGet(c *parserContext) error {
+	return nil
+}
+func opAppParamsGet(c *parserContext) error {
+	return nil
+}
+func opAcctParamsGet(c *parserContext) error {
+	return nil
+}
+func opMinBalance(c *parserContext) error {
+	return nil
+}
+func opPushBytes(c *parserContext) error {
+	return nil
+}
+func opPushInt(c *parserContext) error {
+	return nil
+}
+func opPushBytess(c *parserContext) error {
+	return nil
+}
+func opEd25519VerifyBare(c *parserContext) error {
+	return nil
+}
+func opPushInts(c *parserContext) error {
+	return nil
+}
+func opCallSub(c *parserContext) error {
+	return nil
+}
+func opRetSub(c *parserContext) error {
+	return nil
+}
+func opProto(c *parserContext) error {
+	return nil
+}
+func opFrameDig(c *parserContext) error {
+	return nil
+}
+func opFrameBury(c *parserContext) error {
+	return nil
+}
+func opSwitch(c *parserContext) error {
+	return nil
+}
+func opMatch(c *parserContext) error {
+	return nil
+}
+func opShiftLeft(c *parserContext) error {
+	return nil
+}
+func opShiftRight(c *parserContext) error {
+	return nil
+}
+func opSqrt(c *parserContext) error {
+	return nil
+}
+func opBitLen(c *parserContext) error {
+	return nil
+}
+func opExp(c *parserContext) error {
+	return nil
+}
+func opExpw(c *parserContext) error {
+	return nil
+}
+func opBytesSqrt(c *parserContext) error {
+	return nil
+}
+func opDivw(c *parserContext) error {
+	return nil
+}
+func opSHA3_256(c *parserContext) error {
+	return nil
+}
+func opBn256Add(c *parserContext) error {
+	return nil
+}
+func opBn256ScalarMul(c *parserContext) error {
+	return nil
+}
+func opBn256Pairing(c *parserContext) error {
+	return nil
+}
+func opBytesPlus(c *parserContext) error {
+	return nil
+}
+func opBytesMinus(c *parserContext) error {
+	return nil
+}
+func opBytesDiv(c *parserContext) error {
+	return nil
+}
+func opBytesMul(c *parserContext) error {
+	return nil
+}
+func opBytesLt(c *parserContext) error {
+	return nil
+}
+func opBytesGt(c *parserContext) error {
+	return nil
+}
+func opBytesLe(c *parserContext) error {
+	return nil
+}
+func opBytesGe(c *parserContext) error {
+	return nil
+}
+func opBytesEq(c *parserContext) error {
+	return nil
+}
+func opBytesNeq(c *parserContext) error {
+	return nil
+}
+func opBytesModulo(c *parserContext) error {
+	return nil
+}
+func opBytesBitOr(c *parserContext) error {
+	return nil
+}
+func opBytesBitAnd(c *parserContext) error {
+	return nil
+}
+func opBytesBitXor(c *parserContext) error {
+	return nil
+}
+func opBytesBitNot(c *parserContext) error {
+	return nil
+}
+func opBytesZero(c *parserContext) error {
+	return nil
+}
+func opLog(c *parserContext) error {
+	return nil
+}
+func opTxBegin(c *parserContext) error {
+	return nil
+}
+func opItxnField(c *parserContext) error {
+	return nil
+}
+func opItxnSubmit(c *parserContext) error {
+	return nil
+}
+func opItxn(c *parserContext) error {
+	return nil
+}
+func opItxna(c *parserContext) error {
+	return nil
+}
+func opItxnNext(c *parserContext) error {
+	return nil
+}
+func opGitxn(c *parserContext) error {
+	return nil
+}
+func opGitxna(c *parserContext) error {
+	return nil
+}
+func opBoxCreate(c *parserContext) error {
+	return nil
+}
+func opBoxExtract(c *parserContext) error {
+	return nil
+}
+func opBoxReplace(c *parserContext) error {
+	return nil
+}
+func opBoxDel(c *parserContext) error {
+	return nil
+}
+func opBoxLen(c *parserContext) error {
+	return nil
+}
+func opBoxGet(c *parserContext) error {
+	return nil
+}
+func opBoxPut(c *parserContext) error {
+	return nil
+}
+func opTxnas(c *parserContext) error {
+	return nil
+}
+func opGtxnas(c *parserContext) error {
+	return nil
+}
+func opGtxnsas(c *parserContext) error {
+	return nil
+}
+func opArgs(c *parserContext) error {
+	return nil
+}
+func opGloadss(c *parserContext) error {
+	return nil
+}
+func opItxnas(c *parserContext) error {
+	return nil
+}
+func opGitxnas(c *parserContext) error {
+	return nil
+}
+func opVrfVerify(c *parserContext) error {
+	return nil
+}
+func opBlock(c *parserContext) error {
+	return nil
+}
+
+var EcdsaCurves = []interface{}{}
+var ecdsaVerifyCosts = []interface{}{}
+var ecdsaDecompressCosts = []interface{}{}
+var typeEquals = []interface{}{}
+var typePopN = []interface{}{}
+var typeDupN = []interface{}{}
+var typeDup = []interface{}{}
+var typeDupTwo = []interface{}{}
+var typeDig = []interface{}{}
+var typeSwap = []interface{}{}
+var typeSelect = []interface{}{}
+var typeCover = []interface{}{}
+var typeUncover = []interface{}{}
+var asmSubstring = []interface{}{}
+var typeSetBit = []interface{}{}
+var Base64Encodings = []interface{}{}
+var JSONRefTypes = []interface{}{}
+var typeProto = []interface{}{}
+var immInt8 = []interface{}{}
+var typePushBytess = []interface{}{}
+var typePushInts = []interface{}{}
+var typeFrameDig = []interface{}{}
+var typeFrameBury = []interface{}{}
+var asmItxnField = []interface{}{}
+
+func constants(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+func immKinded(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
+var asmIntCBlock = []interface{}{}
+var checkIntImmArgs = []interface{}{}
+var immInts = []interface{}{}
+
+func immediates(vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{}
+}
+
 type ProcessResult struct {
+	Version     uint8
 	Diagnostics []Diagnostic
 	Symbols     []Symbol
 	SymbolRefs  []Symbol
@@ -70,6 +787,7 @@ func Process(source string) *ProcessResult {
 
 	var lts [][]Token
 	var res Listing
+	version := uint8(1)
 
 	for _, l := range lines {
 		args := &arguments{ts: l}
@@ -219,7 +937,7 @@ func Process(source string) *ProcessResult {
 				name := mustRead("name")
 				switch name {
 				case "version":
-					version := mustReadUint8("version value")
+					version = mustReadUint8("version value")
 					e = &PragmaExpr{Version: uint8(version)}
 				default:
 					failCurr(errors.Errorf("unexpected #pragma: %s", args.Text()))
@@ -712,6 +1430,7 @@ func Process(source string) *ProcessResult {
 	}
 
 	result := &ProcessResult{
+		Version:     version,
 		Diagnostics: diag,
 		Symbols:     syms,
 		SymbolRefs:  refs,
