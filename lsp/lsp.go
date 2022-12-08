@@ -834,11 +834,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				}
 
 				if ref.Line() == req.Params.Range.Start.Line {
-					if ref.Begin() < req.Params.Range.Start.Character {
+					if ref.Begin() < req.Params.Range.Start.Character && ref.End() < req.Params.Range.Start.Character {
 						continue
 					}
 				} else if ref.Line() == req.Params.Range.End.Line {
-					if ref.End() > req.Params.Range.End.Character {
+					if ref.Begin() > req.Params.Range.End.Character && ref.End() > req.Params.Range.End.Character {
 						continue
 					}
 				}
