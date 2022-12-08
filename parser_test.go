@@ -8,25 +8,48 @@ import (
 )
 
 func TestParser(t *testing.T) {
-	p := filepath.Join("examples", "ok")
-	fs, err := os.ReadDir(p)
-	if err != nil {
-		t.Fatal(err)
+	type test struct {
+		Path  string
+		Clean bool
 	}
 
-	for _, f := range fs {
-		if path.Ext(f.Name()) != ".teal" {
-			continue
-		}
+	tests := []test{
+		{
+			Path:  filepath.Join("examples", "ok"),
+			Clean: true,
+		},
+		{
+			Path:  filepath.Join("examples", "err"),
+			Clean: false,
+		},
+	}
 
-		bs, err := os.ReadFile(path.Join(p, f.Name()))
+	for _, test := range tests {
+		fs, err := os.ReadDir(test.Path)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		res := Process(string(bs))
-		for _, d := range res.Diagnostics {
-			t.Errorf("failed to parse - file: %s, error: %s", f.Name(), d)
+		for _, f := range fs {
+			if path.Ext(f.Name()) != ".teal" {
+				continue
+			}
+
+			bs, err := os.ReadFile(path.Join(test.Path, f.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			res := Process(string(bs))
+			if test.Clean {
+				for _, d := range res.Diagnostics {
+					t.Errorf("failed to parse - file: %s, error: %s", f.Name(), d)
+				}
+			} else {
+				if len(res.Diagnostics) == 0 {
+					t.Errorf("expected errors but got none")
+				}
+			}
 		}
 	}
 }
