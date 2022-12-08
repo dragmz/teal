@@ -21,25 +21,25 @@ jobs:
       with:
         go-version: 1.19
         
-    - name: Build tealsp windows/amd64
-      run: env GOOS=windows GOARCH=amd64 go build -o .build/windows/amd64/tealsp.exe cmd/tealsp/main.go
-
-    - name: Build tealsp linux/amd64
-      run: env GOOS=linux GOARCH=amd64 go build -o .build/linux/amd64/tealsp cmd/tealsp/main.go
-
-    - name: Build tealsp darwin/amd64
-      run: env GOOS=darwin GOARCH=amd64 go build -o .build/darwin/amd64/tealsp cmd/tealsp/main.go
-
-    - name: Build tealsp darwin/arm64
-      run: env GOOS=darwin GOARCH=arm64 go build -o .build/darwin/arm64/tealsp cmd/tealsp/main.go
-
     - name: Test
       run: go test -v ./...
+
+    - name: Build tealsp windows/amd64
+      run: env GOOS=windows GOARCH=amd64 go build -o tealsp_windows_amd64.exe cmd/tealsp/main.go
+
+    - name: Build tealsp linux/amd64
+      run: env GOOS=linux GOARCH=amd64 go build -o tealsp_linux_amd64 cmd/tealsp/main.go
+
+    - name: Build tealsp darwin/amd64
+      run: env GOOS=darwin GOARCH=amd64 go build -o tealsp_darwin_amd64 cmd/tealsp/main.go
+
+    - name: Build tealsp darwin/arm64
+      run: env GOOS=darwin GOARCH=arm64 go build -o tealsp_darwin_arm64 cmd/tealsp/main.go
 
     - name: Create release
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true
         tag: dev
-        artifacts: ".build/windows/amd64/tealsp.exe,.build/linux/amd64/tealsp,.build/darwin/amd64/tealsp,.build/darwin/arm64/tealsp"
+        artifacts: "tealsp_windows_amd64.exe,tealsp_linux_amd64,tealsp_darwin_amd64,tealsp_darwin_arm64"
         prerelease: true
