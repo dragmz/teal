@@ -52,7 +52,6 @@ func run(a args) error {
 
 	go func() {
 		for b := range ch {
-			//fmt.Print(".")
 			fmt.Printf("Block: %d at %s\n", b.Round, time.Now())
 			for txidx, tx := range b.Payset {
 				if tx.Txn.Type != "appl" {
@@ -64,18 +63,10 @@ func run(a args) error {
 				err := func() error {
 					fmt.Println("Program length:", len(tx.Txn.ApprovalProgram))
 
-					//h := sha256.Sum256(tx.Txn.ApprovalProgram)
-					//hs := base32.StdEncoding.EncodeToString(h[:])
-					//os.MkdirAll("live", os.ModePerm)
-					//os.WriteFile(filepath.Join("live", hs), tx.Txn.ApprovalProgram, os.ModePerm)
-
 					resp, err := dac.TealDisassemble(tx.Txn.ApprovalProgram).Do(context.Background())
 					if err != nil {
 						return errors.Wrap(err, "failed to disassemble")
 					}
-
-					//fmt.Println("Disassembled program:")
-					//fmt.Println(resp.Result)
 
 					res := teal.Process(resp.Result)
 					if len(res.Diagnostics) > 0 {

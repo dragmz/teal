@@ -34,7 +34,7 @@ func readTokens(source string) ([]Token, []Diagnostic) {
 	return ts, diags
 }
 
-func Process(source string) ProcessResult {
+func Process(source string) *ProcessResult {
 	type recoverable struct{}
 
 	ts, diag := readTokens(source)
@@ -711,7 +711,7 @@ func Process(source string) ProcessResult {
 		}
 	}
 
-	result := ProcessResult{
+	result := &ProcessResult{
 		Diagnostics: diag,
 		Symbols:     syms,
 		SymbolRefs:  refs,

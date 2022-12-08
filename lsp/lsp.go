@@ -21,10 +21,30 @@ const (
 	semanticTokenMacro   = 4
 )
 
+type lspDoc struct {
+	s   string
+	res *teal.ProcessResult
+}
+
+func (d *lspDoc) Update(s string) {
+	d.s = s
+	d.res = nil
+}
+
+func (d *lspDoc) Results() *teal.ProcessResult {
+	if d.res == nil {
+		d.res = teal.Process(d.s)
+	}
+
+	return d.res
+}
+
 type lsp struct {
-	docs     map[string]string
+	docs     map[string]*lspDoc
 	shutdown bool
+
 	exit     bool
+	exitCode int
 
 	tp *textproto.Reader
 	w  *bufio.Writer
@@ -45,7 +65,7 @@ func New(r io.Reader, w io.Writer, opts ...LspOption) (*lsp, error) {
 	l := &lsp{
 		tp:   textproto.NewReader(bufio.NewReader(r)),
 		w:    bufio.NewWriter(w),
-		docs: map[string]string{},
+		docs: map[string]*lspDoc{},
 	}
 
 	for _, opt := range opts {
@@ -56,6 +76,13 @@ func New(r io.Reader, w io.Writer, opts ...LspOption) (*lsp, error) {
 	}
 
 	return l, nil
+}
+
+type jsonRpcRequest struct {
+	JsonRpc string      `json:"jsonrpc"`
+	Id      interface{} `json:"id"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
 }
 
 type jsonRpcHeader struct {
@@ -202,27 +229,22 @@ type lspDocumentSymbolParams struct {
 	TextDocument *lspDocumentSymbolTextDocument `json:"textDocument"`
 }
 
-type tealRenameCommandArgs struct {
-	Range lspRange `json:"range"`
+type tealCreateLabelCommandArgs struct {
+	Uri  string `json:"uri"`
+	Name string `json:"name"`
 }
 
 type lspWorkspaceExecuteCommandHeader struct {
 	Command string `json:"command"`
 }
 
-type lspWorkspaceExecuteCommandBody[T any] struct {
-	Params T `json:"params"`
+type lspWorkspaceExecuteCommandBodyArguments[T any] struct {
+	Arguments T `json:"arguments"`
 }
 
-type lspWorkspaceExecuteCommand lspRequest[*lspWorkspaceExecuteCommandHeader]
-
-// notifications
-type lspDidChange lspRequest[*lspDidChangeParams]
-type lspDidOpen lspRequest[*lspDidOpenParams]
-type lspDidSave lspRequest[*lspDidSaveParams]
-
-// requests
-type lspDocumentSymbolRequest lspRequest[*lspDocumentSymbolParams]
+type lspWorkspaceExecuteCommandBody[T any] struct {
+	Params lspWorkspaceExecuteCommandBodyArguments[T] `json:"params"`
+}
 
 type lspDiagnosticRequestTextDocument struct {
 	Uri string `json:"uri"`
@@ -231,8 +253,6 @@ type lspDiagnosticRequestTextDocument struct {
 type lspDiagnosticRequestParams struct {
 	TextDocument *lspDiagnosticRequestTextDocument `json:"textDocument"`
 }
-
-type lspDiagnosticRequest lspRequest[*lspDiagnosticRequestParams]
 
 type lspCodeActionTextDocument struct {
 	Uri string `json:"uri"`
@@ -250,8 +270,6 @@ type lspCodeActionRequestParams struct {
 	Context      lspCodeActionContext      `json:"context"`
 }
 
-type lspCodeActionRequest lspRequest[*lspCodeActionRequestParams]
-
 type lspRenameRequestTextDocument struct {
 	Uri string `json:"uri"`
 }
@@ -262,8 +280,6 @@ type lspRenameRequestParams struct {
 	NewName      string `json:"newName"`
 }
 
-type lspRenameRequest lspRequest[*lspRenameRequestParams]
-
 type lspPrepareRenameRequestTextDocument struct {
 	Uri string `json:"uri"`
 }
@@ -272,8 +288,6 @@ type lspPrepareRenameRequestParams struct {
 	TextDocument lspPrepareRenameRequestTextDocument `json:"textDocument"`
 	Position     lspPosition
 }
-
-type lspPrepareRenameRequest lspRequest[*lspPrepareRenameRequestParams]
 
 type lspDocumentColorRequestTextDocument struct {
 	Uri string `json:"uri"`
@@ -295,8 +309,6 @@ type lspDocumentColorRequestParams struct {
 	TextDocument lspDocumentColorRequestTextDocument `json:"textDocument"`
 }
 
-type lspDocumentColorRequest lspRequest[*lspDocumentColorRequestParams]
-
 type lspPrepareRenameResponse struct {
 	Range       lspRange `json:"range"`
 	Placeholder string   `json:"placeholder"`
@@ -313,8 +325,24 @@ type lspTextEdit struct {
 	NewText string   `json:"newText"`
 }
 
+type lspOptionalVersionedTextDocumentIdentifier struct {
+	Uri     string `json:"uri"`
+	Version *int   `json:"version"`
+}
+
+type lspTextDocumentEdit struct {
+	TextDocument lspOptionalVersionedTextDocumentIdentifier `json:"textDocument"`
+	Edits        []lspTextEdit                              `json:"edits"`
+}
+
 type lspWorkspaceEdit struct {
-	Changes map[string][]lspTextEdit `json:"changes,omitempty"`
+	Changes         map[string][]lspTextEdit `json:"changes,omitempty"`
+	DocumentChanges []lspTextDocumentEdit    `json:"documentChanges,omitempty"`
+}
+
+type lspWorkspaceApplyEditRequestParams struct {
+	Label string           `json:"label,omitempty"`
+	Edit  lspWorkspaceEdit `json:"edit"`
 }
 
 type lspCodeAction struct {
@@ -333,8 +361,6 @@ type lspDidCloseTextDocument struct {
 type lspDidCloseRequestParams struct {
 	TextDocument *lspDidCloseTextDocument `json:"textDocument"`
 }
-
-type lspDidCloseRequest lspRequest[*lspDidCloseRequestParams]
 
 type lspPosition struct {
 	Line      int `json:"line"`
@@ -368,15 +394,13 @@ type lspRenameOptions struct {
 }
 
 type lspDocumentHighlightRequestTextDocument struct {
-	Uri string `json:"uri`
+	Uri string `json:"uri"`
 }
 
 type lspDocumentHighlightRequestParams struct {
 	TextDocument lspDocumentHighlightRequestTextDocument `json:"textDocument"`
 	Position     lspPosition                             `json:"position"`
 }
-
-type lspDocumentHighlightRequest lspRequest[*lspDocumentHighlightRequestParams]
 
 type lspDocumentHighlight struct {
 	Range lspRange `json:"range"`
@@ -391,6 +415,21 @@ type lspSemanticTokensFullRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
 }
 
+// notifications
+type lspDidChange lspRequest[*lspDidChangeParams]
+type lspDidOpen lspRequest[*lspDidOpenParams]
+type lspDidSave lspRequest[*lspDidSaveParams]
+
+// requests
+type lspDocumentSymbolRequest lspRequest[*lspDocumentSymbolParams]
+type lspWorkspaceExecuteCommand lspRequest[*lspWorkspaceExecuteCommandHeader]
+type lspDiagnosticRequest lspRequest[*lspDiagnosticRequestParams]
+type lspCodeActionRequest lspRequest[*lspCodeActionRequestParams]
+type lspRenameRequest lspRequest[*lspRenameRequestParams]
+type lspPrepareRenameRequest lspRequest[*lspPrepareRenameRequestParams]
+type lspDocumentColorRequest lspRequest[*lspDocumentColorRequestParams]
+type lspDidCloseRequest lspRequest[*lspDidCloseRequestParams]
+type lspDocumentHighlightRequest lspRequest[*lspDocumentHighlightRequestParams]
 type lspSemanticTokensFullRequest lspRequest[*lspSemanticTokensFullRequestParams]
 
 func readInto(b []byte, v interface{}) error {
@@ -400,6 +439,23 @@ func readInto(b []byte, v interface{}) error {
 	}
 
 	return nil
+}
+
+func (l *lsp) reply(id interface{}, result interface{}, err interface{}) error {
+	return l.write(jsonRpcResponse{
+		JsonRpc: "2.0",
+		Id:      id,
+		Result:  result,
+		Error:   err,
+	})
+}
+
+func (l *lsp) fail(id interface{}, err interface{}) error {
+	return l.reply(id, nil, err)
+}
+
+func (l *lsp) success(id interface{}, result interface{}) error {
+	return l.reply(id, result, nil)
 }
 
 func read[T any](b []byte) (T, error) {
@@ -413,23 +469,34 @@ func read[T any](b []byte) (T, error) {
 	return v, nil
 }
 
-func (l *lsp) notifyDiagnostics(uri string, lds []lspDiagnostic) error {
-	return l.write(lspNotification{
+func (l *lsp) request(id string, method string, params interface{}) error {
+	return l.write(jsonRpcRequest{
 		JsonRpc: "2.0",
-		Method:  "textDocument/publishDiagnostics",
-		Params: &lspPublishDiagnostic{
-			Uri:         uri,
-			Diagnostics: lds,
-		},
+		Id:      id,
+		Method:  method,
+		Params:  params,
 	})
 }
 
-func (l *lsp) doDiagnostic(uri string) []lspDiagnostic {
-	text := l.docs[uri]
+func (l *lsp) notify(method string, params interface{}) error {
+	return l.write(lspNotification{
+		JsonRpc: "2.0",
+		Method:  method,
+		Params:  params,
+	})
+}
+
+func (l *lsp) notifyDiagnostics(uri string, lds []lspDiagnostic) error {
+	return l.notify("textDocument/publishDiagnostics", lspPublishDiagnostic{
+		Uri:         uri,
+		Diagnostics: lds,
+	})
+}
+
+func (l *lsp) doDiagnostic(doc *lspDoc) []lspDiagnostic {
+	res := doc.Results()
 
 	lds := []lspDiagnostic{}
-
-	res := teal.Process(text)
 	for _, d := range res.Diagnostics {
 		sev := int(d.Severity())
 
@@ -453,22 +520,42 @@ func (l *lsp) doDiagnostic(uri string) []lspDiagnostic {
 }
 
 func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
-	switch h.Method {
+	switch h.Method { // notifications
 	case "initialized":
-	case "$/cancelRequest":
 
 	case "exit":
 		l.exit = true
-	case "shutdown":
-		l.shutdown = true
+		if !l.shutdown {
+			l.exitCode = 1
+		}
 
-		err := l.write(jsonRpcResponse{
-			JsonRpc: "2.0",
-			Id:      h.Id,
-		})
-
+	case "textDocument/didOpen":
+		req, err := read[lspDidOpen](b)
 		if err != nil {
 			return err
+		}
+
+		doc := l.docs[req.Params.TextDocument.Uri]
+		if doc == nil {
+			doc = &lspDoc{}
+			l.docs[req.Params.TextDocument.Uri] = doc
+		}
+
+		doc.Update(req.Params.TextDocument.Text)
+
+	case "textDocument/didChange":
+		req, err := read[lspDidChange](b)
+		if err != nil {
+			return err
+		}
+
+		for _, ch := range req.Params.ContentChanges {
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			doc.Update(ch.Text)
 		}
 
 	case "textDocument/didSave":
@@ -479,51 +566,107 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 		// TODO: handle save
 
-	case "textDocument/didClose":
-		req, err := read[lspDidCloseRequest](b)
-		if err != nil {
-			return err
+	default: // requests
+
+		if l.shutdown {
+			return errors.New("cannot process requests - server is shut down")
 		}
 
-		delete(l.docs, req.Params.TextDocument.Uri)
+		switch h.Method {
+		case "shutdown":
+			l.shutdown = true
+			return l.success(h.Id, nil)
 
-	case "workspace/executeCommand":
-		req, err := read[lspWorkspaceExecuteCommand](b)
-		if err != nil {
-			return err
-		}
+		case "$/cancelRequest":
 
-		switch req.Params.Command {
-		default:
-			err = l.write(jsonRpcResponse{
-				JsonRpc: "2.0",
-				Id:      h.Id,
-				Error: &lspError{
-					Code:    1,
-					Message: fmt.Sprintf("unknown command: %s", req.Params.Command),
-				},
-			})
+		case "textDocument/didClose":
+			req, err := read[lspDidCloseRequest](b)
 			if err != nil {
 				return err
 			}
-		}
 
-	case "textDocument/prepareRename":
-		req, err := read[lspPrepareRenameRequest](b)
-		if err != nil {
-			return err
-		}
+			delete(l.docs, req.Params.TextDocument.Uri)
 
-		doc := l.docs[req.Params.TextDocument.Uri]
+		case "workspace/executeCommand":
+			req, err := read[lspWorkspaceExecuteCommand](b)
+			if err != nil {
+				return err
+			}
 
-		res := teal.Process(doc)
+			switch req.Params.Command {
+			case "teal.label.create":
+				var body lspWorkspaceExecuteCommandBody[[]tealCreateLabelCommandArgs]
+				err := readInto(b, &body)
+				if err != nil {
+					return err
+				}
 
-		for _, sym := range res.Symbols {
-			if sym.Line() == req.Params.Position.Line && req.Params.Position.Character >= sym.Begin() && req.Params.Position.Character <= sym.End() {
-				err = l.write(jsonRpcResponse{
-					JsonRpc: "2.0",
-					Id:      h.Id,
-					Result: lspPrepareRenameResponse{
+				args := body.Params.Arguments
+				if len(args) != 1 {
+					return errors.New("unexpected number of args")
+				}
+
+				doc := l.docs[args[0].Uri]
+				if doc == nil {
+					return errors.New("doc not found")
+				}
+
+				res := doc.Results()
+
+				name := args[0].Name
+				s := fmt.Sprintf("\r\n%s:\r\n", name)
+
+				return l.request("1", "workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
+					Label: fmt.Sprintf("Create label: %s", name),
+					Edit: lspWorkspaceEdit{
+						DocumentChanges: []lspTextDocumentEdit{
+							{
+								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
+									Uri: args[0].Uri,
+								},
+								Edits: []lspTextEdit{
+									{
+										Range: lspRange{
+											Start: lspPosition{
+												Line:      len(res.Lines),
+												Character: 0,
+											},
+											End: lspPosition{
+												Line:      len(res.Lines),
+												Character: len(s),
+											},
+										},
+										NewText: s,
+									},
+								},
+							},
+						},
+					},
+				})
+
+			default:
+				return l.fail(h.Id, lspError{
+					Code:    1,
+					Message: fmt.Sprintf("unknown command: %s", req.Params.Command),
+				})
+			}
+
+		case "textDocument/prepareRename":
+			req, err := read[lspPrepareRenameRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			res := doc.Results()
+
+			for _, sym := range res.Symbols {
+				if sym.Line() == req.Params.Position.Line && req.Params.Position.Character >= sym.Begin() && req.Params.Position.Character <= sym.End() {
+					return l.success(h.Id, lspPrepareRenameResponse{
 						Range: lspRange{
 							Start: lspPosition{
 								Line:      sym.Line(),
@@ -535,21 +678,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							},
 						},
 						Placeholder: sym.Name(),
-					},
-				})
-				if err != nil {
-					return err
+					})
 				}
-				return nil
 			}
-		}
 
-		for _, ref := range res.SymbolRefs {
-			if ref.Line() == req.Params.Position.Line && req.Params.Position.Character >= ref.Begin() && req.Params.Position.Character <= ref.End() {
-				err = l.write(jsonRpcResponse{
-					JsonRpc: "2.0",
-					Id:      h.Id,
-					Result: lspPrepareRenameResponse{
+			for _, ref := range res.SymbolRefs {
+				if ref.Line() == req.Params.Position.Line && req.Params.Position.Character >= ref.Begin() && req.Params.Position.Character <= ref.End() {
+					return l.success(h.Id, lspPrepareRenameResponse{
 						Range: lspRange{
 							Start: lspPosition{
 								Line:      ref.Line(),
@@ -561,320 +696,338 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							},
 						},
 						Placeholder: ref.Name(),
-					},
-				})
-				if err != nil {
-					return err
-				}
-				return nil
-			}
-		}
-
-	case "textDocument/rename":
-		req, err := read[lspRenameRequest](b)
-		if err != nil {
-			return err
-		}
-
-		doc := l.docs[req.Params.TextDocument.Uri]
-		res := teal.Process(doc)
-
-		chs := []lspTextEdit{}
-
-		for _, edited := range res.Symbols {
-			if edited.Line() == req.Params.Position.Line && req.Params.Position.Character >= edited.Begin() && req.Params.Position.Character <= edited.End() {
-				for _, sym := range res.Symbols {
-					if sym.Name() == edited.Name() {
-						chs = append(chs, lspTextEdit{
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin(),
-								},
-								End: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin() + len(sym.Name()),
-								},
-							},
-							NewText: req.Params.NewName,
-						})
-					}
-				}
-				for _, ref := range res.SymbolRefs {
-					if ref.Name() == edited.Name() {
-						chs = append(chs, lspTextEdit{
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      ref.Line(),
-									Character: ref.Begin(),
-								},
-								End: lspPosition{
-									Line:      ref.Line(),
-									Character: ref.End(),
-								},
-							},
-							NewText: req.Params.NewName,
-						})
-					}
+					})
 				}
 			}
-		}
 
-		for _, edited := range res.SymbolRefs {
-			if edited.Line() == req.Params.Position.Line && req.Params.Position.Character >= edited.Begin() && req.Params.Position.Character <= edited.End() {
-				for _, sym := range res.Symbols {
-					if sym.Name() == edited.Name() {
-						chs = append(chs, lspTextEdit{
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin(),
+		case "textDocument/rename":
+			req, err := read[lspRenameRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			res := doc.Results()
+
+			chs := []lspTextEdit{}
+			for _, edited := range res.Symbols {
+				if edited.Line() == req.Params.Position.Line && req.Params.Position.Character >= edited.Begin() && req.Params.Position.Character <= edited.End() {
+					for _, sym := range res.Symbols {
+						if sym.Name() == edited.Name() {
+							chs = append(chs, lspTextEdit{
+								Range: lspRange{
+									Start: lspPosition{
+										Line:      sym.Line(),
+										Character: sym.Begin(),
+									},
+									End: lspPosition{
+										Line:      sym.Line(),
+										Character: sym.Begin() + len(sym.Name()),
+									},
 								},
-								End: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin() + len(sym.Name()),
-								},
-							},
-							NewText: req.Params.NewName,
-						})
+								NewText: req.Params.NewName,
+							})
+						}
 					}
-				}
-				for _, ref := range res.SymbolRefs {
-					if ref.Name() == edited.Name() {
-						chs = append(chs, lspTextEdit{
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      ref.Line(),
-									Character: ref.Begin(),
+					for _, ref := range res.SymbolRefs {
+						if ref.Name() == edited.Name() {
+							chs = append(chs, lspTextEdit{
+								Range: lspRange{
+									Start: lspPosition{
+										Line:      ref.Line(),
+										Character: ref.Begin(),
+									},
+									End: lspPosition{
+										Line:      ref.Line(),
+										Character: ref.End(),
+									},
 								},
-								End: lspPosition{
-									Line:      ref.Line(),
-									Character: ref.End(),
-								},
-							},
-							NewText: req.Params.NewName,
-						})
+								NewText: req.Params.NewName,
+							})
+						}
 					}
 				}
 			}
-		}
 
-		err = l.write(jsonRpcResponse{
-			JsonRpc: "2.0",
-			Id:      h.Id,
-			Result: lspWorkspaceEdit{
+			for _, edited := range res.SymbolRefs {
+				if edited.Line() == req.Params.Position.Line && req.Params.Position.Character >= edited.Begin() && req.Params.Position.Character <= edited.End() {
+					for _, sym := range res.Symbols {
+						if sym.Name() == edited.Name() {
+							chs = append(chs, lspTextEdit{
+								Range: lspRange{
+									Start: lspPosition{
+										Line:      sym.Line(),
+										Character: sym.Begin(),
+									},
+									End: lspPosition{
+										Line:      sym.Line(),
+										Character: sym.Begin() + len(sym.Name()),
+									},
+								},
+								NewText: req.Params.NewName,
+							})
+						}
+					}
+					for _, ref := range res.SymbolRefs {
+						if ref.Name() == edited.Name() {
+							chs = append(chs, lspTextEdit{
+								Range: lspRange{
+									Start: lspPosition{
+										Line:      ref.Line(),
+										Character: ref.Begin(),
+									},
+									End: lspPosition{
+										Line:      ref.Line(),
+										Character: ref.End(),
+									},
+								},
+								NewText: req.Params.NewName,
+							})
+						}
+					}
+				}
+			}
+
+			return l.success(h.Id, lspWorkspaceEdit{
 				Changes: map[string][]lspTextEdit{
 					req.Params.TextDocument.Uri: chs,
 				},
-			},
-		})
-		if err != nil {
-			return err
-		}
+			})
 
-	case "textDocument/codeAction":
-		_, err := read[lspCodeActionRequest](b)
-		if err != nil {
-			return err
-		}
+		case "textDocument/codeAction":
+			req, err := read[lspCodeActionRequest](b)
+			if err != nil {
+				return err
+			}
 
-		l.write(jsonRpcResponse{
-			JsonRpc: "2.0",
-			Id:      h.Id,
-			Result:  []lspCodeAction{},
-		})
-	case "textDocument/diagnostic":
-		req, err := read[lspDiagnosticRequest](b)
-		if err != nil {
-			return err
-		}
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
 
-		ds := l.doDiagnostic(req.Params.TextDocument.Uri)
+			res := doc.Results()
 
-		return l.write(jsonRpcResponse{
-			JsonRpc: "2.0",
-			Id:      h.Id,
-			Result: &lspFullDocumentDiagnosticReport{
+			cas := []lspCodeAction{}
+			for _, ref := range res.SymbolRefs {
+				if ref.Line() < req.Params.Range.Start.Line || ref.Line() > req.Params.Range.End.Line {
+					continue
+				}
+
+				if ref.Line() == req.Params.Range.Start.Line {
+					if ref.Begin() < req.Params.Range.Start.Character {
+						continue
+					}
+				} else if ref.Line() == req.Params.Range.End.Line {
+					if ref.End() > req.Params.Range.End.Character {
+						continue
+					}
+				}
+
+				found := func() bool {
+					for _, sym := range res.Symbols {
+						if sym.Name() == ref.Name() {
+							return true
+						}
+					}
+
+					return false
+				}()
+
+				if found {
+					continue
+				}
+
+				kind := "quickfix"
+				cas = append(cas, lspCodeAction{
+					Title: fmt.Sprintf("Create label '%s'", ref.Name()),
+					Kind:  &kind,
+					Command: &lspCommand{
+						Title:   "Create label",
+						Command: "teal.label.create",
+						Arguments: []interface{}{
+							tealCreateLabelCommandArgs{
+								Uri:  req.Params.TextDocument.Uri,
+								Name: ref.Name(),
+							},
+						},
+					},
+				})
+			}
+
+			return l.success(h.Id, cas)
+		case "textDocument/diagnostic":
+			req, err := read[lspDiagnosticRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			ds := l.doDiagnostic(doc)
+
+			return l.success(h.Id, lspFullDocumentDiagnosticReport{
 				Kind:  "full",
 				Items: ds,
-			},
-		})
-
-	case "textDocument/didOpen":
-		req, err := read[lspDidOpen](b)
-		if err != nil {
-			return err
-		}
-
-		l.docs[req.Params.TextDocument.Uri] = req.Params.TextDocument.Text
-
-	case "textDocument/didChange":
-		req, err := read[lspDidChange](b)
-		if err != nil {
-			return err
-		}
-
-		for _, ch := range req.Params.ContentChanges {
-			l.docs[req.Params.TextDocument.Uri] = ch.Text
-		}
-
-	case "textDocument/documentSymbol":
-		req, err := read[lspDocumentSymbolRequest](b)
-		if err != nil {
-			return err
-		}
-
-		syms := []lspDocumentSymbol{}
-
-		text := l.docs[req.Params.TextDocument.Uri]
-		res := teal.Process(text)
-		for _, s := range res.Symbols {
-			r := lspRange{
-				Start: lspPosition{
-					Line:      s.Line(),
-					Character: s.Begin(),
-				},
-				End: lspPosition{
-					Line:      s.Line(),
-					Character: s.End(),
-				},
-			}
-			syms = append(syms, lspDocumentSymbol{
-				Name:           s.Name(),
-				Kind:           lspSymbolKindMethod,
-				Range:          r,
-				SelectionRange: r,
 			})
-		}
 
-		l.write(jsonRpcResponse{
-			JsonRpc: "2.0",
-			Id:      h.Id,
-			Result:  syms,
-		})
+		case "textDocument/documentSymbol":
+			req, err := read[lspDocumentSymbolRequest](b)
+			if err != nil {
+				return err
+			}
 
-	case "textDocument/semanticTokens/full":
-		req, err := read[lspSemanticTokensFullRequest](b)
-		if err != nil {
-			return err
-		}
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
 
-		doc := l.docs[req.Params.TextDocument.Uri]
-		res := teal.Process(doc)
+			res := doc.Results()
 
-		st := teal.SemanticTokens{}
-
-		for i, op := range res.Listing {
-			switch op.(type) {
-			case *teal.PragmaExpr:
-				ts := res.Lines[i]
-
-				f := ts[0]
-				l := ts[len(ts)-1]
-
-				st = append(st, teal.SemanticToken{
-					Line:      i,
-					Index:     f.Begin(),
-					Length:    l.End() - f.Begin(),
-					Type:      semanticTokenMacro,
-					Modifiers: 0,
+			syms := []lspDocumentSymbol{}
+			for _, s := range res.Symbols {
+				r := lspRange{
+					Start: lspPosition{
+						Line:      s.Line(),
+						Character: s.Begin(),
+					},
+					End: lspPosition{
+						Line:      s.Line(),
+						Character: s.End(),
+					},
+				}
+				syms = append(syms, lspDocumentSymbol{
+					Name:           s.Name(),
+					Kind:           lspSymbolKindMethod,
+					Range:          r,
+					SelectionRange: r,
 				})
-			case teal.Nop:
-			case *teal.LabelExpr:
-			default:
-				ts := res.Lines[i]
-				if len(ts) > 0 {
+			}
+
+			return l.success(h.Id, syms)
+
+		case "textDocument/semanticTokens/full":
+			req, err := read[lspSemanticTokensFullRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			res := doc.Results()
+
+			st := teal.SemanticTokens{}
+			for i, op := range res.Listing {
+				switch op.(type) {
+				case *teal.PragmaExpr:
+					ts := res.Lines[i]
+
 					f := ts[0]
-					if f.Type() == teal.TokenValue {
-						st = append(st, teal.SemanticToken{
-							Line:      f.Line(),
-							Index:     f.Begin(),
-							Length:    f.End() - f.Begin(),
-							Type:      semanticTokenKeyword,
-							Modifiers: 0,
-						})
+					l := ts[len(ts)-1]
+
+					st = append(st, teal.SemanticToken{
+						Line:      i,
+						Index:     f.Begin(),
+						Length:    l.End() - f.Begin(),
+						Type:      semanticTokenMacro,
+						Modifiers: 0,
+					})
+				case teal.Nop:
+				case *teal.LabelExpr:
+				default:
+					ts := res.Lines[i]
+					if len(ts) > 0 {
+						f := ts[0]
+						if f.Type() == teal.TokenValue {
+							st = append(st, teal.SemanticToken{
+								Line:      f.Line(),
+								Index:     f.Begin(),
+								Length:    f.End() - f.Begin(),
+								Type:      semanticTokenKeyword,
+								Modifiers: 0,
+							})
+						}
 					}
 				}
 			}
-		}
 
-		for _, t := range res.Tokens {
-			switch t.Type() {
-			case teal.TokenComment:
+			for _, t := range res.Tokens {
+				switch t.Type() {
+				case teal.TokenComment:
+					st = append(st, teal.SemanticToken{
+						Line:      t.Line(),
+						Index:     t.Begin(),
+						Length:    t.End() - t.Begin(),
+						Type:      semanticTokenComment,
+						Modifiers: 0,
+					})
+				}
+			}
+
+			for _, s := range res.Symbols {
 				st = append(st, teal.SemanticToken{
-					Line:      t.Line(),
-					Index:     t.Begin(),
-					Length:    t.End() - t.Begin(),
-					Type:      semanticTokenComment,
+					Line:      s.Line(),
+					Index:     s.Begin(),
+					Length:    s.End() - s.Begin(),
+					Type:      semanticTokenMethod,
 					Modifiers: 0,
 				})
 			}
-		}
 
-		for _, s := range res.Symbols {
-			st = append(st, teal.SemanticToken{
-				Line:      s.Line(),
-				Index:     s.Begin(),
-				Length:    s.End() - s.Begin(),
-				Type:      semanticTokenMethod,
-				Modifiers: 0,
-			})
-		}
+			for _, s := range res.SymbolRefs {
+				st = append(st, teal.SemanticToken{
+					Line:      s.Line(),
+					Index:     s.Begin(),
+					Length:    s.End() - s.Begin(),
+					Type:      semanticTokenString,
+					Modifiers: 0,
+				})
+			}
 
-		for _, s := range res.SymbolRefs {
-			st = append(st, teal.SemanticToken{
-				Line:      s.Line(),
-				Index:     s.Begin(),
-				Length:    s.End() - s.Begin(),
-				Type:      semanticTokenString,
-				Modifiers: 0,
-			})
-		}
+			data := st.Encode()
 
-		data := st.Encode()
-
-		err = l.write(jsonRpcResponse{
-			JsonRpc: "2.0",
-			Id:      h.Id,
-			Result: lspSemanticTokens{
+			return l.success(h.Id, lspSemanticTokens{
 				Data: data,
-			},
-		})
+			})
 
-		if err != nil {
-			return err
-		}
+		case "initialize":
+			sync := new(int)
+			*sync = 1
 
-	case "initialize":
-		sync := new(int)
-		*sync = 1
+			symbol := new(bool)
+			*symbol = true
 
-		symbol := new(bool)
-		*symbol = true
+			action := new(bool)
+			*action = true
 
-		action := new(bool)
-		*action = true
+			rename := new(bool)
+			*rename = true
 
-		rename := new(bool)
-		*rename = true
+			highlight := new(bool)
+			*highlight = true
 
-		highlight := new(bool)
-		*highlight = true
+			fullSemantic := new(bool)
+			*fullSemantic = true
 
-		fullSemantic := new(bool)
-		*fullSemantic = true
-
-		return l.write(jsonRpcResponse{
-			JsonRpc: "2.0",
-			Id:      h.Id,
-			Result: &lspInitializeResult{
+			return l.success(h.Id, lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
 					TextDocumentSync:       sync,
 					DiagnosticProvider:     &lspDiagnosticProvider{},
 					DocumentSymbolProvider: symbol,
-					//CodeActionProvider:     action,
+					CodeActionProvider:     action,
 					ExecuteCommandProvider: &lspExecuteCommandProvider{
-						Commands: []string{},
+						Commands: []string{
+							"teal.label.create",
+						},
 					},
 					RenameProvider: &lspRenameOptions{
 						PrepareProvider: rename,
@@ -887,10 +1040,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						},
 					},
 				},
-			},
-		})
-	default:
-		return errors.New("unknown method")
+			})
+		default:
+			return errors.New("unknown method")
+		}
 	}
 
 	return nil
@@ -941,7 +1094,7 @@ func (l *lsp) trace(s string) {
 	l.debug.Flush()
 }
 
-func (l *lsp) Run() error {
+func (l *lsp) Run() (int, error) {
 	l.trace("TEAL LSP running..")
 	defer func() {
 		l.trace("TEAL LSP exited.")
@@ -986,8 +1139,7 @@ func (l *lsp) Run() error {
 		if err != nil {
 			l.trace(fmt.Sprintf("ERR: %s", err))
 		}
-
 	}
 
-	return nil
+	return l.exitCode, nil
 }

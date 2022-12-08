@@ -18,14 +18,14 @@ type args struct {
 	Net  string
 }
 
-func run(a args) error {
+func run(a args) (int, error) {
 	var r io.Reader
 	var w io.Writer
 
 	if a.Addr != "" && a.Net != "" {
 		c, err := net.Dial(a.Net, a.Addr)
 		if err != nil {
-			return errors.Wrap(err, "failed to connect to the client")
+			return -1, errors.Wrap(err, "failed to connect to the client")
 		}
 
 		r = c
@@ -39,7 +39,7 @@ func run(a args) error {
 	if a.Debug != "" {
 		f, err := os.Create(a.Debug)
 		if err != nil {
-			return errors.Wrap(err, "failed to create debug output file")
+			return -2, errors.Wrap(err, "failed to create debug output file")
 		}
 
 		opts = append(opts, lsp.WithDebug(f))
@@ -47,15 +47,10 @@ func run(a args) error {
 
 	l, err := lsp.New(r, w, opts...)
 	if err != nil {
-		return errors.Wrap(err, "failed to create lsp")
+		return -3, errors.Wrap(err, "failed to create lsp")
 	}
 
-	err = l.Run()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return l.Run()
 }
 
 func main() {
@@ -67,8 +62,10 @@ func main() {
 
 	flag.Parse()
 
-	err := run(a)
+	code, err := run(a)
 	if err != nil {
 		panic(err)
 	}
+
+	os.Exit(code)
 }
