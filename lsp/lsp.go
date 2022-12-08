@@ -86,9 +86,14 @@ type jsonRpcRequest struct {
 }
 
 type jsonRpcHeader struct {
-	JsonRpc string      `json:"jsonrpc"`
-	Id      interface{} `json:"id"`
-	Method  string      `json:"method"`
+	JsonRpc string `json:"jsonrpc"`
+
+	Id interface{} `json:"id"`
+
+	Method string `json:"method"`
+
+	Result interface{} `json:"result"`
+	Error  interface{} `json:"error"`
 }
 
 type jsonRpcResponse struct {
@@ -520,6 +525,17 @@ func (l *lsp) doDiagnostic(doc *lspDoc) []lspDiagnostic {
 }
 
 func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
+
+	if h.Result != nil {
+		// TODO: handle success
+		return nil
+	}
+
+	if h.Error != nil {
+		// TODO: handle failure
+		return nil
+	}
+
 	switch h.Method { // notifications
 	case "initialized":
 
