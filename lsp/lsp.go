@@ -631,7 +631,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 		switch h.Method {
 		case "shutdown":
 			l.shutdown = true
-			return l.success(h.Id, nil)
+			return l.success(h.Id, []struct{}{})
 
 		case "$/cancelRequest":
 
