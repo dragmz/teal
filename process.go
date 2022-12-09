@@ -17,7 +17,10 @@ type parserFunc func(c *parserContext) error
 type protoFunc func(p string)
 
 type OpSpecProto struct{}
-type OpSpecDetails struct{}
+type OpSpecDetails struct {
+	NamesMap map[string]bool
+	Names    []string
+}
 
 type OpSpec struct {
 	Code      byte
@@ -90,8 +93,27 @@ var immBytess = []interface{}{}
 var typeTxField = []interface{}{}
 var TxnFields = []interface{}{}
 
-func field(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
+func immediates(names ...string) OpSpecDetails {
+	m := map[string]bool{}
+	r := []string{}
+
+	for _, name := range names {
+		if !m[name] {
+			m[name] = true
+			r = append(r, name)
+		}
+	}
+	return OpSpecDetails{
+		NamesMap: m,
+		Names:    r,
+	}
+}
+
+func field(name string, vs ...interface{}) OpSpecDetails {
+	return OpSpecDetails{
+		NamesMap: map[string]bool{name: true},
+		Names:    []string{name},
+	}
 }
 
 func detBranch(vs ...interface{}) OpSpecDetails {
@@ -104,7 +126,12 @@ func (d OpSpecDetails) costs(vs ...interface{}) OpSpecDetails {
 	return d
 }
 
-func (d OpSpecDetails) field(vs ...interface{}) OpSpecDetails {
+func (d OpSpecDetails) field(name string, vs ...interface{}) OpSpecDetails {
+	if !d.NamesMap[name] {
+		d.NamesMap[name] = true
+		d.Names = append(d.Names, name)
+	}
+
 	return d
 }
 
@@ -718,10 +745,6 @@ func immKinded(vs ...interface{}) OpSpecDetails {
 var asmIntCBlock = []interface{}{}
 var checkIntImmArgs = []interface{}{}
 var immInts = []interface{}{}
-
-func immediates(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
-}
 
 type ProcessResult struct {
 	Version     uint8

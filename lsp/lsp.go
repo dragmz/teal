@@ -904,10 +904,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				}
 				for _, spec := range teal.OpSpecs {
 					if spec.Version <= res.Version && strings.HasPrefix(spec.Name, prefix) {
+						detail := " " + strings.Join(spec.OpDetails.Names, " ")
 						ccs = append(ccs, lspCompletionItem{
 							Label:         spec.Name,
 							Documentation: teal.OpDocByName[spec.Name],
 							Kind:          operator,
+							LabelDetails: &lspCompletionItemLabelDetails{
+								Detail: detail,
+							},
 						})
 					}
 				}
