@@ -188,16 +188,17 @@ type lspSemanticTokens struct {
 }
 
 type lspServerCapabilities struct {
-	TextDocumentSync          *int                       `json:"textDocumentSync,omitempty"`
-	DiagnosticProvider        *lspDiagnosticProvider     `json:"diagnosticProvider,omitempty"`
-	CompletionProvider        *lspCompletionProvider     `json:"completionProvider,omitempty"`
-	DocumentSymbolProvider    *bool                      `json:"documentSymbolProvider,omitempty"`
-	CodeActionProvider        *bool                      `json:"codeActionProvider,omitempty"`
-	ExecuteCommandProvider    *lspExecuteCommandProvider `json:"executeCommandProvider,omitempty"`
-	RenameProvider            *lspRenameOptions          `json:"renameProvider,omitempty"`
-	ColorProvider             *bool                      `json:"colorProvider,omitempty"`
-	DocumentHighlightProvider *bool                      `json:"documentHighlightProvider,omitempty"`
-	SemanticTokensProvider    *lspSemanticTokensProvider `json:"semanticTokensProvider,omitempty"`
+	TextDocumentSync           *int                       `json:"textDocumentSync,omitempty"`
+	DiagnosticProvider         *lspDiagnosticProvider     `json:"diagnosticProvider,omitempty"`
+	CompletionProvider         *lspCompletionProvider     `json:"completionProvider,omitempty"`
+	DocumentSymbolProvider     *bool                      `json:"documentSymbolProvider,omitempty"`
+	CodeActionProvider         *bool                      `json:"codeActionProvider,omitempty"`
+	ExecuteCommandProvider     *lspExecuteCommandProvider `json:"executeCommandProvider,omitempty"`
+	RenameProvider             *lspRenameOptions          `json:"renameProvider,omitempty"`
+	ColorProvider              *bool                      `json:"colorProvider,omitempty"`
+	DocumentHighlightProvider  *bool                      `json:"documentHighlightProvider,omitempty"`
+	SemanticTokensProvider     *lspSemanticTokensProvider `json:"semanticTokensProvider,omitempty"`
+	DocumentFormattingProvider *bool                      `json:"documentFormattingProvider,omitempty"`
 }
 
 type lspInitializeResult struct {
@@ -459,6 +460,10 @@ type lspCompletionRequestParams struct {
 	Position     lspPosition               `json:"position"`
 }
 
+type lspDocumentFormattingRequestParams struct {
+	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
+}
+
 // notifications
 type lspDidChange lspRequest[*lspDidChangeParams]
 type lspDidOpen lspRequest[*lspDidOpenParams]
@@ -476,6 +481,7 @@ type lspDidCloseRequest lspRequest[*lspDidCloseRequestParams]
 type lspDocumentHighlightRequest lspRequest[*lspDocumentHighlightRequestParams]
 type lspSemanticTokensFullRequest lspRequest[*lspSemanticTokensFullRequestParams]
 type lspCompletionRequest lspRequest[*lspCompletionRequestParams]
+type lspDocumentFormattingRequest lspRequest[*lspDocumentFormattingRequestParams]
 
 func readInto(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, &v)
@@ -943,7 +949,43 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			return l.success(h.Id, ccs)
+			/*
+				case "textDocument/formatting":
+					req, err := read[lspDocumentFormattingRequest](b)
+					if err != nil {
+						return err
+					}
 
+					doc := l.docs[req.Params.TextDocument.Uri]
+					if doc == nil {
+						return l.fail(h.Id, "document not found")
+					}
+
+					res := doc.Results()
+
+					formatted := tealfmt.Format(strings.NewReader(doc.s))
+
+					var end int
+					if len(res.Lines) > 0 {
+						end = len(res.Lines[len(res.Lines)-1])
+					}
+
+					return l.success(h.Id, []lspTextEdit{
+						{
+							Range: lspRange{
+								Start: lspPosition{
+									Line:      0,
+									Character: 0,
+								},
+								End: lspPosition{
+									Line:      len(res.Lines) - 1,
+									Character: end,
+								},
+							},
+							NewText: formatted,
+						},
+					})
+			*/
 		case "textDocument/codeAction":
 			req, err := read[lspCodeActionRequest](b)
 			if err != nil {
@@ -1166,6 +1208,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			fullSemantic := new(bool)
 			*fullSemantic = true
 
+			/*
+				formatting := new(bool)
+				*formatting = true
+			*/
+
 			return l.success(h.Id, lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
 					TextDocumentSync:       sync,
@@ -1188,6 +1235,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						},
 					},
 					CompletionProvider: &lspCompletionProvider{},
+					//DocumentFormattingProvider: formatting,
 				},
 			})
 		default:
