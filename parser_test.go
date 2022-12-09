@@ -47,7 +47,7 @@ func TestParser(t *testing.T) {
 				}
 			} else {
 				if len(res.Diagnostics) == 0 {
-					t.Errorf("expected errors but got none")
+					t.Errorf("expected errors but got none: %s", test.Path)
 				}
 			}
 		}
