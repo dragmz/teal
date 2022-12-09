@@ -927,7 +927,6 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							Kind:             operator,
 							InsertText:       insert,
 							InsertTextFormat: format,
-							CommitCharacters: []string{" "},
 							LabelDetails: &lspCompletionItemLabelDetails{
 								Detail: detail,
 							},
