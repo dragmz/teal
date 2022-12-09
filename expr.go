@@ -180,7 +180,7 @@ func (e *LtEqExpr) String() string {
 	return "<="
 }
 
-var LtEq = &LtEqExpr{}
+var Le = &LtEqExpr{}
 
 // >=
 
@@ -191,7 +191,7 @@ func (e *GtEqExpr) String() string {
 	return ">="
 }
 
-var GtEq = &GtEqExpr{}
+var Ge = &GtEqExpr{}
 
 // &&
 
@@ -285,7 +285,7 @@ func (e *ModExpr) String() string {
 	return "%"
 }
 
-var Mod = &ModExpr{}
+var Modulo = &ModExpr{}
 
 // |
 
@@ -295,7 +295,7 @@ func (e *BinOrExpr) String() string {
 	return "|"
 }
 
-var BinOr = &BinOrExpr{}
+var Bitr = &BinOrExpr{}
 
 // &
 
@@ -305,7 +305,7 @@ func (e *BinAndExpr) String() string {
 	return "&"
 }
 
-var BinAnd = &BinAndExpr{}
+var BitAnd = &BinAndExpr{}
 
 // ^
 
@@ -315,7 +315,7 @@ func (e *BinXorExpr) String() string {
 	return "^"
 }
 
-var BinXor = &BinXorExpr{}
+var BitXor = &BinXorExpr{}
 
 // ~
 
@@ -325,7 +325,7 @@ func (e *BinNotExpr) String() string {
 	return "~"
 }
 
-var BinNot = &BinNotExpr{}
+var BitNot = &BinNotExpr{}
 
 // mulw
 
@@ -957,7 +957,7 @@ type PushBytesExpr struct {
 }
 
 func (e *PushBytesExpr) String() string {
-	return Bytes{Value: e.Value, Format: e.Format}.String()
+	return fmt.Sprintf("pushbytes %s", Bytes{Value: e.Value, Format: e.Format})
 }
 
 type PushIntExpr struct {
@@ -996,9 +996,9 @@ type Bytes struct {
 func (e Bytes) String() string {
 	switch e.Format {
 	case BytesStringLiteral:
-		return fmt.Sprintf("byte \"%s\"", string(e.Value))
+		return fmt.Sprintf("\"%s\"", string(e.Value))
 	case BytesBase64:
-		return fmt.Sprintf("byte b64 %s", base64.StdEncoding.EncodeToString(e.Value))
+		return fmt.Sprintf("b64 %s", base64.StdEncoding.EncodeToString(e.Value))
 	default:
 		panic(fmt.Sprintf("unsupported bytes format: %d", e.Format))
 	}
@@ -1006,10 +1006,7 @@ func (e Bytes) String() string {
 }
 
 func (e *ByteExpr) String() string {
-	return Bytes{
-		Value:  e.Value,
-		Format: e.Format,
-	}.String()
+	return fmt.Sprintf("byte %s", Bytes{Value: e.Value, Format: e.Format})
 }
 
 type BoxGetExpr struct {
@@ -1316,6 +1313,175 @@ func (e *DupExpr) String() string {
 }
 
 var Dup = &DupExpr{}
+
+type BuryExpr struct {
+	Index uint8
+}
+
+func (e *BuryExpr) String() string {
+	return fmt.Sprintf("bury %d", e.Index)
+}
+
+type PopNExpr struct {
+	Index uint8
+}
+
+func (e *PopNExpr) String() string {
+	return fmt.Sprintf("popn %d", e.Index)
+}
+
+type DupNExpr struct {
+	Index uint8
+}
+
+func (e *DupNExpr) String() string {
+	return fmt.Sprintf("dupn %d", e.Index)
+}
+
+type Extract16BitsExpr struct{}
+
+func (e *Extract16BitsExpr) String() string {
+	return "extract_uint16"
+}
+
+var Extract16Bits = &Extract16BitsExpr{}
+
+type Extract32BitsExpr struct{}
+
+func (e *Extract32BitsExpr) String() string {
+	return "extract_uint32"
+}
+
+var Extract32Bits = &Extract32BitsExpr{}
+
+type Extract64BitsExpr struct{}
+
+func (e *Extract64BitsExpr) String() string {
+	return "extract_uint64"
+}
+
+var Extract64Bits = &Extract64BitsExpr{}
+
+type Replace2Expr struct {
+	Index uint8
+}
+
+func (e *Replace2Expr) String() string {
+	return fmt.Sprintf("repace2 %d", e.Index)
+}
+
+type Replace3Expr struct{}
+
+func (e *Replace3Expr) String() string {
+	return "replace3"
+}
+
+var Replace3 = &Replace3Expr{}
+
+type Base64DecodeExpr struct {
+	Index uint8
+}
+
+func (e *Base64DecodeExpr) String() string {
+	return fmt.Sprintf("base64_decode %d", e.Index)
+}
+
+type JsonRefExpr struct {
+	Index uint8
+}
+
+func (e *JsonRefExpr) String() string {
+	return fmt.Sprintf("json_ref %d", e.Index)
+}
+
+type Ed25519VerifyBareExpr struct{}
+
+func (e *Ed25519VerifyBareExpr) String() string {
+	return "ed25519verify_bare"
+}
+
+var Ed25519VerifyBare = &Ed25519VerifyBareExpr{}
+
+type BitLenExpr struct{}
+
+func (e *BitLenExpr) String() string {
+	return "bitlen"
+}
+
+var BitLen = &BitLenExpr{}
+
+type ExpwExpr struct{}
+
+func (e *ExpwExpr) String() string {
+	return "expw"
+}
+
+var Expw = &ExpwExpr{}
+
+type ItxnaExpr struct {
+	Field uint8
+	Index uint8
+}
+
+func (e *ItxnaExpr) String() string {
+	return fmt.Sprintf("itxna %d %d", e.Field, e.Index)
+}
+
+type GtxnasExpr struct {
+	Field uint8
+	Index uint8
+}
+
+func (e *GtxnasExpr) String() string {
+	return fmt.Sprintf("gtxnas %d %d", e.Field, e.Index)
+}
+
+type ArgsExpr struct{}
+
+func (e *ArgsExpr) String() string {
+	return "args"
+}
+
+var Args = &ArgsExpr{}
+
+type GloadssExpr struct{}
+
+func (e *GloadssExpr) String() string {
+	return "gloadss"
+}
+
+var Gloadss = &GloadssExpr{}
+
+type ItxnasExpr struct {
+	Field TxnField
+}
+
+func (e *ItxnasExpr) String() string {
+	return fmt.Sprintf("itxnas %s", e.Field)
+}
+
+type GitxnasExpr struct {
+	Index uint8
+	Field TxnField
+}
+
+func (e *GitxnasExpr) String() string {
+	return fmt.Sprintf("gitxnas %d %s", e.Index, e.Field)
+}
+
+type PushBytessExpr struct {
+	Bytess [][]byte
+}
+
+func (e PushBytessExpr) String() string {
+	var ss []string
+
+	for _, bs := range e.Bytess {
+		ss = append(ss, Bytes{Format: BytesBase64, Value: bs}.String())
+	}
+
+	return fmt.Sprintf("pushbytess %s", strings.Join(ss, " "))
+}
 
 type FrameBuryExpr struct {
 	Index int8
@@ -1811,13 +1977,21 @@ func (e *Substring3Expr) String() string {
 
 var Substring3 = &Substring3Expr{}
 
+type ShlExpr struct{}
+
+func (e *ShlExpr) String() string {
+	return "shl"
+}
+
+var ShiftLeft = &ShlExpr{}
+
 type ShrExpr struct{}
 
 func (e *ShrExpr) String() string {
 	return "shr"
 }
 
-var Shr = &ShrExpr{}
+var ShiftRight = &ShrExpr{}
 
 type GetBitExpr struct{}
 
@@ -1857,7 +2031,7 @@ func (e *BminusExpr) String() string {
 	return "b-"
 }
 
-var Bminus = &BminusExpr{}
+var BytesMinus = &BminusExpr{}
 
 type BmulExpr struct{}
 
@@ -1865,7 +2039,7 @@ func (e *BmulExpr) String() string {
 	return "b*"
 }
 
-var Bmul = &BmulExpr{}
+var BytesMul = &BmulExpr{}
 
 type BdivExpr struct{}
 
@@ -1873,7 +2047,7 @@ func (e *BdivExpr) String() string {
 	return "b/"
 }
 
-var Bdiv = &BdivExpr{}
+var BytesDiv = &BdivExpr{}
 
 type BplusExpr struct{}
 
@@ -1881,7 +2055,7 @@ func (e *BplusExpr) String() string {
 	return "b+"
 }
 
-var Bplus = &BplusExpr{}
+var BytesPlus = &BplusExpr{}
 
 type GaidExpr struct {
 	Group uint8
@@ -1890,6 +2064,33 @@ type GaidExpr struct {
 func (e *GaidExpr) String() string {
 	return fmt.Sprintf("gaid %d", e.Group)
 }
+
+type GaidsExpr struct {
+}
+
+func (e *GaidsExpr) String() string {
+	return "gaids"
+}
+
+var Gaids = &GaidsExpr{}
+
+type LoadsExpr struct {
+}
+
+func (e *LoadsExpr) String() string {
+	return "loads"
+}
+
+var Loads = &LoadsExpr{}
+
+type StoresExpr struct {
+}
+
+func (e *StoresExpr) String() string {
+	return "stores"
+}
+
+var Stores = &StoresExpr{}
 
 type Dup2Expr struct{}
 
@@ -1932,6 +2133,70 @@ func (e *BgteqExpr) String() string {
 
 var Bgteq = &BgteqExpr{}
 
+type BGtExpr struct{}
+
+func (e *BGtExpr) String() string {
+	return "b>"
+}
+
+var BytesGt = &BGtExpr{}
+
+type BytesLeExpr struct{}
+
+func (e *BytesLeExpr) String() string {
+	return "b<="
+}
+
+var BytesLe = &BytesLeExpr{}
+
+type BytesGeExpr struct{}
+
+func (e *BytesGeExpr) String() string {
+	return "b>="
+}
+
+var BytesGe = &BytesGeExpr{}
+
+type BytesEqExpr struct{}
+
+func (e *BytesEqExpr) String() string {
+	return "b=="
+}
+
+var BytesEq = &BytesEqExpr{}
+
+type BytesNeqExpr struct{}
+
+func (e *BytesNeqExpr) String() string {
+	return "b!="
+}
+
+var BytesNeq = &BytesNeqExpr{}
+
+type BytesModuloExpr struct{}
+
+func (e *BytesModuloExpr) String() string {
+	return "b%"
+}
+
+var BytesModulo = &BytesModuloExpr{}
+
+type BytesBitOrExpr struct{}
+
+func (e *BytesBitOrExpr) String() string {
+	return "b|"
+}
+
+var BytesBitOr = &BytesBitOrExpr{}
+
+type BytesBitAndExpr struct{}
+
+func (e *BytesBitAndExpr) String() string {
+	return "b&"
+}
+
+var BytesBitAnd = &BytesBitAndExpr{}
+
 type BsqrtExpr struct{}
 
 func (e *BsqrtExpr) String() string {
@@ -1964,7 +2229,7 @@ func (e *BltExpr) String() string {
 	return "b<"
 }
 
-var Blt = &BltExpr{}
+var BytesLt = &BltExpr{}
 
 type BandExpr struct{}
 
@@ -1974,13 +2239,29 @@ func (e *BandExpr) String() string {
 
 var Band = &BandExpr{}
 
-type BxorExpr struct{}
+type BytesBitXorExpr struct{}
 
-func (e *BxorExpr) String() string {
+func (e *BytesBitXorExpr) String() string {
 	return "b^"
 }
 
-var Bxor = &BxorExpr{}
+var BytesBitXor = &BytesBitXorExpr{}
+
+type BytesBitNotExpr struct{}
+
+func (e *BytesBitNotExpr) String() string {
+	return "b~"
+}
+
+var BytesBitNot = &BytesBitNotExpr{}
+
+type BytesZeroExpr struct{}
+
+func (e *BytesZeroExpr) String() string {
+	return "bzero"
+}
+
+var BytesZero = &BytesZeroExpr{}
 
 type AppOptedInExpr struct{}
 
@@ -2099,7 +2380,7 @@ func AssertLtEq(a, b Expr) Expr {
 	return Block(
 		a,
 		b,
-		LtEq,
+		Le,
 		Assert,
 	)
 }
@@ -2152,7 +2433,7 @@ func AssertInRange(expr Expr, a_inclusive uint64, b_exclusive uint64) Expr {
 	return Block(
 		expr,
 		Int(a_inclusive),
-		GtEq,
+		Ge,
 		expr,
 		Int(b_exclusive),
 		Lt,

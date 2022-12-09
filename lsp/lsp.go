@@ -888,30 +888,56 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			ccs := []lspCompletionItem{
 				{
 					Label: "#pragma",
+					// TODO: need to set TextEdit because vs code adds extra # if one is already there by default
 				},
 			}
 
 			operator := new(int)
 			*operator = 25
 
+			snippetFormat := new(int)
+			*snippetFormat = 2
+
 			if ok {
+				for _, spec := range teal.OpSpecs {
+					if spec.Version <= res.Version && strings.HasPrefix(spec.Name, prefix) {
+						var insert string
+						var format *int
+						if len(spec.OpDetails.Names) > 0 {
+							var placeholders string
+							for i, name := range spec.OpDetails.Names {
+								if i > 0 {
+									placeholders += " "
+								}
+
+								placeholders += fmt.Sprintf("${%d:%s}", i+1, name)
+							}
+
+							insert = fmt.Sprintf("%s %s", spec.Name, placeholders)
+							format = snippetFormat
+						} else {
+							insert = ""
+							format = nil
+						}
+
+						detail := " " + strings.Join(spec.OpDetails.Names, " ")
+						ccs = append(ccs, lspCompletionItem{
+							Label:            spec.Name,
+							Documentation:    teal.OpDocByName[spec.Name],
+							Kind:             operator,
+							InsertText:       insert,
+							InsertTextFormat: format,
+							CommitCharacters: []string{" "},
+							LabelDetails: &lspCompletionItemLabelDetails{
+								Detail: detail,
+							},
+						})
+					}
+				}
 				for name := range teal.PseudoOps {
 					if strings.HasPrefix(name, prefix) {
 						ccs = append(ccs, lspCompletionItem{
 							Label: name,
-						})
-					}
-				}
-				for _, spec := range teal.OpSpecs {
-					if spec.Version <= res.Version && strings.HasPrefix(spec.Name, prefix) {
-						detail := " " + strings.Join(spec.OpDetails.Names, " ")
-						ccs = append(ccs, lspCompletionItem{
-							Label:         spec.Name,
-							Documentation: teal.OpDocByName[spec.Name],
-							Kind:          operator,
-							LabelDetails: &lspCompletionItemLabelDetails{
-								Detail: detail,
-							},
 						})
 					}
 				}

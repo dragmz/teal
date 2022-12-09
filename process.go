@@ -10,16 +10,141 @@ import (
 var PseudoOps = pseudoOps
 var OpDocByName = opDocByName
 var OpDocExtras = opDocExtras
+var opSpecByName = func() map[string]OpSpec {
+	res := map[string]OpSpec{}
+	for _, spec := range OpSpecs {
+		res[spec.Name] = spec
+	}
+	return res
+}()
 
-type parserContext struct{}
+type recoverable struct{}
 
-type parserFunc func(c *parserContext) error
+type parserContext struct {
+	ops  []Op
+	args *arguments
+	diag []Diagnostic
+}
+
+func (c *parserContext) emit(e Op) {
+	c.ops = append(c.ops, e)
+}
+
+func (c *parserContext) failAt(l int, b int, e int, err error) {
+	c.diag = append(c.diag, parseError{l: l, b: b, e: e, error: err})
+	panic(recoverable{})
+}
+
+func (c *parserContext) failToken(t Token, err error) {
+	c.failAt(t.l, t.b, t.e, err)
+}
+
+func (c *parserContext) failCurr(err error) {
+	c.failToken(c.args.Curr(), err)
+}
+
+func (c *parserContext) failPrev(err error) {
+	c.failToken(c.args.Prev(), err)
+}
+
+func (c *parserContext) mustReadArg(name string) {
+	if !c.args.Scan() {
+		c.failPrev(errors.Errorf("missing arg: %s", name))
+	}
+}
+
+func (c *parserContext) parseUint64(name string) uint64 {
+	v, err := readInt(c.args)
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse uint64: %s", name))
+	}
+
+	return v
+}
+
+func (c *parserContext) parseUint8(name string) uint8 {
+	v, err := readUint8(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse uint8: %s", name))
+	}
+	return v
+}
+
+func (c *parserContext) parseInt8(name string) int8 {
+	v, err := readInt8(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse int8: %s", name))
+	}
+	return v
+}
+
+func (c *parserContext) parseTxnField(name string) TxnField {
+	v, err := readTxnField(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse txn field: %s", name))
+	}
+	return v
+}
+
+func (c *parserContext) parseBytes(name string) []byte {
+	v, err := readBytes(c.args)
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse bytes: %s", name))
+	}
+	return v
+}
+
+func (c *parserContext) parseEcdsaCurveIndex(name string) EcdsaCurve {
+	v, err := readEcdsaCurveIndex(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse ESCDS curve index: %s", name))
+	}
+	return v
+}
+
+func (c *parserContext) mustReadBytes(name string) []byte {
+	c.mustReadArg(name)
+	return c.parseBytes(name)
+}
+
+func (c *parserContext) mustReadInt(name string) uint64 {
+	c.mustReadArg(name)
+	return c.parseUint64(name)
+}
+
+func (c *parserContext) mustReadUint8(name string) uint8 {
+	c.mustReadArg(name)
+	return c.parseUint8(name)
+}
+
+func (c *parserContext) mustReadInt8(name string) int8 {
+	c.mustReadArg(name)
+	return c.parseInt8(name)
+}
+
+func (c *parserContext) mustRead(name string) string {
+	c.mustReadArg(name)
+	return c.args.Text()
+}
+
+func (c *parserContext) mustReadTxnField(name string) TxnField {
+	c.mustReadArg(name)
+	return c.parseTxnField(name)
+}
+
+func (c *parserContext) mustReadEcdsaCurveIndex(name string) EcdsaCurve {
+	c.mustReadArg(name)
+	return c.parseEcdsaCurveIndex(name)
+}
+
+type parserFunc func(c *parserContext)
 type protoFunc func(p string)
 
 type OpSpecProto struct{}
 type OpSpecDetails struct {
 	NamesMap map[string]bool
 	Names    []string
+	Cost     int
 }
 
 type OpSpec struct {
@@ -31,7 +156,6 @@ type OpSpec struct {
 	OpDetails OpSpecDetails
 }
 
-// TODO
 func assembler(vs ...interface{}) OpSpecDetails {
 	return OpSpecDetails{}
 }
@@ -40,7 +164,6 @@ func costly(vs ...interface{}) OpSpecDetails {
 	return OpSpecDetails{}
 }
 
-// TODO
 func detDefault() OpSpecDetails {
 	return OpSpecDetails{}
 }
@@ -48,8 +171,6 @@ func detDefault() OpSpecDetails {
 func detSwitch() OpSpecDetails {
 	return OpSpecDetails{}
 }
-
-// TODO
 
 func costByField(vs ...interface{}) OpSpecDetails {
 	return OpSpecDetails{}
@@ -59,12 +180,10 @@ func typed(vs ...interface{}) OpSpecDetails {
 	return OpSpecDetails{}
 }
 
-// TODO
 const (
 	modeSig = 1
 )
 
-// TODO
 func (d OpSpecDetails) only(vs ...interface{}) OpSpecDetails {
 	return d
 }
@@ -171,542 +290,700 @@ var asmPushInts = []interface{}{}
 var VrfStandards = []interface{}{}
 var BlockFields = []interface{}{}
 
-// TODO
 func proto(vs ...interface{}) OpSpecProto {
 	return OpSpecProto{}
 }
 
-// TODO
-func opErr(c *parserContext) error {
-	return nil
+func opErr(c *parserContext) {
+	c.emit(Err)
 }
 
-func opSHA256(c *parserContext) error {
-	return nil
+func opSHA256(c *parserContext) {
+	c.emit(Sha256)
 }
 
-func opKeccak256(c *parserContext) error {
-	return nil
-}
-func opSHA512_256(c *parserContext) error {
-	return nil
-}
-func opEd25519Verify(c *parserContext) error {
-	return nil
-}
-func opEcdsaVerify(c *parserContext) error {
-	return nil
-}
-func opEcdsaPkDecompress(c *parserContext) error {
-	return nil
-}
-func opEcdsaPkRecover(c *parserContext) error {
-	return nil
-}
-func opPlus(c *parserContext) error {
-	return nil
-}
-func opMinus(c *parserContext) error {
-	return nil
-}
-func opDiv(c *parserContext) error {
-	return nil
-}
-func opMul(c *parserContext) error {
-	return nil
-}
-func opLt(c *parserContext) error {
-	return nil
-}
-func opGt(c *parserContext) error {
-	return nil
-}
-func opLe(c *parserContext) error {
-	return nil
-}
-func opGe(c *parserContext) error {
-	return nil
-}
-func opAnd(c *parserContext) error {
-	return nil
-}
-func opOr(c *parserContext) error {
-	return nil
-}
-func opEq(c *parserContext) error {
-	return nil
-}
-func opNeq(c *parserContext) error {
-	return nil
-}
-func opNot(c *parserContext) error {
-	return nil
-}
-func opLen(c *parserContext) error {
-	return nil
-}
-func opItob(c *parserContext) error {
-	return nil
-}
-func opBtoi(c *parserContext) error {
-	return nil
-}
-func opModulo(c *parserContext) error {
-	return nil
-}
-func opBitOr(c *parserContext) error {
-	return nil
-}
-func opBitAnd(c *parserContext) error {
-	return nil
-}
-func opBitXor(c *parserContext) error {
-	return nil
-}
-func opBitNot(c *parserContext) error {
-	return nil
-}
-func opMulw(c *parserContext) error {
-	return nil
-}
-func opAddw(c *parserContext) error {
-	return nil
-}
-func opDivModw(c *parserContext) error {
-	return nil
-}
-func opIntConstBlock(c *parserContext) error {
-	return nil
-}
-func opIntConstLoad(c *parserContext) error {
-	return nil
-}
-func opIntConst0(c *parserContext) error {
-	return nil
-}
-func opIntConst1(c *parserContext) error {
-	return nil
-}
-func opIntConst2(c *parserContext) error {
-	return nil
-}
-func opIntConst3(c *parserContext) error {
-	return nil
-}
-func opByteConstBlock(c *parserContext) error {
-	return nil
-}
-func opByteConstLoad(c *parserContext) error {
-	return nil
-}
-func opByteConst0(c *parserContext) error {
-	return nil
-}
-func opByteConst1(c *parserContext) error {
-	return nil
-}
-func opByteConst2(c *parserContext) error {
-	return nil
-}
-func opByteConst3(c *parserContext) error {
-	return nil
-}
-func opArg(c *parserContext) error {
-	return nil
-}
-func opArg0(c *parserContext) error {
-	return nil
-}
-func opArg1(c *parserContext) error {
-	return nil
-}
-func opArg2(c *parserContext) error {
-	return nil
-}
-func opArg3(c *parserContext) error {
-	return nil
-}
-func opTxn(c *parserContext) error {
-	return nil
-}
-func opGlobal(c *parserContext) error {
-	return nil
-}
-func opGtxn(c *parserContext) error {
-	return nil
-}
-func opLoad(c *parserContext) error {
-	return nil
-}
-func opStore(c *parserContext) error {
-	return nil
-}
-func opTxna(c *parserContext) error {
-	return nil
-}
-func opGtxna(c *parserContext) error {
-	return nil
-}
-func opGtxns(c *parserContext) error {
-	return nil
-}
-func opGtxnsa(c *parserContext) error {
-	return nil
-}
-func opGload(c *parserContext) error {
-	return nil
-}
-func opGloads(c *parserContext) error {
-	return nil
-}
-func opGaid(c *parserContext) error {
-	return nil
-}
-func opGaids(c *parserContext) error {
-	return nil
-}
-func opLoads(c *parserContext) error {
-	return nil
-}
-func opStores(c *parserContext) error {
-	return nil
-}
-func opBnz(c *parserContext) error {
-	return nil
-}
-func opBz(c *parserContext) error {
-	return nil
-}
-func opB(c *parserContext) error {
-	return nil
-}
-func opReturn(c *parserContext) error {
-	return nil
-}
-func opAssert(c *parserContext) error {
-	return nil
-}
-func opBury(c *parserContext) error {
-	return nil
-}
-func opPopN(c *parserContext) error {
-	return nil
-}
-func opDupN(c *parserContext) error {
-	return nil
+func opKeccak256(c *parserContext) {
+	c.emit(Keccak256)
 }
 
-func opPop(c *parserContext) error {
-	return nil
+func opSHA512_256(c *parserContext) {
+	c.emit(Sha512256)
 }
-func opDup(c *parserContext) error {
-	return nil
+func opEd25519Verify(c *parserContext) {
+	c.emit(ED25519Verify)
 }
-func opDup2(c *parserContext) error {
-	return nil
+
+func opEcdsaVerify(c *parserContext) {
+	curve := c.mustReadEcdsaCurveIndex("curve index")
+	c.emit(&EcdsaVerifyExpr{Index: curve})
 }
-func opDig(c *parserContext) error {
-	return nil
+func opEcdsaPkDecompress(c *parserContext) {
+	curve := c.mustReadEcdsaCurveIndex("curve index")
+	c.emit(&EcdsaPkDecompressExpr{Index: curve})
 }
-func opSwap(c *parserContext) error {
-	return nil
+
+func opEcdsaPkRecover(c *parserContext) {
+	curve := c.mustReadEcdsaCurveIndex("curve index")
+	c.emit(&EcdsaPkRecoverExpr{Index: curve})
 }
-func opSelect(c *parserContext) error {
-	return nil
+
+func opPlus(c *parserContext) {
+	c.emit(PlusOp)
 }
-func opCover(c *parserContext) error {
-	return nil
+func opMinus(c *parserContext) {
+	c.emit(MinusOp)
 }
-func opUncover(c *parserContext) error {
-	return nil
+func opDiv(c *parserContext) {
+	c.emit(Div)
 }
-func opConcat(c *parserContext) error {
-	return nil
+func opMul(c *parserContext) {
+	c.emit(Mul)
 }
-func opSubstring(c *parserContext) error {
-	return nil
+func opLt(c *parserContext) {
+	c.emit(Lt)
 }
-func opSubstring3(c *parserContext) error {
-	return nil
+func opGt(c *parserContext) {
+	c.emit(Gt)
 }
-func opGetBit(c *parserContext) error {
-	return nil
+func opLe(c *parserContext) {
+	c.emit(Le)
 }
-func opSetBit(c *parserContext) error {
-	return nil
+func opGe(c *parserContext) {
+	c.emit(Ge)
 }
-func opGetByte(c *parserContext) error {
-	return nil
+func opAnd(c *parserContext) {
+	c.emit(And)
 }
-func opSetByte(c *parserContext) error {
-	return nil
+func opOr(c *parserContext) {
+	c.emit(Or)
 }
-func opExtract(c *parserContext) error {
-	return nil
+func opEq(c *parserContext) {
+	c.emit(Eq)
 }
-func opExtract3(c *parserContext) error {
-	return nil
+func opNeq(c *parserContext) {
+	c.emit(Neq)
 }
-func opExtract16Bits(c *parserContext) error {
-	return nil
+func opNot(c *parserContext) {
+	c.emit(Not)
 }
-func opExtract32Bits(c *parserContext) error {
-	return nil
+func opLen(c *parserContext) {
+	c.emit(Len)
 }
-func opExtract64Bits(c *parserContext) error {
-	return nil
+func opItob(c *parserContext) {
+	c.emit(Itob)
 }
-func opReplace2(c *parserContext) error {
-	return nil
+func opBtoi(c *parserContext) {
+	c.emit(Btoi)
 }
-func opReplace3(c *parserContext) error {
-	return nil
+func opModulo(c *parserContext) {
+	c.emit(Modulo)
 }
-func opBase64Decode(c *parserContext) error {
-	return nil
+func opBitOr(c *parserContext) {
+	c.emit(Bitr)
 }
-func opJSONRef(c *parserContext) error {
-	return nil
+func opBitAnd(c *parserContext) {
+	c.emit(BitAnd)
 }
-func opBalance(c *parserContext) error {
-	return nil
+func opBitXor(c *parserContext) {
+	c.emit(BitXor)
 }
-func opAppOptedIn(c *parserContext) error {
-	return nil
+func opBitNot(c *parserContext) {
+	c.emit(BitNot)
 }
-func opAppLocalGet(c *parserContext) error {
-	return nil
+func opMulw(c *parserContext) {
+	c.emit(Mulw)
 }
-func opAppLocalGetEx(c *parserContext) error {
-	return nil
+func opAddw(c *parserContext) {
+	c.emit(Addw)
 }
-func opAppGlobalGet(c *parserContext) error {
-	return nil
+func opDivModw(c *parserContext) {
+	c.emit(DivModw)
 }
-func opAppGlobalGetEx(c *parserContext) error {
-	return nil
+func opIntConstBlock(c *parserContext) {
+	var values []uint64
+
+	for c.args.Scan() {
+		value := c.parseUint64("value")
+		values = append(values, value)
+	}
+
+	c.emit(&IntcBlockExpr{Values: values})
+}
+
+func opIntConstLoad(c *parserContext) {
+	value := c.mustReadUint8("value")
+	c.emit(&IntcExpr{Index: uint8(value)})
+}
+
+func opIntConst0(c *parserContext) {
+	c.emit(Intc0)
+}
+func opIntConst1(c *parserContext) {
+	c.emit(Intc1)
+}
+func opIntConst2(c *parserContext) {
+	c.emit(Intc2)
+}
+func opIntConst3(c *parserContext) {
+	c.emit(Intc3)
+}
+func opByteConstBlock(c *parserContext) {
+	var values [][]byte
+
+	for c.args.Scan() {
+		b := c.parseBytes("value")
+		values = append(values, b)
+	}
+
+	c.emit(&BytecBlockExpr{Values: values})
+}
+
+func opByteConstLoad(c *parserContext) {
+	value := c.mustReadUint8("index")
+	c.emit(&BytecExpr{Index: uint8(value)})
+}
+
+func opByteConst0(c *parserContext) {
+	c.emit(Bytec0)
+}
+func opByteConst1(c *parserContext) {
+	c.emit(Bytec1)
+}
+func opByteConst2(c *parserContext) {
+	c.emit(Bytec2)
+}
+func opByteConst3(c *parserContext) {
+	c.emit(Bytec3)
+}
+func opArg(c *parserContext) {
+	value := c.mustReadUint8("index")
+	c.emit(&ArgExpr{Index: uint8(value)})
+}
+func opArg0(c *parserContext) {
+	c.emit(Arg0)
+}
+func opArg1(c *parserContext) {
+	c.emit(Arg1)
+}
+func opArg2(c *parserContext) {
+	c.emit(Arg2)
+}
+func opArg3(c *parserContext) {
+	c.emit(Arg3)
+}
+func opTxn(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	c.emit(&TxnExpr{Field: f})
+}
+func opGlobal(c *parserContext) {
+	c.mustReadArg("field")
+
+	field, err := readGlobalField(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse global field: %s", c.args.Text()))
+		return
+	}
+
+	c.emit(&GlobalExpr{Index: field})
+}
+
+func opGtxn(c *parserContext) {
+	t := c.mustReadInt("t")
+	f := c.mustReadTxnField("f")
+	c.emit(&GtxnExpr{Index: uint8(t), Field: f})
+}
+
+func opLoad(c *parserContext) {
+	value := c.mustReadUint8("i")
+	c.emit(&LoadExpr{Index: uint8(value)})
+}
+func opStore(c *parserContext) {
+	value := c.mustReadUint8("i")
+	c.emit(&StoreExpr{Index: uint8(value)})
+}
+
+func opTxna(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	i := c.mustReadUint8("i")
+	c.emit(&TxnaExpr{Field: f, Index: i})
+}
+
+func opGtxna(c *parserContext) {
+	t := c.mustReadUint8("t")
+	f := c.mustReadTxnField("f")
+	i := c.mustReadUint8("i")
+	c.emit(&GtxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
+}
+func opGtxns(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	c.emit(&GtxnsExpr{Field: f})
+}
+
+func opGtxnsa(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	i := c.mustReadUint8("i")
+	c.emit(&GtxnsaExpr{Field: f, Index: uint8(i)})
+}
+func opGload(c *parserContext) {
+	t := c.mustReadUint8("t")
+	value := c.mustReadUint8("i")
+
+	c.emit(&GloadExpr{Group: uint8(t), Index: uint8(value)})
+}
+
+func opGloads(c *parserContext) {
+	value := c.mustReadUint8("i")
+	c.emit(&GloadsExpr{Index: uint8(value)})
+}
+
+func opGaid(c *parserContext) {
+	t := c.mustReadUint8("t")
+	c.emit(&GaidExpr{Group: uint8(t)})
+}
+func opGaids(c *parserContext) {
+	c.emit(Gaids)
+}
+func opLoads(c *parserContext) {
+	c.emit(Loads)
+}
+func opStores(c *parserContext) {
+	c.emit(Stores)
+}
+func opBnz(c *parserContext) {
+	name := c.mustRead("label name")
+	c.emit(&BnzExpr{Label: &LabelExpr{Name: name}})
+}
+func opBz(c *parserContext) {
+	name := c.mustRead("label name")
+	c.emit(&BzExpr{Label: &LabelExpr{Name: name}})
+}
+func opB(c *parserContext) {
+	name := c.mustRead("label name")
+	c.emit(&BExpr{Label: &LabelExpr{Name: name}})
+}
+func opReturn(c *parserContext) {
+	c.emit(Return)
+}
+func opAssert(c *parserContext) {
+	c.emit(Assert)
+}
+func opBury(c *parserContext) {
+	n := c.mustReadUint8("n")
+	c.emit(&BuryExpr{Index: n})
 }
-func opAppLocalPut(c *parserContext) error {
-	return nil
+func opPopN(c *parserContext) {
+	n := c.mustReadUint8("n")
+	c.emit(&PopNExpr{Index: n})
 }
-func opAppGlobalPut(c *parserContext) error {
-	return nil
+func opDupN(c *parserContext) {
+	n := c.mustReadUint8("n")
+	c.emit(&DupNExpr{Index: n})
 }
-func opAppLocalDel(c *parserContext) error {
-	return nil
+
+func opPop(c *parserContext) {
+	c.emit(Pop)
 }
-func opAppGlobalDel(c *parserContext) error {
-	return nil
+func opDup(c *parserContext) {
+	c.emit(Dup)
 }
-func opAssetHoldingGet(c *parserContext) error {
-	return nil
+func opDup2(c *parserContext) {
+	c.emit(Dup2)
 }
-func opAssetParamsGet(c *parserContext) error {
-	return nil
+func opDig(c *parserContext) {
+	value := c.mustReadUint8("n")
+	c.emit(&DigExpr{Index: uint8(value)})
 }
-func opAppParamsGet(c *parserContext) error {
-	return nil
+func opSwap(c *parserContext) {
+	c.emit(Swap)
 }
-func opAcctParamsGet(c *parserContext) error {
-	return nil
+func opSelect(c *parserContext) {
+	c.emit(Select)
 }
-func opMinBalance(c *parserContext) error {
-	return nil
+func opCover(c *parserContext) {
+	value := c.mustReadUint8("n")
+	c.emit(&CoverExpr{Index: uint8(value)})
 }
-func opPushBytes(c *parserContext) error {
-	return nil
+func opUncover(c *parserContext) {
+	value := c.mustReadUint8("index")
+	c.emit(&UncoverExpr{Index: uint8(value)})
 }
-func opPushInt(c *parserContext) error {
-	return nil
+func opConcat(c *parserContext) {
+	c.emit(Concat)
+}
+func opSubstring(c *parserContext) {
+	start := c.mustReadUint8("s")
+	end := c.mustReadUint8("e")
+	c.emit(&SubstringExpr{Start: uint8(start), End: uint8(end)})
+}
+func opSubstring3(c *parserContext) {
+	c.emit(Substring3)
+}
+func opGetBit(c *parserContext) {
+	c.emit(GetBit)
+}
+func opSetBit(c *parserContext) {
+	c.emit(SetBit)
+}
+func opGetByte(c *parserContext) {
+	c.emit(GetByte)
+}
+func opSetByte(c *parserContext) {
+	c.emit(SetByte)
+}
+func opExtract(c *parserContext) {
+	start := c.mustReadUint8("s")
+	length := c.mustReadUint8("l")
+
+	c.emit(&ExtractExpr{Start: uint8(start), Length: uint8(length)})
+}
+
+func opExtract3(c *parserContext) {
+	c.emit(Extract3)
+}
+func opExtract16Bits(c *parserContext) {
+	c.emit(Extract16Bits)
+}
+func opExtract32Bits(c *parserContext) {
+	c.emit(Extract32Bits)
+}
+func opExtract64Bits(c *parserContext) {
+	c.emit(Extract64Bits)
+}
+func opReplace2(c *parserContext) {
+	value := c.mustReadUint8("s")
+	c.emit(&Replace2Expr{Index: uint8(value)})
+}
+func opReplace3(c *parserContext) {
+	c.emit(Replace3)
+}
+func opBase64Decode(c *parserContext) {
+	value := c.mustReadUint8("e")
+	c.emit(&Base64DecodeExpr{Index: uint8(value)})
+}
+func opJSONRef(c *parserContext) {
+	value := c.mustReadUint8("r")
+	c.emit(&JsonRefExpr{Index: uint8(value)})
+}
+func opBalance(c *parserContext) {
+	c.emit(Balance)
+}
+func opAppOptedIn(c *parserContext) {
+	c.emit(AppOptedIn)
+}
+func opAppLocalGet(c *parserContext) {
+	c.emit(AppLocalGet)
+}
+func opAppLocalGetEx(c *parserContext) {
+	c.emit(AppLocalGetEx)
+}
+func opAppGlobalGet(c *parserContext) {
+	c.emit(AppGlobalGet)
+}
+func opAppGlobalGetEx(c *parserContext) {
+	c.emit(AppGlobalGetEx)
+}
+func opAppLocalPut(c *parserContext) {
+	c.emit(AppLocalPut)
+}
+func opAppGlobalPut(c *parserContext) {
+	c.emit(AppGlobalPut)
+}
+func opAppLocalDel(c *parserContext) {
+	c.emit(AppLocalDel)
+}
+func opAppGlobalDel(c *parserContext) {
+	c.emit(AppGlobalDel)
+}
+func opAssetHoldingGet(c *parserContext) {
+	c.mustReadArg("f")
+
+	f, err := readAssetHoldingField(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to read asset_holding_get f: %s", c.args.Text()))
+		return
+	}
+
+	c.emit(&AssetHoldingGetExpr{Field: f})
+}
+func opAssetParamsGet(c *parserContext) {
+	c.mustReadArg("f")
+
+	field, err := readAssetField(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse asset_params_get f: %s", c.args.Text()))
+		return
+	}
+
+	c.emit(&AssetParamsGetExpr{Field: field})
+}
+func opAppParamsGet(c *parserContext) {
+	c.mustReadArg("f")
+
+	f, err := readAppField(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse app_params_get f: %s", c.args.Text()))
+		return
+	}
+
+	c.emit(&AppParamsGetExpr{Field: f})
+}
+func opAcctParamsGet(c *parserContext) {
+	c.mustReadArg("f")
+
+	f, err := readAcctParams(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse acct_params_get f: %s", c.args.Text()))
+		return
+	}
+
+	c.emit(&AcctParamsGetExpr{Field: f})
+}
+func opMinBalance(c *parserContext) {
+	c.emit(MinBalance)
+}
+func opPushBytes(c *parserContext) {
+	value := c.mustReadBytes("value")
+	c.emit(&PushBytesExpr{Value: value})
+}
+func opPushInt(c *parserContext) {
+	value := c.mustReadInt("value")
+	c.emit(&PushIntExpr{Value: value})
+}
+func opPushBytess(c *parserContext) {
+	// TODO
+}
+func opEd25519VerifyBare(c *parserContext) {
+	c.emit(Ed25519VerifyBare)
+}
+func opPushInts(c *parserContext) {
+	// TODO
+}
+func opCallSub(c *parserContext) {
+	name := c.mustRead("label name")
+	c.emit(&CallSubExpr{Label: &LabelExpr{Name: name}})
+}
+func opRetSub(c *parserContext) {
+	c.emit(RetSub)
+}
+func opProto(c *parserContext) {
+	a := c.mustReadUint8("a")
+	r := c.mustReadUint8("r")
+
+	c.emit(&ProtoExpr{Args: uint8(a), Results: uint8(r)})
 }
-func opPushBytess(c *parserContext) error {
-	return nil
+func opFrameDig(c *parserContext) {
+	value := c.mustReadInt8("index")
+	c.emit(&FrameDigExpr{Index: value})
 }
-func opEd25519VerifyBare(c *parserContext) error {
-	return nil
+func opFrameBury(c *parserContext) {
+	value := c.mustReadInt8("index")
+	c.emit(&FrameBuryExpr{Index: value})
 }
-func opPushInts(c *parserContext) error {
-	return nil
+func opSwitch(c *parserContext) {
+	var labels []*LabelExpr
+	for c.args.Scan() {
+		labels = append(labels, &LabelExpr{Name: c.args.Text()})
+	}
+	c.emit(&SwitchExpr{Targets: labels})
 }
-func opCallSub(c *parserContext) error {
-	return nil
+func opMatch(c *parserContext) {
+	var labels []*LabelExpr
+	for c.args.Scan() {
+		labels = append(labels, &LabelExpr{Name: c.args.Text()})
+	}
+	c.emit(&MatchExpr{Targets: labels})
 }
-func opRetSub(c *parserContext) error {
-	return nil
+func opShiftLeft(c *parserContext) {
+	c.emit(ShiftLeft)
 }
-func opProto(c *parserContext) error {
-	return nil
+func opShiftRight(c *parserContext) {
+	c.emit(ShiftRight)
 }
-func opFrameDig(c *parserContext) error {
-	return nil
+func opSqrt(c *parserContext) {
+	c.emit(Sqrt)
 }
-func opFrameBury(c *parserContext) error {
-	return nil
+func opBitLen(c *parserContext) {
+	c.emit(BitLen)
 }
-func opSwitch(c *parserContext) error {
-	return nil
+func opExp(c *parserContext) {
+	c.emit(Exp)
 }
-func opMatch(c *parserContext) error {
-	return nil
+func opExpw(c *parserContext) {
+	c.emit(Expw)
 }
-func opShiftLeft(c *parserContext) error {
-	return nil
+func opBytesSqrt(c *parserContext) {
+	c.emit(Bsqrt)
 }
-func opShiftRight(c *parserContext) error {
-	return nil
+func opDivw(c *parserContext) {
+	c.emit(Divw)
 }
-func opSqrt(c *parserContext) error {
-	return nil
+func opSHA3_256(c *parserContext) {
+	c.emit(Sha3256)
 }
-func opBitLen(c *parserContext) error {
-	return nil
+func opBn256Add(c *parserContext) {
+	// TODO
 }
-func opExp(c *parserContext) error {
-	return nil
+func opBn256ScalarMul(c *parserContext) {
+	// TODO
 }
-func opExpw(c *parserContext) error {
-	return nil
+func opBn256Pairing(c *parserContext) {
+	// TODO
 }
-func opBytesSqrt(c *parserContext) error {
-	return nil
+func opBytesPlus(c *parserContext) {
+	c.emit(BytesPlus)
 }
-func opDivw(c *parserContext) error {
-	return nil
+func opBytesMinus(c *parserContext) {
+	c.emit(BytesMinus)
 }
-func opSHA3_256(c *parserContext) error {
-	return nil
+func opBytesDiv(c *parserContext) {
+	c.emit(BytesDiv)
 }
-func opBn256Add(c *parserContext) error {
-	return nil
+func opBytesMul(c *parserContext) {
+	c.emit(BytesMul)
 }
-func opBn256ScalarMul(c *parserContext) error {
-	return nil
+func opBytesLt(c *parserContext) {
+	c.emit(BytesLt)
 }
-func opBn256Pairing(c *parserContext) error {
-	return nil
+func opBytesGt(c *parserContext) {
+	c.emit(BytesGt)
 }
-func opBytesPlus(c *parserContext) error {
-	return nil
+func opBytesLe(c *parserContext) {
+	c.emit(BytesLe)
 }
-func opBytesMinus(c *parserContext) error {
-	return nil
+func opBytesGe(c *parserContext) {
+	c.emit(BytesGe)
 }
-func opBytesDiv(c *parserContext) error {
-	return nil
+func opBytesEq(c *parserContext) {
+	c.emit(BytesEq)
 }
-func opBytesMul(c *parserContext) error {
-	return nil
+func opBytesNeq(c *parserContext) {
+	c.emit(BytesNeq)
 }
-func opBytesLt(c *parserContext) error {
-	return nil
+func opBytesModulo(c *parserContext) {
+	c.emit(BytesModulo)
 }
-func opBytesGt(c *parserContext) error {
-	return nil
+func opBytesBitOr(c *parserContext) {
+	c.emit(BytesBitOr)
 }
-func opBytesLe(c *parserContext) error {
-	return nil
+func opBytesBitAnd(c *parserContext) {
+	c.emit(BytesBitAnd)
 }
-func opBytesGe(c *parserContext) error {
-	return nil
+func opBytesBitXor(c *parserContext) {
+	c.emit(BytesBitXor)
 }
-func opBytesEq(c *parserContext) error {
-	return nil
+func opBytesBitNot(c *parserContext) {
+	c.emit(BytesBitNot)
 }
-func opBytesNeq(c *parserContext) error {
-	return nil
+func opBytesZero(c *parserContext) {
+	c.emit(BytesZero)
 }
-func opBytesModulo(c *parserContext) error {
-	return nil
-}
-func opBytesBitOr(c *parserContext) error {
-	return nil
-}
-func opBytesBitAnd(c *parserContext) error {
-	return nil
-}
-func opBytesBitXor(c *parserContext) error {
-	return nil
-}
-func opBytesBitNot(c *parserContext) error {
-	return nil
-}
-func opBytesZero(c *parserContext) error {
-	return nil
-}
-func opLog(c *parserContext) error {
-	return nil
-}
-func opTxBegin(c *parserContext) error {
-	return nil
-}
-func opItxnField(c *parserContext) error {
-	return nil
-}
-func opItxnSubmit(c *parserContext) error {
-	return nil
-}
-func opItxn(c *parserContext) error {
-	return nil
-}
-func opItxna(c *parserContext) error {
-	return nil
-}
-func opItxnNext(c *parserContext) error {
-	return nil
-}
-func opGitxn(c *parserContext) error {
-	return nil
-}
-func opGitxna(c *parserContext) error {
-	return nil
-}
-func opBoxCreate(c *parserContext) error {
-	return nil
-}
-func opBoxExtract(c *parserContext) error {
-	return nil
-}
-func opBoxReplace(c *parserContext) error {
-	return nil
-}
-func opBoxDel(c *parserContext) error {
-	return nil
-}
-func opBoxLen(c *parserContext) error {
-	return nil
-}
-func opBoxGet(c *parserContext) error {
-	return nil
-}
-func opBoxPut(c *parserContext) error {
-	return nil
-}
-func opTxnas(c *parserContext) error {
-	return nil
-}
-func opGtxnas(c *parserContext) error {
-	return nil
-}
-func opGtxnsas(c *parserContext) error {
-	return nil
-}
-func opArgs(c *parserContext) error {
-	return nil
-}
-func opGloadss(c *parserContext) error {
-	return nil
-}
-func opItxnas(c *parserContext) error {
-	return nil
-}
-func opGitxnas(c *parserContext) error {
-	return nil
-}
-func opVrfVerify(c *parserContext) error {
-	return nil
-}
-func opBlock(c *parserContext) error {
-	return nil
+func opLog(c *parserContext) {
+	c.emit(Log)
+}
+func opTxBegin(c *parserContext) {
+	c.emit(ItxnBegin)
+}
+func opItxnField(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	c.emit(&ItxnFieldExpr{Field: f})
+}
+func opItxnSubmit(c *parserContext) {
+	c.emit(ItxnSubmit)
+}
+func opItxn(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	c.emit(&ItxnExpr{Field: f})
+}
+func opItxna(c *parserContext) {
+	f := c.mustReadUint8("f")
+	i := c.mustReadUint8("i")
+	c.emit(&ItxnaExpr{Field: f, Index: i})
+}
+func opItxnNext(c *parserContext) {
+	c.emit(ItxnNext)
+}
+func opGitxn(c *parserContext) {
+	t := c.mustReadUint8("t")
+	f := c.mustReadTxnField("f")
+	c.emit(&GitxnExpr{Index: uint8(t), Field: f})
+}
+func opGitxna(c *parserContext) {
+	t := c.mustReadInt("t")
+	f := c.mustReadTxnField("f")
+	i := c.mustReadUint8("i")
+
+	c.emit(&GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
+
+}
+func opBoxCreate(c *parserContext) {
+	c.emit(BoxCreate)
+}
+func opBoxExtract(c *parserContext) {
+	c.emit(BoxExtract)
+}
+func opBoxReplace(c *parserContext) {
+	c.emit(BoxReplace)
+}
+func opBoxDel(c *parserContext) {
+	c.emit(BoxDel)
+}
+func opBoxLen(c *parserContext) {
+	c.emit(BoxLen)
+}
+func opBoxGet(c *parserContext) {
+	c.emit(BoxGet)
+}
+func opBoxPut(c *parserContext) {
+	c.emit(BoxPut)
+}
+func opTxnas(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	c.emit(&TxnasExpr{Field: f})
+}
+func opGtxnas(c *parserContext) {
+	t := c.mustReadUint8("t")
+	f := c.mustReadUint8("f")
+	c.emit(&GtxnasExpr{Index: t, Field: f})
+}
+func opGtxnsas(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	c.emit(&GtxnsasExpr{Field: f})
+}
+func opArgs(c *parserContext) {
+	c.emit(Args)
+}
+func opGloadss(c *parserContext) {
+	c.emit(Gloadss)
+}
+func opItxnas(c *parserContext) {
+	f := c.mustReadTxnField("f")
+	c.emit(&ItxnasExpr{Field: f})
+}
+func opGitxnas(c *parserContext) {
+	t := c.mustReadUint8("t")
+	f := c.mustReadTxnField("f")
+	c.emit(&GitxnasExpr{Index: t, Field: f})
+}
+func opVrfVerify(c *parserContext) {
+	c.mustReadArg("f")
+	f, err := readVrfVerifyField(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse vrf_verify f: %s", c.args.Text()))
+		return
+	}
+
+	c.emit(&VrfVerifyExpr{Field: f})
+}
+func opBlock(c *parserContext) {
+	c.mustReadArg("f")
+
+	f, err := readBlockField(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse block f: %s", c.args.Text()))
+		return
+	}
+
+	c.emit(&BlockExpr{Field: f})
 }
 
 var EcdsaCurves = []interface{}{}
@@ -775,9 +1052,12 @@ func readTokens(source string) ([]Token, []Diagnostic) {
 }
 
 func Process(source string) *ProcessResult {
-	type recoverable struct{}
+	c := &parserContext{
+		ops: []Op{},
+	}
 
-	ts, diag := readTokens(source)
+	var ts []Token
+	ts, c.diag = readTokens(source)
 
 	lines := [][]Token{}
 
@@ -809,35 +1089,15 @@ func Process(source string) *ProcessResult {
 	}
 
 	var lts [][]Token
-	var res Listing
 	version := uint8(1)
 
 	for _, l := range lines {
-		args := &arguments{ts: l}
-
-		failAt := func(l int, b int, e int, err error) {
-			diag = append(diag, parseError{l: l, b: b, e: e, error: err})
-			panic(recoverable{})
-		}
-
-		failToken := func(t Token, err error) {
-			failAt(t.l, t.b, t.e, err)
-		}
-
-		failCurr := func(err error) {
-			failToken(args.Curr(), err)
-		}
-
-		failPrev := func(err error) {
-			failToken(args.Prev(), err)
-		}
-
-		var e Op
+		c.args = &arguments{ts: l}
 		func() {
 			defer func() {
 				switch v := recover().(type) {
 				case recoverable:
-					e = Empty // consider replacing with Raw string expr
+					c.emit(Empty) // consider replacing with Raw string expr
 				case nil:
 				default:
 					fmt.Printf("unrecoverable: %v", v)
@@ -845,561 +1105,57 @@ func Process(source string) *ProcessResult {
 				}
 			}()
 
-			if !args.Scan() {
-				e = Empty
+			if !c.args.Scan() {
+				c.emit(Empty)
 				return
 			}
 
-			if strings.HasSuffix(args.Text(), ":") {
-				name := args.Text()
+			if strings.HasSuffix(c.args.Text(), ":") {
+				name := c.args.Text()
 				name = name[:len(name)-1]
 				if len(name) == 0 {
-					failCurr(errors.New("missing label name"))
+					c.failCurr(errors.New("missing label name"))
 					return
 				}
-				e = &LabelExpr{Name: name}
+				c.emit(&LabelExpr{Name: name})
 				return
 			}
 
-			v := args.Text()
-
-			mustReadArg := func(name string) {
-				if !args.Scan() {
-					failPrev(errors.Errorf("missing arg: %s", name))
-				}
-			}
-
-			parseUint64 := func(name string) uint64 {
-				v, err := readInt(args)
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse uint64: %s", name))
-				}
-
-				return v
-			}
-
-			parseUint8 := func(name string) uint8 {
-				v, err := readUint8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse uint8: %s", name))
-				}
-				return v
-			}
-
-			parseInt8 := func(name string) int8 {
-				v, err := readInt8(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse int8: %s", name))
-				}
-				return v
-			}
-
-			parseTxnField := func(name string) TxnField {
-				v, err := readTxnField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse txn field: %s", name))
-				}
-				return v
-			}
-
-			parseBytes := func(name string) []byte {
-				v, err := readBytes(args)
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse bytes: %s", name))
-				}
-				return v
-			}
-
-			parseEcdsaCurveIndex := func(name string) EcdsaCurve {
-				v, err := readEcdsaCurveIndex(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse ESCDS curve index: %s", name))
-				}
-				return v
-			}
-
-			mustReadBytes := func(name string) []byte {
-				mustReadArg(name)
-				return parseBytes(name)
-			}
-
-			mustReadInt := func(name string) uint64 {
-				mustReadArg(name)
-				return parseUint64(name)
-			}
-
-			mustReadUint8 := func(name string) uint8 {
-				mustReadArg(name)
-				return parseUint8(name)
-			}
-
-			mustReadInt8 := func(name string) int8 {
-				mustReadArg(name)
-				return parseInt8(name)
-			}
-
-			mustRead := func(name string) string {
-				mustReadArg(name)
-				return args.Text()
-			}
-
-			mustReadTxnField := func(name string) TxnField {
-				mustReadArg(name)
-				return parseTxnField(name)
-			}
-
-			mustReadEcdsaCurveIndex := func(name string) EcdsaCurve {
-				mustReadArg(name)
-				return parseEcdsaCurveIndex(name)
-			}
-
-			switch v {
+			name := c.args.Text()
+			switch c.args.Text() {
 			case "":
-				e = Empty
+				c.emit(Empty)
 			case "#pragma":
-				name := mustRead("name")
+				name := c.mustRead("name")
 				switch name {
 				case "version":
-					version = mustReadUint8("version value")
-					e = &PragmaExpr{Version: uint8(version)}
+					version = c.mustReadUint8("version value")
+					c.emit(&PragmaExpr{Version: uint8(version)})
 				default:
-					failCurr(errors.Errorf("unexpected #pragma: %s", args.Text()))
+					c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
 					return
 				}
-			case "bnz":
-				name := mustRead("label name")
-				e = &BnzExpr{Label: &LabelExpr{Name: name}}
-			case "bz":
-				name := mustRead("label name")
-				e = &BzExpr{Label: &LabelExpr{Name: name}}
-			case "b":
-				name := mustRead("label name")
-				e = &BExpr{Label: &LabelExpr{Name: name}}
-			case "bzero":
-				e = Bzero
-			case "getbyte":
-				e = GetByte
-			case "substring3":
-				e = Substring3
-			case "shr":
-				e = Shr
-			case "err":
-				e = Err
-			case "sha256":
-				e = Sha256
-			case "keccak256":
-				e = Keccak256
-			case "sha512_256":
-				e = Sha512256
-			case "ed25519verify":
-				e = ED25519Verify
-			case "ecdsa_verify":
-				curve := mustReadEcdsaCurveIndex("curve index")
-				e = &EcdsaVerifyExpr{Index: curve}
-			case "ecdsa_pk_decompress":
-				curve := mustReadEcdsaCurveIndex("curve index")
-				e = &EcdsaPkDecompressExpr{Index: curve}
-			case "ecdsa_pk_recover":
-				curve := mustReadEcdsaCurveIndex("curve index")
-				e = &EcdsaPkRecoverExpr{Index: curve}
-			case "+":
-				e = PlusOp
-			case "-":
-				e = MinusOp
-			case "/":
-				e = Div
-			case "*":
-				e = Mul
-			case "<":
-				e = Lt
-			case ">":
-				e = Gt
-			case "<=":
-				e = LtEq
-			case ">=":
-				e = GtEq
-			case "&&":
-				e = And
-			case "||":
-				e = Or
-			case "==":
-				e = Eq
-			case "!=":
-				e = Neq
-			case "!":
-				e = Not
-			case "len":
-				e = Len
-			case "itob":
-				e = Itob
-			case "btoi":
-				e = Btoi
-			case "%":
-				e = Mod
-			case "|":
-				e = BinOr
-			case "&":
-				e = BinAnd
-			case "^":
-				e = BinXor
-			case "~":
-				e = BinNot
-			case "mulw":
-				e = Mulw
-			case "addw":
-				e = Addw
-			case "divmodw":
-				e = DivModw
-			case "divw":
-				e = Divw
-			case "select":
-				e = Select
-			case "b>=":
-				e = Bgteq
-			case "b<":
-				e = Blt
-			case "b&":
-				e = Band
-			case "b^":
-				e = Bxor
-			case "bsqrt":
-				e = Bsqrt
-			case "app_opted_in":
-				e = AppOptedIn
-			case "intcblock":
-				var values []uint64
-
-				for args.Scan() {
-					value := parseUint64("value")
-					values = append(values, value)
-				}
-
-				e = &IntcBlockExpr{Values: values}
-			case "intc":
-				value := mustReadUint8("value")
-				e = &IntcExpr{Index: uint8(value)}
-			case "intc_0":
-				e = Intc0
-			case "intc_1":
-				e = Intc1
-			case "intc_2":
-				e = Intc2
-			case "intc_3":
-				e = Intc3
-			case "bytecblock":
-				var values [][]byte
-
-				for args.Scan() {
-					b := parseBytes("value")
-					values = append(values, b)
-				}
-
-				e = &BytecBlockExpr{Values: values}
-			case "bytec":
-				value := mustReadUint8("index")
-				e = &BytecExpr{Index: uint8(value)}
-			case "bytec_0":
-				e = Bytec0
-			case "bytec_1":
-				e = Bytec1
-			case "bytec_2":
-				e = Bytec2
-			case "bytec_3":
-				e = Bytec3
-			case "arg":
-				value := mustReadUint8("index")
-				e = &ArgExpr{Index: uint8(value)}
-			case "arg_0":
-				e = Arg0
-			case "arg_1":
-				e = Arg1
-			case "arg_2":
-				e = Arg2
-			case "arg_3":
-				e = Arg3
-			case "dup2":
-				e = Dup2
-			case "gitxna":
-				t := mustReadInt("t")
-				f := mustReadTxnField("f")
-				i := mustReadUint8("i")
-
-				e = &GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)}
-			case "gtxn":
-				t := mustReadInt("t")
-				f := mustReadTxnField("f")
-				e = &GtxnExpr{Index: uint8(t), Field: f}
-			case "txn":
-				f := mustReadTxnField("f")
-				e = &TxnExpr{Field: f}
-			case "global":
-				mustReadArg("field")
-
-				field, err := readGlobalField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse global field: %s", args.Text()))
-					return
-				}
-
-				e = &GlobalExpr{Index: field}
-			case "load":
-				value := mustReadUint8("i")
-				e = &LoadExpr{Index: uint8(value)}
-			case "gload":
-				t := mustReadUint8("t")
-				value := mustReadUint8("i")
-
-				e = &GloadExpr{Group: uint8(t), Index: uint8(value)}
-			case "gloads":
-				value := mustReadUint8("i")
-				e = &GloadsExpr{Index: uint8(value)}
-			case "store":
-				value := mustReadUint8("i")
-				e = &StoreExpr{Index: uint8(value)}
-			case "txna":
-				f := mustReadTxnField("f")
-				i := mustReadUint8("i")
-				e = &TxnaExpr{Field: f, Index: i}
-			case "gtxns":
-				f := mustReadTxnField("f")
-				e = &GtxnsExpr{Field: f}
-			case "gaid":
-				t := mustReadUint8("t")
-				e = &GaidExpr{Group: uint8(t)}
-			case "gtxna":
-				t := mustReadUint8("t")
-				f := mustReadTxnField("f")
-				i := mustReadUint8("i")
-				e = &GtxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)}
-			case "gtxnsa":
-				f := mustReadTxnField("f")
-				i := mustReadUint8("i")
-				e = &GtxnsaExpr{Field: f, Index: uint8(i)}
-			case "txnas":
-				f := mustReadTxnField("f")
-				e = &TxnasExpr{Field: f}
-			case "extract":
-				start := mustReadUint8("s")
-				length := mustReadUint8("l")
-
-				e = &ExtractExpr{Start: uint8(start), Length: uint8(length)}
-			case "substring":
-				start := mustReadUint8("s")
-				end := mustReadUint8("e")
-				e = &SubstringExpr{Start: uint8(start), End: uint8(end)}
-			case "proto":
-				a := mustReadUint8("a")
-				r := mustReadUint8("r")
-
-				e = &ProtoExpr{Args: uint8(a), Results: uint8(r)}
 			case "byte":
-				value := mustReadBytes("value")
-				e = &ByteExpr{Value: value}
-			case "pushbytes":
-				value := mustReadBytes("value")
-				e = &PushBytesExpr{Value: value}
-			case "pushint":
-				value := mustReadInt("value")
-				e = &PushIntExpr{Value: value}
-			case "asset_params_get":
-				mustReadArg("f")
-
-				field, err := readAssetField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse asset_params_get f: %s", args.Text()))
-					return
-				}
-
-				e = &AssetParamsGetExpr{Field: field}
+				value := c.mustReadBytes("value")
+				c.emit(&ByteExpr{Value: value})
 			case "int":
-				value := mustReadInt("value")
-				e = &IntExpr{Value: value}
-			case "sqrt":
-				e = Sqrt
-			case "box_del":
-				e = BoxDel
-			case "box_len":
-				e = BoxLen
-			case "box_create":
-				e = BoxCreate
-			case "box_get":
-				e = BoxGet
-			case "box_put":
-				e = BoxPut
-			case "box_replace":
-				e = BoxReplace
-			case "box_extract":
-				e = BoxExtract
-			case "pop":
-				e = Pop
-			case "swap":
-				e = Swap
-			case "app_global_put":
-				e = AppGlobalPut
-			case "app_local_put":
-				e = AppLocalPut
-			case "app_local_get":
-				e = AppLocalGet
-			case "app_global_get":
-				e = AppGlobalGet
-			case "app_global_get_ex":
-				e = AppGlobalGetEx
-			case "app_local_get_ex":
-				e = AppLocalGetEx
-			case "app_local_del":
-				e = AppLocalDel
-			case "app_global_del":
-				e = AppGlobalDel
-			case "itxn_next":
-				e = ItxnNext
-			case "min_balance":
-				e = MinBalance
-			case "getbit":
-				e = GetBit
-			case "setbit":
-				e = SetBit
-			case "b-":
-				e = Bminus
-			case "b*":
-				e = Bmul
-			case "b/":
-				e = Bdiv
-			case "b+":
-				e = Bplus
-			case "dig":
-				value := mustReadUint8("n")
-				e = &DigExpr{Index: uint8(value)}
-			case "gtxnsas":
-				f := mustReadTxnField("f")
-				e = &GtxnsasExpr{Field: f}
-			case "gitxn":
-				t := mustReadUint8("t")
-				f := mustReadTxnField("f")
-				e = &GitxnExpr{Index: uint8(t), Field: f}
-			case "asset_holding_get":
-				mustReadArg("f")
-
-				f, err := readAssetHoldingField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to read asset_holding_get f: %s", args.Text()))
-					return
-				}
-
-				e = &AssetHoldingGetExpr{Field: f}
-			case "acct_params_get":
-				mustReadArg("f")
-
-				f, err := readAcctParams(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse acct_params_get f: %s", args.Text()))
-					return
-				}
-
-				e = &AcctParamsGetExpr{Field: f}
-
-			case "app_params_get":
-				mustReadArg("f")
-
-				f, err := readAppField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse app_params_get f: %s", args.Text()))
-					return
-				}
-
-				e = &AppParamsGetExpr{Field: f}
-			case "balance":
-				e = Balance
-			case "retsub":
-				e = RetSub
-			case "return":
-				e = Return
-			case "exp":
-				e = Exp
-			case "log":
-				e = Log
-			case "extract3":
-				e = Extract3
-			case "sha3_256":
-				e = Sha3256
-			case "extract_uint64":
-				e = ExtractUint64
-			case "vrf_verify":
-				mustReadArg("f")
-				f, err := readVrfVerifyField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse vrf_verify f: %s", args.Text()))
-					return
-				}
-
-				e = &VrfVerifyExpr{Field: f}
-			case "block":
-				mustReadArg("f")
-
-				f, err := readBlockField(args.Text())
-				if err != nil {
-					failCurr(errors.Wrapf(err, "failed to parse block f: %s", args.Text()))
-					return
-				}
-
-				e = &BlockExpr{Field: f}
-			case "switch":
-				var labels []*LabelExpr
-				for args.Scan() {
-					labels = append(labels, &LabelExpr{Name: args.Text()})
-				}
-				e = &SwitchExpr{Targets: labels}
-			case "match":
-				var labels []*LabelExpr
-				for args.Scan() {
-					labels = append(labels, &LabelExpr{Name: args.Text()})
-				}
-				e = &MatchExpr{Targets: labels}
-			case "callsub":
-				name := mustRead("label name")
-				e = &CallSubExpr{Label: &LabelExpr{Name: name}}
-			case "assert":
-				e = Assert
-			case "dup":
-				e = Dup
-			case "frame_bury":
-				value := mustReadInt8("index")
-				e = &FrameBuryExpr{Index: value}
-			case "frame_dig":
-				value := mustReadInt8("index")
-				e = &FrameDigExpr{Index: value}
-			case "setbyte":
-				e = SetByte
-			case "uncover":
-				value := mustReadUint8("index")
-				e = &UncoverExpr{Index: uint8(value)}
-			case "cover":
-				value := mustReadUint8("n")
-				e = &CoverExpr{Index: uint8(value)}
-			case "concat":
-				e = Concat
-			case "itxn_begin":
-				e = ItxnBegin
-			case "itxn_submit":
-				e = ItxnSubmit
-			case "itxn":
-				f := mustReadTxnField("f")
-				e = &ItxnExpr{Field: f}
-			case "itxn_field":
-				f := mustReadTxnField("f")
-				e = &ItxnFieldExpr{Field: f}
+				value := c.mustReadInt("value")
+				c.emit(&IntExpr{Value: value})
 			default:
-				failCurr(errors.Errorf("unexpected opcode: %s", args.Text()))
+				spec, ok := opSpecByName[name]
+				if ok {
+					spec.Parse(c)
+				} else {
+					c.failCurr(errors.Errorf("unexpected opcode: %s", c.args.Text()))
+				}
 				return
 			}
 		}()
 
-		if e != nil {
-			res = append(res, e)
-			lts = append(lts, args.ts)
-		}
+		lts = append(lts, c.args.ts)
 	}
 
-	l := &Linter{l: res}
+	l := &Linter{l: c.ops}
 	l.Lint()
 
 	for _, le := range l.res {
@@ -1412,7 +1168,7 @@ func Process(source string) *ProcessResult {
 			e = lt[len(lt)-1].e
 		}
 
-		diag = append(diag, lintError{
+		c.diag = append(c.diag, lintError{
 			error: le,
 			l:     le.Line(),
 			b:     b,
@@ -1424,7 +1180,7 @@ func Process(source string) *ProcessResult {
 	syms := []Symbol{}
 	refs := []Symbol{}
 
-	for i, op := range res {
+	for i, op := range c.ops {
 		switch op := op.(type) {
 		case *LabelExpr:
 			// TODO: hack - assumes label is the first token on the line
@@ -1454,11 +1210,11 @@ func Process(source string) *ProcessResult {
 
 	result := &ProcessResult{
 		Version:     version,
-		Diagnostics: diag,
+		Diagnostics: c.diag,
 		Symbols:     syms,
 		SymbolRefs:  refs,
 		Tokens:      ts,
-		Listing:     res,
+		Listing:     c.ops,
 		Lines:       lts,
 	}
 
