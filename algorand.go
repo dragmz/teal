@@ -39,41 +39,10 @@ SOFTWARE.
 
 const protoByte = 0x8a
 
-// rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
-// was enabled. This is important to remember so that old TEAL accounts cannot
-// be maliciously or accidentally rekeyed. Do not edit!
-const rekeyingEnabledVersion = 2
-
-// appsEnabledVersion is the version of TEAL where ApplicationCall
-// functionality was enabled. We use this to disallow v0 and v1 programs
-// from being used with applications. Do not edit!
-const appsEnabledVersion = 2
-
-// backBranchEnabledVersion is the first version of TEAL where branches could
-// go back (and cost accounting was done during execution)
-const backBranchEnabledVersion = 4
-
 // directRefEnabledVersion is the version of TEAL where opcodes
 // that reference accounts, asas, and apps may do so directly, not requiring
 // using an index into arrays.
 const directRefEnabledVersion = 4
-
-// innerAppsEnabledVersion is the version that allowed inner app calls.
-const innerAppsEnabledVersion = 6
-
-// txnEffectsVersion is first version that allowed txn opcode to access
-// "effects" (ApplyData info)
-const txnEffectsVersion = 6
-
-// createdResourcesVersion is the first version that allows access to assets and
-// applications that were created in the same group, despite them not being in
-// the Foreign arrays.
-const createdResourcesVersion = 6
-
-// appAddressAvailableVersion is the first version that allows access to the
-// accounts of applications that were provided in the foreign apps transaction
-// field.
-const appAddressAvailableVersion = 7
 
 const fidoVersion = 7       // base64, json, secp256r1
 const randomnessVersion = 7 // vrf_verify, block

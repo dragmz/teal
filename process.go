@@ -138,7 +138,6 @@ func (c *parserContext) mustReadEcdsaCurveIndex(name string) EcdsaCurve {
 }
 
 type parserFunc func(c *parserContext)
-type protoFunc func(p string)
 
 type OpSpecProto struct{}
 type OpSpecDetails struct {
