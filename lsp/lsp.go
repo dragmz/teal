@@ -41,6 +41,8 @@ func (d *lspDoc) Results() *teal.ProcessResult {
 }
 
 type lsp struct {
+	id int
+
 	docs     map[string]*lspDoc
 	shutdown bool
 
@@ -93,13 +95,13 @@ type jsonRpcHeader struct {
 
 	Method string `json:"method"`
 
-	Result interface{} `json:"result"`
-	Error  interface{} `json:"error"`
+	Result interface{} `json:"result,omitempty"`
+	Error  interface{} `json:"error,omitempty"`
 }
 
 type jsonRpcResponse struct {
 	JsonRpc string      `json:"jsonrpc"`
-	Result  interface{} `json:"result"`
+	Result  interface{} `json:"result,omitempty"`
 	Error   interface{} `json:"error,omitempty"`
 	Id      interface{} `json:"id"`
 }
@@ -670,7 +672,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				name := args[0].Name
 				s := fmt.Sprintf("\r\n%s:\r\n", name)
 
-				return l.request("1", "workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
+				l.id++
+				return l.request(strconv.Itoa(l.id), "workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
 					Label: fmt.Sprintf("Create label: %s", name),
 					Edit: lspWorkspaceEdit{
 						DocumentChanges: []lspTextDocumentEdit{
@@ -980,11 +983,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
-			}
 
-			ds := l.doDiagnostic(doc)
+			var ds []lspDiagnostic
+			if doc != nil {
+				ds = l.doDiagnostic(doc)
+			} else {
+				ds = []lspDiagnostic{}
+			}
 
 			return l.success(h.Id, lspFullDocumentDiagnosticReport{
 				Kind:  "full",
