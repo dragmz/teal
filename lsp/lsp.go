@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/dragmz/teal"
+	"github.com/joe-p/tealfmt"
 	"github.com/pkg/errors"
 )
 
@@ -949,43 +950,36 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			return l.success(h.Id, ccs)
-			/*
-				case "textDocument/formatting":
-					req, err := read[lspDocumentFormattingRequest](b)
-					if err != nil {
-						return err
-					}
+		case "textDocument/formatting":
+			req, err := read[lspDocumentFormattingRequest](b)
+			if err != nil {
+				return err
+			}
 
-					doc := l.docs[req.Params.TextDocument.Uri]
-					if doc == nil {
-						return l.fail(h.Id, "document not found")
-					}
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return l.fail(h.Id, "document not found")
+			}
 
-					res := doc.Results()
+			res := doc.Results()
 
-					formatted := tealfmt.Format(strings.NewReader(doc.s))
+			formatted := tealfmt.Format(strings.NewReader(doc.s))
 
-					var end int
-					if len(res.Lines) > 0 {
-						end = len(res.Lines[len(res.Lines)-1])
-					}
-
-					return l.success(h.Id, []lspTextEdit{
-						{
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      0,
-									Character: 0,
-								},
-								End: lspPosition{
-									Line:      len(res.Lines) - 1,
-									Character: end,
-								},
-							},
-							NewText: formatted,
+			return l.success(h.Id, []lspTextEdit{
+				{
+					Range: lspRange{
+						Start: lspPosition{
+							Line:      0,
+							Character: 0,
 						},
-					})
-			*/
+						End: lspPosition{
+							Line:      len(res.Lines),
+							Character: 0,
+						},
+					},
+					NewText: formatted,
+				},
+			})
 		case "textDocument/codeAction":
 			req, err := read[lspCodeActionRequest](b)
 			if err != nil {
@@ -1208,10 +1202,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			fullSemantic := new(bool)
 			*fullSemantic = true
 
-			/*
-				formatting := new(bool)
-				*formatting = true
-			*/
+			formatting := new(bool)
+			*formatting = true
 
 			return l.success(h.Id, lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
@@ -1234,8 +1226,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							TokenModifiers: []string{},
 						},
 					},
-					CompletionProvider: &lspCompletionProvider{},
-					//DocumentFormattingProvider: formatting,
+					CompletionProvider:         &lspCompletionProvider{},
+					DocumentFormattingProvider: formatting,
 				},
 			})
 		default:

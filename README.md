@@ -1,6 +1,14 @@
 # teal
 
-Go types for Algorand TEAL
+Go packages for Algorand TEAL
+
+##  tealsp
+
+TEAL LSP Server for LSP-compatible editors, currently used in:
+
+- vscode-teal - Visual Studio Code extension: https://marketplace.visualstudio.com/items?itemName=DragMZ.teal
+
+## types
 
 ```go
 package main
