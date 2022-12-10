@@ -2,15 +2,11 @@ package teal
 
 import (
 	"encoding/base32"
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/dragmz/teal/protocol"
 	"github.com/dragmz/teal/transactions"
-	"github.com/pkg/errors"
 )
 
 // Copyright (C) 2019-2022 Algorand, Inc.
@@ -567,68 +563,6 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bi"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
-}
-
-func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
-	arg := args[0]
-	if strings.HasPrefix(arg, "base32(") || strings.HasPrefix(arg, "b32(") {
-		open := strings.IndexRune(arg, '(')
-		close := strings.IndexRune(arg, ')')
-		if close == -1 {
-			err = errors.New("byte base32 arg lacks close paren")
-			return
-		}
-		val, err = base32DecodeAnyPadding(arg[open+1 : close])
-		if err != nil {
-			return
-		}
-		consumed = 1
-	} else if strings.HasPrefix(arg, "base64(") || strings.HasPrefix(arg, "b64(") {
-		open := strings.IndexRune(arg, '(')
-		close := strings.IndexRune(arg, ')')
-		if close == -1 {
-			err = errors.New("byte base64 arg lacks close paren")
-			return
-		}
-		val, err = base64.StdEncoding.DecodeString(arg[open+1 : close])
-		if err != nil {
-			return
-		}
-		consumed = 1
-	} else if strings.HasPrefix(arg, "0x") {
-		val, err = hex.DecodeString(arg[2:])
-		if err != nil {
-			return
-		}
-		consumed = 1
-	} else if arg == "base32" || arg == "b32" {
-		if len(args) < 2 {
-			err = fmt.Errorf("need literal after 'byte %s'", arg)
-			return
-		}
-		val, err = base32DecodeAnyPadding(args[1])
-		if err != nil {
-			return
-		}
-		consumed = 2
-	} else if arg == "base64" || arg == "b64" {
-		if len(args) < 2 {
-			err = fmt.Errorf("need literal after 'byte %s'", arg)
-			return
-		}
-		val, err = base64.StdEncoding.DecodeString(args[1])
-		if err != nil {
-			return
-		}
-		consumed = 2
-	} else if len(arg) > 1 && arg[0] == '"' && arg[len(arg)-1] == '"' {
-		val, err = parseStringLiteral(arg)
-		consumed = 1
-	} else {
-		err = fmt.Errorf("byte arg did not parse: %v", arg)
-		return
-	}
-	return
 }
 
 func parseStringLiteral(input string) (result []byte, err error) {

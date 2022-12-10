@@ -1,6 +1,8 @@
 package teal
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -87,11 +89,74 @@ func (c *parserContext) parseTxnField(name string) TxnField {
 }
 
 func (c *parserContext) parseBytes(name string) []byte {
-	v, err := readBytes(c.args)
-	if err != nil {
-		c.failCurr(errors.Wrapf(err, "failed to parse bytes: %s", name))
+	arg := c.args.Curr().String()
+
+	if strings.HasPrefix(arg, "base32(") || strings.HasPrefix(arg, "b32(") {
+		close := strings.IndexRune(arg, ')')
+		if close == -1 {
+			c.failCurr(errors.New("byte base32 arg lacks close paren"))
+		}
+
+		open := strings.IndexRune(arg, '(')
+		val, err := base32DecodeAnyPadding(arg[open+1 : close])
+		if err != nil {
+			c.failCurr(err)
+		}
+		return val
+
 	}
-	return v
+
+	if strings.HasPrefix(arg, "base64(") || strings.HasPrefix(arg, "b64(") {
+		close := strings.IndexRune(arg, ')')
+		if close == -1 {
+			c.failCurr(errors.New("byte base64 arg lacks close paren"))
+		}
+
+		open := strings.IndexRune(arg, '(')
+		val, err := base64.StdEncoding.DecodeString(arg[open+1 : close])
+		if err != nil {
+			c.failCurr(err)
+		}
+		return val
+	}
+
+	if strings.HasPrefix(arg, "0x") {
+		val, err := hex.DecodeString(arg[2:])
+		if err != nil {
+			c.failCurr(err)
+		}
+		return val
+	}
+
+	if arg == "base32" || arg == "b32" {
+		l := c.mustRead("literal")
+		val, err := base32DecodeAnyPadding(l)
+		if err != nil {
+			c.failCurr(err)
+		}
+		return val
+	}
+
+	if arg == "base64" || arg == "b64" {
+		l := c.mustRead("literal")
+		val, err := base64.StdEncoding.DecodeString(l)
+		if err != nil {
+			c.failCurr(err)
+		}
+		return val
+	}
+
+	if len(arg) > 1 && arg[0] == '"' && arg[len(arg)-1] == '"' {
+		val, err := parseStringLiteral(arg)
+		if err != nil {
+			c.failCurr(err)
+		}
+		return val
+	}
+
+	c.failCurr(fmt.Errorf("byte arg did not parse: %v", arg))
+
+	return nil
 }
 
 func (c *parserContext) parseEcdsaCurveIndex(name string) EcdsaCurve {

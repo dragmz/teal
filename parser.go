@@ -218,20 +218,6 @@ func readInt(a *arguments) (uint64, error) {
 	return val, nil
 }
 
-func readBytes(a *arguments) ([]byte, error) {
-	args := []string{a.Text()}
-	for a.Scan() {
-		args = append(args, a.Text())
-	}
-
-	val, _, err := parseBinaryArgs(args)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse binary args")
-	}
-
-	return val, nil
-}
-
 func readEcdsaCurveIndex(s string) (EcdsaCurve, error) {
 	var curve EcdsaCurve
 
