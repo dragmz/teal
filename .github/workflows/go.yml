@@ -35,11 +35,14 @@ jobs:
 
     - name: Build tealsp darwin/arm64
       run: env GOOS=darwin GOARCH=arm64 go build -o tealsp_darwin_arm64 cmd/tealsp/main.go
+      
+    - name: Prepare version file
+      run: echo $GITHUB_SHA > version
 
     - name: Create release
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true
         tag: dev
-        artifacts: "tealsp_win32_x64.exe,tealsp_linux_x64,tealsp_darwin_x64,tealsp_darwin_arm64"
+        artifacts: "tealsp_win32_x64.exe,tealsp_linux_x64,tealsp_darwin_x64,tealsp_darwin_arm64,version"
         prerelease: true
