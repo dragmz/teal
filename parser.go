@@ -83,341 +83,115 @@ func readUint8(s string) (uint8, error) {
 }
 
 func readAssetHoldingField(s string) (AssetHoldingField, error) {
-	switch s {
-	case "AssetBalance":
-		return AssetBalance, nil
-	case "AssetFrozen":
-		return AssetFrozen, nil
-	default:
-		value, err := readUint8(s)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to parse asset holding field")
-		}
-		return AssetHoldingField(value), nil
+	spec, ok := assetHoldingFieldSpecByName[s]
+	if ok {
+		return spec.field, nil
 	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return AssetHoldingField(value), nil
 }
 
-func readVrfVerifyField(s string) (VrfVerifyField, error) {
-	switch s {
-	case "VrfAlgorand":
-		return VrfAlgorand, nil
-	default:
-		value, err := readUint8(s)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to parse vrf_verify f")
-		}
-
-		return VrfVerifyField(value), nil
-
+func readVrfVerifyField(s string) (VrfStandard, error) {
+	spec, ok := vrfStandardSpecByName[s]
+	if ok {
+		return spec.field, nil
 	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return VrfStandard(value), nil
 }
 
 func readBlockField(s string) (BlockField, error) {
-	switch s {
-	case "BlkSeed":
-		return BlkSeed, nil
-	case "BlkTimestamp":
-		return BlkTimestamp, nil
-	default:
-		value, err := readUint8(s)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to parse block f")
-		}
-
-		return BlockField(value), nil
+	spec, ok := blockFieldSpecByName[s]
+	if ok {
+		return spec.field, nil
 	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return BlockField(value), nil
 }
 
 func readAcctParams(s string) (AcctParamsField, error) {
-	switch s {
-	case "AcctBalance":
-		return AcctBalance, nil
-	case "AcctMinBalance":
-		return AcctMinBalance, nil
-	case "AcctAuthAddr":
-		return AcctAuthAddr, nil
-	case "AcctTotalNumUint":
-		return AcctTotalNumUint, nil
-	case "AcctTotalNumByteSlice":
-		return AcctTotalNumByteSlice, nil
-	case "AcctTotalExtraAppPages":
-		return AcctTotalExtraAppPages, nil
-	case "AcctTotalAppsCreated":
-		return AcctTotalAppsCreated, nil
-	case "AcctTotalAppsOptedIn":
-		return AcctTotalAppsOptedIn, nil
-	case "AcctTotalAssetsCreated":
-		return AcctTotalAssetsCreated, nil
-	case "AcctTotalAssets":
-		return AcctTotalAssets, nil
-	case "AcctTotalBoxes":
-		return AcctTotalBoxes, nil
-	case "AcctTotalBoxBytes":
-		return AcctTotalBoxBytes, nil
-	default:
-		value, err := readUint8(s)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to parse app params field")
-		}
-
-		return AcctParamsField(value), nil
+	spec, ok := acctParamsFieldSpecByName[s]
+	if ok {
+		return spec.field, nil
 	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return AcctParamsField(value), nil
 }
 
 func readAppField(s string) (AppParamsField, error) {
-	switch s {
-	case "AppApprovalProgram":
-		return AppApprovalProgram, nil
-	case "AppClearStateProgram":
-		return AppClearStateProgram, nil
-	case "AppGlobalNumUint":
-		return AppGlobalNumUint, nil
-	case "AppGlobalNumByteSlice":
-		return AppGlobalNumByteSlice, nil
-	case "AppLocalNumUint":
-		return AppLocalNumUint, nil
-	case "AppLocalNumByteSlice":
-		return AppLocalNumByteSlice, nil
-	case "AppExtraProgramPages":
-		return AppExtraProgramPages, nil
-	case "AppCreator":
-		return AppCreator, nil
-	case "AppAddress":
-		return AppAddress, nil
-	default:
-		value, err := readUint8(s)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to parse app params field")
-		}
-
-		return AppParamsField(value), nil
+	spec, ok := appParamsFieldSpecByName[s]
+	if ok {
+		return spec.field, nil
 	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return AppParamsField(value), nil
 }
 
 func readAssetField(s string) (AssetParamsField, error) {
-	switch s {
-	case "AssetTotal":
-		return AssetTotal, nil
-	case "AssetDecimals":
-		return AssetDecimals, nil
-	case "AssetDefaultFrozen":
-		return AssetDefaultFrozen, nil
-	case "AssetUnitName":
-		return AssetUnitName, nil
-	case "AssetName":
-		return AssetName, nil
-	case "AssetURL":
-		return AssetURL, nil
-	case "AssetMetadataHash":
-		return AssetMetadataHash, nil
-	case "AssetManager":
-		return AssetManager, nil
-	case "AssetReserve":
-		return AssetReserve, nil
-	case "AssetFreeze":
-		return AssetFreeze, nil
-	case "AssetClawback":
-		return AssetClawback, nil
-	case "AssetCreator":
-		return AssetCreator, nil
-	default:
-		value, err := readUint8(s)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to parse asset params field")
-		}
-
-		return AssetParamsField(value), nil
+	spec, ok := assetParamsFieldSpecByName[s]
+	if ok {
+		return spec.field, nil
 	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return AssetParamsField(value), nil
 }
 
 func readGlobalField(s string) (GlobalField, error) {
-	switch s {
-	case "MinTxnFee":
-		return GlobalMinTxnFee, nil
-	case "MinBalance":
-		return GlobalMinBalance, nil
-	case "lMaxTxnLife":
-		return GlobalMaxTxnLife, nil
-	case "ZeroAddress":
-		return GlobalZeroAddress, nil
-	case "GroupSize":
-		return GlobalGroupSize, nil
-	case "LogicSigVersion":
-		return GlobalLogicSigVersion, nil
-	case "Round":
-		return GlobalRound, nil
-	case "LatestTimestamp":
-		return GlobalLatestTimestamp, nil
-	case "CurrentApplicationID":
-		return GlobalCurrentApplicationID, nil
-	case "CreatorAddress":
-		return GlobalCreatorAddress, nil
-	case "CurrentApplicationAddress":
-		return GlobalCurrentApplicationAddress, nil
-	case "GroupID":
-		return GlobalGroupID, nil
-	case "OpcodeBudget":
-		return GlobalOpcodeBudget, nil
-	case "CallerApplicationID":
-		return GlobalCallerApplicationID, nil
-	case "CallerApplicationAddress":
-		return GlobalCallerApplicationAddress, nil
-	default:
-		value, err := readUint8(s)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to parse global field")
-		}
-
-		return GlobalField(value), nil
+	spec, ok := globalFieldSpecByName[s]
+	if ok {
+		return spec.field, nil
 	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return GlobalField(value), nil
 }
 
 func readTxnField(s string) (TxnField, error) {
-	switch s {
-	case "Sender":
-		return TxnSender, nil
-	case "Fee":
-		return TxnFee, nil
-	case "FirstValid":
-		return TxnFirstValid, nil
-	case "FirstValidTime":
-		return TxnFirstValidTime, nil
-	case "LastValid":
-		return TxnLastValid, nil
-	case "Note":
-		return TxnNote, nil
-	case "Lease":
-		return TxnLease, nil
-	case "Receiver":
-		return TxnReceiver, nil
-	case "Amount":
-		return TxnAmount, nil
-	case "CloseRemainderTo":
-		return TxnCloseRemainderTo, nil
-	case "VotePK":
-		return TxnVotePK, nil
-	case "SelectionPK":
-		return TxnSelectionPK, nil
-	case "VoteFirst":
-		return TxnVoteFirst, nil
-	case "VoteLast":
-		return TxnVoteLast, nil
-	case "VoteKeyDilution":
-		return TxnVoteKeyDilution, nil
-	case "Type":
-		return TxnType, nil
-	case "TypeEnum":
-		return TxnTypeEnum, nil
-	case "XferAsset":
-		return TxnXferAsset, nil
-	case "AssetAmount":
-		return TxnAssetAmount, nil
-	case "AssetSender":
-		return TxnAssetSender, nil
-	case "AssetReceiver":
-		return TxnAssetReceiver, nil
-	case "AssetCloseTo":
-		return TxnAssetCloseTo, nil
-	case "GroupIndex":
-		return TxnGroupIndex, nil
-	case "TxID":
-		return TxnTxID, nil
-	case "ApplicationID":
-		return TxnApplicationID, nil
-	case "OnCompletion":
-		return TxnOnCompletion, nil
-	case "ApplicationArgs":
-		return TxnApplicationArgs, nil
-	case "NumAppArgs":
-		return TxnNumAppArgs, nil
-	case "Accounts":
-		return TxnAccounts, nil
-	case "NumAccounts":
-		return TxnNumAccounts, nil
-	case "ApprovalProgram":
-		return TxnApprovalProgram, nil
-	case "ClearStateProgram":
-		return TxnClearStateProgram, nil
-	case "RekeyTo":
-		return TxnRekeyTo, nil
-	case "ConfigAsset":
-		return TxnConfigAsset, nil
-	case "ConfigAssetTotal":
-		return TxnConfigAssetTotal, nil
-	case "ConfigAssetDecimals":
-		return TxnConfigAssetDecimals, nil
-	case "ConfigAssetDefaultFrozen":
-		return TxnConfigAssetDefaultFrozen, nil
-	case "ConfigAssetUnitName":
-		return TxnConfigAssetUnitName, nil
-	case "ConfigAssetName":
-		return TxnConfigAssetName, nil
-	case "ConfigAssetURL":
-		return TxnConfigAssetURL, nil
-	case "ConfigAssetMetadataHash":
-		return TxnConfigAssetMetadataHash, nil
-	case "ConfigAssetManager":
-		return TxnConfigAssetManager, nil
-	case "ConfigAssetReserve":
-		return TxnConfigAssetReserve, nil
-	case "ConfigAssetFreeze":
-		return TxnConfigAssetFreeze, nil
-	case "ConfigAssetClawback":
-		return TxnConfigAssetClawback, nil
-	case "FreezeAsset":
-		return TxnFreezeAsset, nil
-	case "FreezeAssetAccounts":
-		return TxnFreezeAssetAccounts, nil
-	case "FreezeAssetFrozen":
-		return TxnFreezeAssetFrozen, nil
-	case "Assets":
-		return TxnAssets, nil
-	case "NumAssets":
-		return TxnNumAssets, nil
-	case "Applications":
-		return TxnApplications, nil
-	case "NumApplications":
-		return TxnNumApplications, nil
-	case "GlobalNumUint":
-		return TxnGlobalNumUint, nil
-	case "GlobalNumByteSlice":
-		return TxnGlobalNumByteSlice, nil
-	case "LocalNumUint":
-		return TxnLocalNumUint, nil
-	case "LocalNumByteSlice":
-		return TxnLocalNumByteSlice, nil
-	case "ExtraProgramPages":
-		return TxnExtraProgramPages, nil
-	case "Nonparticipation":
-		return TxnNonparticipation, nil
-	case "Logs":
-		return TxnLogs, nil
-	case "NumLogs":
-		return TxnNumLogs, nil
-	case "CreatedAssetID":
-		return TxnCreatedAssetID, nil
-	case "CreatedApplicationID":
-		return TxnCreatedApplicationID, nil
-	case "LastLog":
-		return TxnLastLog, nil
-	case "StateProofPK":
-		return TxnStateProofPK, nil
-	case "ApprovalProgramPages":
-		return TxnApprovalProgramPages, nil
-	case "NumApprovalProgramPages":
-		return TxnNumApprovalProgramPages, nil
-	case "ClearStateProgramPages":
-		return TxnClearStateProgramPages, nil
-	case "NumClearStateProgramPages":
-		return TxnNumClearStateProgramPages, nil
-	default:
-		value, err := readUint8(s)
-		if err != nil {
-			return 0, errors.Wrap(err, "failed to parse txn field")
-		}
-
-		return TxnField(value), nil
+	spec, ok := txnFieldSpecByName[s]
+	if ok {
+		return spec.field, nil
 	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return TxnField(value), nil
 }
 
 func readInt(a *arguments) (uint64, error) {
@@ -468,8 +242,8 @@ func readEcdsaCurveIndex(s string) (EcdsaCurve, error) {
 
 	curve = EcdsaCurve(value)
 	switch curve {
-	case EcdsaVerifySecp256k1:
-	case EcdsaVerifySecp256r1:
+	case Secp256k1:
+	case Secp256r1:
 	default:
 		return curve, errors.Errorf("unexpected ecdsa_verify curve index: %d", value)
 	}

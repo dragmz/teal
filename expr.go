@@ -72,13 +72,6 @@ var ED25519Verify = &ED25519VerifyExpr{}
 
 // ecdsa_verify v
 
-type EcdsaCurve uint8
-
-const (
-	EcdsaVerifySecp256k1 = EcdsaCurve(0)
-	EcdsaVerifySecp256r1 = EcdsaCurve(1)
-)
-
 type EcdsaVerifyExpr struct {
 	Index EcdsaCurve
 }
@@ -553,222 +546,6 @@ var Arg3 = &Arg3Expr{}
 
 // txn f
 
-type TxnField uint8
-
-const (
-	TxnSender                    = TxnField(0)
-	TxnFee                       = TxnField(1)
-	TxnFirstValid                = TxnField(2)
-	TxnFirstValidTime            = TxnField(3)
-	TxnLastValid                 = TxnField(4)
-	TxnNote                      = TxnField(5)
-	TxnLease                     = TxnField(6)
-	TxnReceiver                  = TxnField(7)
-	TxnAmount                    = TxnField(8)
-	TxnCloseRemainderTo          = TxnField(9)
-	TxnVotePK                    = TxnField(10)
-	TxnSelectionPK               = TxnField(11)
-	TxnVoteFirst                 = TxnField(12)
-	TxnVoteLast                  = TxnField(13)
-	TxnVoteKeyDilution           = TxnField(14)
-	TxnType                      = TxnField(15)
-	TxnTypeEnum                  = TxnField(16)
-	TxnXferAsset                 = TxnField(17)
-	TxnAssetAmount               = TxnField(18)
-	TxnAssetSender               = TxnField(19)
-	TxnAssetReceiver             = TxnField(20)
-	TxnAssetCloseTo              = TxnField(21)
-	TxnGroupIndex                = TxnField(22)
-	TxnTxID                      = TxnField(23)
-	TxnApplicationID             = TxnField(24)
-	TxnOnCompletion              = TxnField(25)
-	TxnApplicationArgs           = TxnField(26)
-	TxnNumAppArgs                = TxnField(27)
-	TxnAccounts                  = TxnField(28)
-	TxnNumAccounts               = TxnField(29)
-	TxnApprovalProgram           = TxnField(30)
-	TxnClearStateProgram         = TxnField(31)
-	TxnRekeyTo                   = TxnField(32)
-	TxnConfigAsset               = TxnField(33)
-	TxnConfigAssetTotal          = TxnField(34)
-	TxnConfigAssetDecimals       = TxnField(35)
-	TxnConfigAssetDefaultFrozen  = TxnField(36)
-	TxnConfigAssetUnitName       = TxnField(37)
-	TxnConfigAssetName           = TxnField(38)
-	TxnConfigAssetURL            = TxnField(39)
-	TxnConfigAssetMetadataHash   = TxnField(40)
-	TxnConfigAssetManager        = TxnField(41)
-	TxnConfigAssetReserve        = TxnField(42)
-	TxnConfigAssetFreeze         = TxnField(43)
-	TxnConfigAssetClawback       = TxnField(44)
-	TxnFreezeAsset               = TxnField(45)
-	TxnFreezeAssetAccounts       = TxnField(46)
-	TxnFreezeAssetFrozen         = TxnField(47)
-	TxnAssets                    = TxnField(48)
-	TxnNumAssets                 = TxnField(49)
-	TxnApplications              = TxnField(50)
-	TxnNumApplications           = TxnField(51)
-	TxnGlobalNumUint             = TxnField(52)
-	TxnGlobalNumByteSlice        = TxnField(53)
-	TxnLocalNumUint              = TxnField(54)
-	TxnLocalNumByteSlice         = TxnField(55)
-	TxnExtraProgramPages         = TxnField(56)
-	TxnNonparticipation          = TxnField(57)
-	TxnLogs                      = TxnField(58)
-	TxnNumLogs                   = TxnField(59)
-	TxnCreatedAssetID            = TxnField(60)
-	TxnCreatedApplicationID      = TxnField(61)
-	TxnLastLog                   = TxnField(62)
-	TxnStateProofPK              = TxnField(63)
-	TxnApprovalProgramPages      = TxnField(64)
-	TxnNumApprovalProgramPages   = TxnField(65)
-	TxnClearStateProgramPages    = TxnField(66)
-	TxnNumClearStateProgramPages = TxnField(67)
-)
-
-func (f TxnField) String() string {
-	switch f {
-	case TxnSender:
-		return "Sender"
-	case TxnFee:
-		return "TxnFee"
-	case TxnFirstValid:
-		return "FirstValid"
-	case TxnFirstValidTime:
-		return "FirstValidTime"
-	case TxnLastValid:
-		return "LastValid"
-	case TxnNote:
-		return "Note"
-	case TxnLease:
-		return "Lease"
-	case TxnReceiver:
-		return "Receiver"
-	case TxnAmount:
-		return "Amount"
-	case TxnCloseRemainderTo:
-		return "CloseRemainderTo"
-	case TxnVotePK:
-		return "VotePK"
-	case TxnSelectionPK:
-		return "SelectionPK"
-	case TxnVoteFirst:
-		return "VoteFirst"
-	case TxnVoteLast:
-		return "VoteLast"
-	case TxnVoteKeyDilution:
-		return "VoteKeyDilution"
-	case TxnType:
-		return "Type"
-	case TxnTypeEnum:
-		return "TypeEnum"
-	case TxnXferAsset:
-		return "XferAsset"
-	case TxnAssetAmount:
-		return "AssetAmount"
-	case TxnAssetSender:
-		return "AssetSender"
-	case TxnAssetReceiver:
-		return "AssetReceiver"
-	case TxnAssetCloseTo:
-		return "AssetCloseTo"
-	case TxnGroupIndex:
-		return "GroupIndex"
-	case TxnTxID:
-		return "TxID"
-	case TxnApplicationID:
-		return "ApplicationID"
-	case TxnOnCompletion:
-		return "OnCompletion"
-	case TxnApplicationArgs:
-		return "ApplicationArgs"
-	case TxnNumAppArgs:
-		return "NumAppArgs"
-	case TxnAccounts:
-		return "Accounts"
-	case TxnNumAccounts:
-		return "NumAccounts"
-	case TxnApprovalProgram:
-		return "ApprovalProgram"
-	case TxnClearStateProgram:
-		return "ClearStateProgram"
-	case TxnRekeyTo:
-		return "RekeyTo"
-	case TxnConfigAsset:
-		return "ConfigAsset"
-	case TxnConfigAssetTotal:
-		return "ConfigAssetTotal"
-	case TxnConfigAssetDecimals:
-		return "ConfigAssetDecimals"
-	case TxnConfigAssetDefaultFrozen:
-		return "ConfigAssetDefaultFrozen"
-	case TxnConfigAssetUnitName:
-		return "ConfigAssetUnitName"
-	case TxnConfigAssetName:
-		return "ConfigAssetName"
-	case TxnConfigAssetURL:
-		return "ConfigAssetURL"
-	case TxnConfigAssetMetadataHash:
-		return "ConfigAssetMetadataHash"
-	case TxnConfigAssetManager:
-		return "ConfigAssetManager"
-	case TxnConfigAssetReserve:
-		return "ConfigAssetReserve"
-	case TxnConfigAssetFreeze:
-		return "ConfigAssetFreeze"
-	case TxnConfigAssetClawback:
-		return "ConfigAssetClawback"
-	case TxnFreezeAsset:
-		return "FreezeAsset"
-	case TxnFreezeAssetAccounts:
-		return "FreezeAssetAccounts"
-	case TxnFreezeAssetFrozen:
-		return "FreezeAssetFrozen"
-	case TxnAssets:
-		return "Assets"
-	case TxnNumAssets:
-		return "NumAssets"
-	case TxnApplications:
-		return "Applications"
-	case TxnNumApplications:
-		return "NumApplications"
-	case TxnGlobalNumUint:
-		return "GlobalNumUint"
-	case TxnGlobalNumByteSlice:
-		return "GlobalNumByteSlice"
-	case TxnLocalNumUint:
-		return "LocalNumUint"
-	case TxnLocalNumByteSlice:
-		return "LocalNumByteSlice"
-	case TxnExtraProgramPages:
-		return "ExtraProgramPages"
-	case TxnNonparticipation:
-		return "Nonparticipation"
-	case TxnLogs:
-		return "Logs"
-	case TxnNumLogs:
-		return "NumLogs"
-	case TxnCreatedAssetID:
-		return "CreatedAssetID"
-	case TxnCreatedApplicationID:
-		return "CreatedApplicationID"
-	case TxnLastLog:
-		return "LastLog"
-	case TxnStateProofPK:
-		return "StateProofPK"
-	case TxnApprovalProgramPages:
-		return "ApprovalProgramPages"
-	case TxnNumApprovalProgramPages:
-		return "NumApprovalProgramPages"
-	case TxnClearStateProgramPages:
-		return "ClearStateProgramPages"
-	case TxnNumClearStateProgramPages:
-		return "NumClearStateProgramPages"
-	default:
-		return fmt.Sprintf("%d", f)
-	}
-}
-
 type TxnExpr struct {
 	Field TxnField
 }
@@ -778,8 +555,6 @@ func (e *TxnExpr) String() string {
 }
 
 // global f
-
-type GlobalField uint8
 
 const (
 	GlobalMinTxnFee                 = GlobalField(0)
@@ -798,43 +573,6 @@ const (
 	GlobalCallerApplicationID       = GlobalField(13)
 	GlobalCallerApplicationAddress  = GlobalField(14)
 )
-
-func (f GlobalField) String() string {
-	switch f {
-	case GlobalMinTxnFee:
-		return "MinTxnFee"
-	case GlobalMinBalance:
-		return "MinBalance"
-	case GlobalMaxTxnLife:
-		return "MaxTxnLife"
-	case GlobalZeroAddress:
-		return "ZeroAddress"
-	case GlobalGroupSize:
-		return "GroupSize"
-	case GlobalLogicSigVersion:
-		return "LogicSigVersion"
-	case GlobalRound:
-		return "Round"
-	case GlobalLatestTimestamp:
-		return "LatestTimestamp"
-	case GlobalCurrentApplicationID:
-		return "CurrentApplicationID"
-	case GlobalCreatorAddress:
-		return "CreatorAddress"
-	case GlobalCurrentApplicationAddress:
-		return "CurrentApplicationAddress"
-	case GlobalGroupID:
-		return "GroupID"
-	case GlobalOpcodeBudget:
-		return "OpcodeBudget"
-	case GlobalCallerApplicationID:
-		return "CallerApplicationID"
-	case GlobalCallerApplicationAddress:
-		return "CallerApplicationAddress"
-	default:
-		return fmt.Sprintf("%d", f)
-	}
-}
 
 type GlobalExpr struct {
 	Index GlobalField
@@ -1537,54 +1275,6 @@ func (e *CommentExpr) String() string {
 	return fmt.Sprintf("//%s", e.Text)
 }
 
-type AssetParamsField uint8
-
-const (
-	AssetTotal         = AssetParamsField(0)
-	AssetDecimals      = AssetParamsField(1)
-	AssetDefaultFrozen = AssetParamsField(2)
-	AssetUnitName      = AssetParamsField(3)
-	AssetName          = AssetParamsField(4)
-	AssetURL           = AssetParamsField(5)
-	AssetMetadataHash  = AssetParamsField(6)
-	AssetManager       = AssetParamsField(7)
-	AssetReserve       = AssetParamsField(8)
-	AssetFreeze        = AssetParamsField(9)
-	AssetClawback      = AssetParamsField(10)
-	AssetCreator       = AssetParamsField(11)
-)
-
-func (f AssetParamsField) String() string {
-	switch f {
-	case AssetTotal:
-		return "AssetTotal"
-	case AssetUnitName:
-		return "AssetUnitName"
-	case AssetName:
-		return "AssetName"
-	case AssetURL:
-		return "AssetURL"
-	case AssetMetadataHash:
-		return "AssetMetadataHash"
-	case AssetManager:
-		return "AssetManager"
-	case AssetReserve:
-		return "AssetReserve"
-	case AssetFreeze:
-		return "AssetFreeze"
-	case AssetClawback:
-		return "AssetClawback"
-	case AssetCreator:
-		return "AssetCreator"
-	case AssetDecimals:
-		return "AssetDecimals"
-	case AssetDefaultFrozen:
-		return "AssetDefaultFrozen"
-	default:
-		return fmt.Sprintf("%d", f)
-	}
-}
-
 type AssetParamsGetExpr struct {
 	Field AssetParamsField
 }
@@ -1726,99 +1416,12 @@ func (e *ExpExpr) String() string {
 
 var Exp = &ExpExpr{}
 
-type AppParamsField uint8
-
-const (
-	AppApprovalProgram    = AppParamsField(0)
-	AppClearStateProgram  = AppParamsField(1)
-	AppGlobalNumUint      = AppParamsField(2)
-	AppGlobalNumByteSlice = AppParamsField(3)
-	AppLocalNumUint       = AppParamsField(4)
-	AppLocalNumByteSlice  = AppParamsField(5)
-	AppExtraProgramPages  = AppParamsField(6)
-	AppCreator            = AppParamsField(7)
-	AppAddress            = AppParamsField(8)
-)
-
-func (f AppParamsField) String() string {
-	switch f {
-	case AppAddress:
-		return "AppAddress"
-	case AppApprovalProgram:
-		return "AppApprovalProgram"
-	case AppClearStateProgram:
-		return "AppClearStateProgram"
-	case AppCreator:
-		return "AppCreator"
-	case AppExtraProgramPages:
-		return "AppExtraProgramPages"
-	case AppGlobalNumByteSlice:
-		return "AppGlobalNumByteSlice"
-	case AppGlobalNumUint:
-		return "AppGlobalNumUint"
-	case AppLocalNumByteSlice:
-		return "AppLocalNumByteSlice"
-	case AppLocalNumUint:
-		return "AppLocalNumUint"
-	default:
-		return fmt.Sprintf("%d", f)
-	}
-}
-
 type AppParamsGetExpr struct {
 	Field AppParamsField
 }
 
 func (e *AppParamsGetExpr) String() string {
 	return fmt.Sprintf("app_params_get %s", e.Field)
-}
-
-type AcctParamsField uint8
-
-const (
-	AcctBalance            = AcctParamsField(0)
-	AcctMinBalance         = AcctParamsField(1)
-	AcctAuthAddr           = AcctParamsField(2)
-	AcctTotalNumUint       = AcctParamsField(3)
-	AcctTotalNumByteSlice  = AcctParamsField(4)
-	AcctTotalExtraAppPages = AcctParamsField(5)
-	AcctTotalAppsCreated   = AcctParamsField(6)
-	AcctTotalAppsOptedIn   = AcctParamsField(7)
-	AcctTotalAssetsCreated = AcctParamsField(8)
-	AcctTotalAssets        = AcctParamsField(9)
-	AcctTotalBoxes         = AcctParamsField(10)
-	AcctTotalBoxBytes      = AcctParamsField(11)
-)
-
-func (f AcctParamsField) String() string {
-	switch f {
-	case AcctBalance:
-		return "AcctBalance"
-	case AcctMinBalance:
-		return "AcctMinBalance"
-	case AcctAuthAddr:
-		return "AcctAuthAddr"
-	case AcctTotalNumUint:
-		return "AcctTotalNumUint"
-	case AcctTotalNumByteSlice:
-		return "AcctTotalNumByteSlice"
-	case AcctTotalExtraAppPages:
-		return "AcctTotalExtraAppPages"
-	case AcctTotalAppsCreated:
-		return "AcctTotalAppsCreated"
-	case AcctTotalAppsOptedIn:
-		return "AcctTotalAppsOptedIn"
-	case AcctTotalAssetsCreated:
-		return "AcctTotalAssetsCreated"
-	case AcctTotalAssets:
-		return "AcctTotalAssets"
-	case AcctTotalBoxes:
-		return "AcctTotalBoxes"
-	case AcctTotalBoxBytes:
-		return "AcctTotalBoxBytes"
-	default:
-		return fmt.Sprintf("%d", f)
-	}
 }
 
 type AcctParamsGetExpr struct {
@@ -1837,24 +1440,6 @@ func (e *LogExpr) String() string {
 
 var Log = &LogExpr{}
 
-type BlockField uint8
-
-const (
-	BlkSeed      = BlockField(0)
-	BlkTimestamp = BlockField(1)
-)
-
-func (f BlockField) String() string {
-	switch f {
-	case BlkSeed:
-		return "BlkSeed"
-	case BlkTimestamp:
-		return "BlkTimestamp"
-	default:
-		return fmt.Sprintf("%d", f)
-	}
-}
-
 type BlockExpr struct {
 	Field BlockField
 }
@@ -1863,23 +1448,8 @@ func (e *BlockExpr) String() string {
 	return fmt.Sprintf("block %s", e.Field)
 }
 
-type VrfVerifyField uint8
-
-const (
-	VrfAlgorand = VrfVerifyField(0)
-)
-
-func (f VrfVerifyField) String() string {
-	switch f {
-	case VrfAlgorand:
-		return "VrfAglorand"
-	default:
-		return fmt.Sprintf("%d", f)
-	}
-}
-
 type VrfVerifyExpr struct {
-	Field VrfVerifyField
+	Field VrfStandard
 }
 
 func (e *VrfVerifyExpr) String() string {
@@ -1901,24 +1471,6 @@ func (e *ExtractUint64Expr) String() string {
 }
 
 var ExtractUint64 = &ExtractUint64Expr{}
-
-type AssetHoldingField uint8
-
-const (
-	AssetBalance = AssetHoldingField(0)
-	AssetFrozen  = AssetHoldingField(1)
-)
-
-func (f AssetHoldingField) String() string {
-	switch f {
-	case AssetBalance:
-		return "AssetBalance"
-	case AssetFrozen:
-		return "AssetFrozen"
-	default:
-		return fmt.Sprintf("%d", f)
-	}
-}
 
 type AssetHoldingGetExpr struct {
 	Field AssetHoldingField
@@ -1942,7 +1494,7 @@ func (e *MinBalanceExpr) String() string {
 	return "min_balance"
 }
 
-var MinBalance = &MinBalanceExpr{}
+var MinBalanceOp = &MinBalanceExpr{}
 
 type GitxnExpr struct {
 	Index uint8
@@ -2394,7 +1946,7 @@ func FrameDig(index int8) *FrameDigExpr {
 }
 
 func Arg(index uint8) *TxnaExpr {
-	return Txna(TxnApplicationArgs, index)
+	return Txna(ApplicationArgs, index)
 }
 
 func ItxnField(field TxnField) *ItxnFieldExpr {

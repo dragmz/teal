@@ -179,10 +179,6 @@ func typed(vs ...interface{}) OpSpecDetails {
 	return OpSpecDetails{}
 }
 
-const (
-	modeSig = 1
-)
-
 func (d OpSpecDetails) only(vs ...interface{}) OpSpecDetails {
 	return d
 }
@@ -209,7 +205,6 @@ var asmByteCBlock = []interface{}{}
 var checkByteImmArgs = []interface{}{}
 var immBytess = []interface{}{}
 var typeTxField = []interface{}{}
-var TxnFields = []interface{}{}
 
 func immediates(names ...string) OpSpecDetails {
 	m := map[string]bool{}
@@ -271,14 +266,6 @@ var typeStore = []interface{}{}
 var asmByteC = []interface{}{}
 var asmItxn = []interface{}{}
 var asmGitxn = []interface{}{}
-var TxnScalarFields = []interface{}{}
-var GlobalFields = []interface{}{}
-var TxnArrayFields = []interface{}{}
-var modeApp = []interface{}{}
-var AssetHoldingFields = []interface{}{}
-var AssetParamsFields = []interface{}{}
-var AppParamsFields = []interface{}{}
-var AcctParamsFields = []interface{}{}
 
 var asmPushBytes = []interface{}{}
 var immBytes = []interface{}{}
@@ -286,8 +273,6 @@ var asmPushInt = []interface{}{}
 var immInt = []interface{}{}
 var asmPushBytess = []interface{}{}
 var asmPushInts = []interface{}{}
-var VrfStandards = []interface{}{}
-var BlockFields = []interface{}{}
 
 func proto(vs ...interface{}) OpSpecProto {
 	return OpSpecProto{}
@@ -738,7 +723,7 @@ func opAcctParamsGet(c *parserContext) {
 	c.emit(&AcctParamsGetExpr{Field: f})
 }
 func opMinBalance(c *parserContext) {
-	c.emit(MinBalance)
+	c.emit(MinBalanceOp)
 }
 func opPushBytes(c *parserContext) {
 	value := c.mustReadBytes("value")
@@ -985,7 +970,6 @@ func opBlock(c *parserContext) {
 	c.emit(&BlockExpr{Field: f})
 }
 
-var EcdsaCurves = []interface{}{}
 var ecdsaVerifyCosts = []interface{}{}
 var ecdsaDecompressCosts = []interface{}{}
 var typeEquals = []interface{}{}
@@ -1000,8 +984,6 @@ var typeCover = []interface{}{}
 var typeUncover = []interface{}{}
 var asmSubstring = []interface{}{}
 var typeSetBit = []interface{}{}
-var Base64Encodings = []interface{}{}
-var JSONRefTypes = []interface{}{}
 var typeProto = []interface{}{}
 var immInt8 = []interface{}{}
 var typePushBytess = []interface{}{}
