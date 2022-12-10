@@ -37,7 +37,7 @@ jobs:
       run: env GOOS=darwin GOARCH=arm64 go build -o tealsp_darwin_arm64 cmd/tealsp/main.go
       
     - name: Prepare version file
-      run: echo "${GITHUB_SHA}" > .version
+      run: echo $GITHUB_SHA > .version
 
     - name: Create release
       uses: ncipollo/release-action@v1
