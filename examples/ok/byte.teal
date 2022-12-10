@@ -1,0 +1,11 @@
+byte base64 dGVzdA==
+byte b64 dGVzdA==
+byte base64(dGVzdA==)
+byte base32 ORSXG5A=
+byte b32 ORSXG5A=
+byte b32(ORSXG5A=)
+byte 0x74657374
+byte "\x74\x65\x73\x74"
+byte "test"
+byte "test test"
+byte "test\"test"

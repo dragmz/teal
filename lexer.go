@@ -1,6 +1,7 @@
 package teal
 
 import (
+	"strings"
 	"unicode/utf8"
 )
 
@@ -15,7 +16,7 @@ const (
 )
 
 type Token struct {
-	v []byte // value
+	v string // value
 
 	l int // line
 	b int // begin
@@ -25,7 +26,7 @@ type Token struct {
 }
 
 func (t Token) String() string {
-	return string(t.v)
+	return t.v
 }
 
 func (t Token) Line() int {
@@ -80,7 +81,7 @@ func (z *Lexer) emit(t TokenType) {
 		b: z.p - z.lb,
 		e: z.i - z.lb,
 
-		v: z.Source[z.p:z.i],
+		v: string(z.Source[z.p:z.i]),
 		t: t,
 	})
 
@@ -135,19 +136,54 @@ func (e lexerError) Severity() DiagnosticSeverity {
 }
 
 func (z *Lexer) readValue() {
-	for {
-		if z.i == len(z.Source) {
-			z.emit(TokenValue)
-			return
-		}
-
-		c, n := utf8.DecodeRune(z.Source[z.i:])
-		if isTerminating(c) {
-			z.emit(TokenValue)
-			return
-		}
-
+	p, n := utf8.DecodeRune(z.Source[z.i:])
+	if p == '"' {
 		z.inc(n)
+		for {
+			if z.i == len(z.Source) {
+				z.fail("incomplete string")
+				return
+			}
+
+			c, n := utf8.DecodeRune(z.Source[z.i:])
+			if c == '"' && p != '\\' {
+				z.inc(n)
+
+				s := string(z.Source[z.p+1 : z.i-1])
+				v := "\"" + strings.ReplaceAll(s, "\\\"", "\"") + "\""
+
+				z.ts = append(z.ts, Token{
+					l: z.l,
+					b: z.p - z.lb,
+					e: z.i - z.lb,
+
+					v: v,
+					t: TokenValue,
+				})
+
+				z.p = z.i
+				return
+			}
+
+			z.inc(n)
+
+			p = c
+		}
+	} else {
+		for {
+			if z.i == len(z.Source) {
+				z.emit(TokenValue)
+				return
+			}
+
+			c, n := utf8.DecodeRune(z.Source[z.i:])
+			if isTerminating(c) {
+				z.emit(TokenValue)
+				return
+			}
+
+			z.inc(n)
+		}
 	}
 }
 
@@ -181,7 +217,7 @@ func (z *Lexer) readComment() {
 				b: z.p - z.lb,
 				e: z.i - z.lb,
 
-				v: z.Source[z.p+2 : z.i],
+				v: string(z.Source[z.p+2 : z.i]),
 				t: TokenComment,
 			})
 
@@ -202,7 +238,7 @@ func (z *Lexer) readComment() {
 					b: z.p - z.lb,
 					e: z.i - z.lb,
 
-					v: z.Source[z.p+2 : z.i],
+					v: string(z.Source[z.p+2 : z.i]),
 					t: TokenComment,
 				})
 
