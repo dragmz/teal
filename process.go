@@ -26,6 +26,11 @@ type parserContext struct {
 	ops  []Op
 	args *arguments
 	diag []Diagnostic
+
+	ns []Token
+	ss []Token
+	ks []Token
+	ms []Token
 }
 
 func (c *parserContext) emit(e Op) {
@@ -61,6 +66,8 @@ func (c *parserContext) parseUint64(name string) uint64 {
 		c.failCurr(errors.Wrapf(err, "failed to parse uint64: %s", name))
 	}
 
+	c.ns = append(c.ns, c.args.Curr())
+
 	return v
 }
 
@@ -69,6 +76,9 @@ func (c *parserContext) parseUint8(name string) uint8 {
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse uint8: %s", name))
 	}
+
+	c.ns = append(c.ns, c.args.Curr())
+
 	return v
 }
 
@@ -77,10 +87,14 @@ func (c *parserContext) parseInt8(name string) int8 {
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse int8: %s", name))
 	}
+
+	c.ns = append(c.ns, c.args.Curr())
+
 	return v
 }
 
 func (c *parserContext) parseTxnField(name string) TxnField {
+	// TODO report semantics
 	v, err := readTxnField(c.args.Text())
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse txn field: %s", name))
@@ -102,6 +116,8 @@ func (c *parserContext) parseBytes(name string) []byte {
 		if err != nil {
 			c.failCurr(err)
 		}
+
+		c.ss = append(c.ss, c.args.Curr())
 		return val
 	}
 
@@ -116,6 +132,7 @@ func (c *parserContext) parseBytes(name string) []byte {
 		if err != nil {
 			c.failCurr(err)
 		}
+		c.ss = append(c.ss, c.args.Curr())
 		return val
 	}
 
@@ -124,24 +141,35 @@ func (c *parserContext) parseBytes(name string) []byte {
 		if err != nil {
 			c.failCurr(err)
 		}
+		c.ss = append(c.ss, c.args.Curr())
 		return val
 	}
 
 	if arg == "base32" || arg == "b32" {
+		c.ks = append(c.ks, c.args.Curr())
+
 		l := c.mustRead("literal")
 		val, err := base32DecodeAnyPadding(l)
 		if err != nil {
 			c.failCurr(err)
 		}
+
+		c.ss = append(c.ss, c.args.Curr())
+
 		return val
 	}
 
 	if arg == "base64" || arg == "b64" {
+		c.ks = append(c.ks, c.args.Curr())
+
 		l := c.mustRead("literal")
 		val, err := base64.StdEncoding.DecodeString(l)
 		if err != nil {
 			c.failCurr(err)
 		}
+
+		c.ss = append(c.ss, c.args.Curr())
+
 		return val
 	}
 
@@ -150,6 +178,7 @@ func (c *parserContext) parseBytes(name string) []byte {
 		if err != nil {
 			c.failCurr(err)
 		}
+		c.ss = append(c.ss, c.args.Curr())
 		return val
 	}
 
@@ -159,6 +188,7 @@ func (c *parserContext) parseBytes(name string) []byte {
 }
 
 func (c *parserContext) parseEcdsaCurveIndex(name string) EcdsaCurve {
+	// TODO report semantics
 	v, err := readEcdsaCurveIndex(c.args.Text())
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse ESCDS curve index: %s", name))
@@ -532,6 +562,8 @@ func opGlobal(c *parserContext) {
 		return
 	}
 
+	// TODO report semantics
+
 	c.emit(&GlobalExpr{Index: field})
 }
 
@@ -751,6 +783,8 @@ func opAssetHoldingGet(c *parserContext) {
 		return
 	}
 
+	// TODO report semantics
+
 	c.emit(&AssetHoldingGetExpr{Field: f})
 }
 func opAssetParamsGet(c *parserContext) {
@@ -761,6 +795,8 @@ func opAssetParamsGet(c *parserContext) {
 		c.failCurr(errors.Wrapf(err, "failed to parse asset_params_get f: %s", c.args.Text()))
 		return
 	}
+
+	// TODO report semantics
 
 	c.emit(&AssetParamsGetExpr{Field: field})
 }
@@ -773,6 +809,8 @@ func opAppParamsGet(c *parserContext) {
 		return
 	}
 
+	// TODO report semantics
+
 	c.emit(&AppParamsGetExpr{Field: f})
 }
 func opAcctParamsGet(c *parserContext) {
@@ -783,6 +821,8 @@ func opAcctParamsGet(c *parserContext) {
 		c.failCurr(errors.Wrapf(err, "failed to parse acct_params_get f: %s", c.args.Text()))
 		return
 	}
+
+	// TODO report semantics
 
 	c.emit(&AcctParamsGetExpr{Field: f})
 }
@@ -1034,6 +1074,8 @@ func opVrfVerify(c *parserContext) {
 		return
 	}
 
+	// TODO report semantics
+
 	c.emit(&VrfVerifyExpr{Field: f})
 }
 func opBlock(c *parserContext) {
@@ -1044,6 +1086,8 @@ func opBlock(c *parserContext) {
 		c.failCurr(errors.Wrapf(err, "failed to parse block f: %s", c.args.Text()))
 		return
 	}
+
+	// TODO report semantics
 
 	c.emit(&BlockExpr{Field: f})
 }
@@ -1090,6 +1134,11 @@ type ProcessResult struct {
 	Tokens      []Token
 	Listing     Listing
 	Lines       [][]Token
+	Ops         []Token
+	Numbers     []Token
+	Strings     []Token
+	Keywords    []Token
+	Macros      []Token
 }
 
 func readTokens(source string) ([]Token, []Diagnostic) {
@@ -1148,6 +1197,8 @@ func Process(source string) *ProcessResult {
 	}
 
 	var lts [][]Token
+	var ops []Token
+
 	version := uint8(1)
 
 	for _, l := range lines {
@@ -1185,24 +1236,30 @@ func Process(source string) *ProcessResult {
 			case "":
 				c.emit(Empty)
 			case "#pragma":
+				c.ms = append(c.ms, c.args.Curr())
 				name := c.mustRead("name")
 				switch name {
 				case "version":
+					c.ms = append(c.ms, c.args.Curr())
 					version = c.mustReadUint8("version value")
+					c.ms = append(c.ms, c.args.Curr())
 					c.emit(&PragmaExpr{Version: uint8(version)})
 				default:
 					c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
 					return
 				}
 			case "byte":
+				ops = append(ops, c.args.Curr())
 				value := c.mustReadBytes("value")
 				c.emit(&ByteExpr{Value: value})
 			case "int":
+				ops = append(ops, c.args.Curr())
 				value := c.mustReadInt("value")
 				c.emit(&IntExpr{Value: value})
 			default:
 				spec, ok := opSpecByName[name]
 				if ok {
+					ops = append(ops, c.args.Curr())
 					spec.Parse(c)
 				} else {
 					c.failCurr(errors.Errorf("unexpected opcode: %s", c.args.Text()))
@@ -1275,6 +1332,11 @@ func Process(source string) *ProcessResult {
 		Tokens:      ts,
 		Listing:     c.ops,
 		Lines:       lts,
+		Ops:         ops,
+		Numbers:     c.ns,
+		Strings:     c.ss,
+		Keywords:    c.ks,
+		Macros:      c.ms,
 	}
 
 	return result

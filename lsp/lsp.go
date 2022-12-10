@@ -16,11 +16,15 @@ import (
 )
 
 const (
-	semanticTokenKeyword = 0
-	semanticTokenString  = 1
-	semanticTokenComment = 2
-	semanticTokenMethod  = 3
-	semanticTokenMacro   = 4
+	semanticTokenKeyword  = 0
+	semanticTokenString   = 1
+	semanticTokenComment  = 2
+	semanticTokenMethod   = 3
+	semanticTokenMacro    = 4
+	semanticTokenValue    = 5
+	semanticTokenNumber   = 6
+	semanticTokenOperator = 7
+	semanticTokenFunction = 8
 )
 
 type lspDoc struct {
@@ -1110,38 +1114,57 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			res := doc.Results()
 
 			st := teal.SemanticTokens{}
-			for i, op := range res.Listing {
-				switch op.(type) {
-				case *teal.PragmaExpr:
-					ts := res.Lines[i]
 
-					f := ts[0]
-					l := ts[len(ts)-1]
+			for _, m := range res.Macros {
+				st = append(st, teal.SemanticToken{
+					Line:      m.Line(),
+					Index:     m.Begin(),
+					Length:    m.End() - m.Begin(),
+					Type:      semanticTokenMacro,
+					Modifiers: 0,
+				})
+			}
 
+			for _, op := range res.Ops {
+				if op.Type() == teal.TokenValue {
 					st = append(st, teal.SemanticToken{
-						Line:      i,
-						Index:     f.Begin(),
-						Length:    l.End() - f.Begin(),
-						Type:      semanticTokenMacro,
+						Line:      op.Line(),
+						Index:     op.Begin(),
+						Length:    op.End() - op.Begin(),
+						Type:      semanticTokenKeyword,
 						Modifiers: 0,
 					})
-				case teal.Nop:
-				case *teal.LabelExpr:
-				default:
-					ts := res.Lines[i]
-					if len(ts) > 0 {
-						f := ts[0]
-						if f.Type() == teal.TokenValue {
-							st = append(st, teal.SemanticToken{
-								Line:      f.Line(),
-								Index:     f.Begin(),
-								Length:    f.End() - f.Begin(),
-								Type:      semanticTokenKeyword,
-								Modifiers: 0,
-							})
-						}
-					}
 				}
+			}
+
+			for _, v := range res.Numbers {
+				st = append(st, teal.SemanticToken{
+					Line:      v.Line(),
+					Index:     v.Begin(),
+					Length:    v.End() - v.Begin(),
+					Type:      semanticTokenNumber,
+					Modifiers: 0,
+				})
+			}
+
+			for _, v := range res.Strings {
+				st = append(st, teal.SemanticToken{
+					Line:      v.Line(),
+					Index:     v.Begin(),
+					Length:    v.End() - v.Begin(),
+					Type:      semanticTokenString,
+					Modifiers: 0,
+				})
+			}
+
+			for _, v := range res.Keywords {
+				st = append(st, teal.SemanticToken{
+					Line:      v.Line(),
+					Index:     v.Begin(),
+					Length:    v.End() - v.Begin(),
+					Type:      semanticTokenKeyword,
+					Modifiers: 0,
+				})
 			}
 
 			for _, t := range res.Tokens {
@@ -1222,7 +1245,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					SemanticTokensProvider: &lspSemanticTokensProvider{
 						Full: fullSemantic,
 						Legend: lspSemanticTokensLegend{
-							TokenTypes:     []string{"keyword", "string", "comment", "method", "macro"},
+							TokenTypes:     []string{"keyword", "string", "comment", "method", "macro", "value", "number", "operator", "function"},
 							TokenModifiers: []string{},
 						},
 					},
