@@ -103,7 +103,6 @@ func (c *parserContext) parseBytes(name string) []byte {
 			c.failCurr(err)
 		}
 		return val
-
 	}
 
 	if strings.HasPrefix(arg, "base64(") || strings.HasPrefix(arg, "b64(") {
@@ -799,13 +798,27 @@ func opPushInt(c *parserContext) {
 	c.emit(&PushIntExpr{Value: value})
 }
 func opPushBytess(c *parserContext) {
-	// TODO
+	bs := [][]byte{}
+	for c.args.Scan() {
+		b := c.parseBytes("value")
+		bs = append(bs, b)
+	}
+	c.emit(&PushBytessExpr{
+		Bytess: bs,
+	})
 }
 func opEd25519VerifyBare(c *parserContext) {
 	c.emit(Ed25519VerifyBare)
 }
 func opPushInts(c *parserContext) {
-	// TODO
+	is := []uint64{}
+	for c.args.Scan() {
+		i := c.parseUint64("value")
+		is = append(is, i)
+	}
+	c.emit(&PushIntsExpr{
+		Ints: is,
+	})
 }
 func opCallSub(c *parserContext) {
 	name := c.mustRead("label name")
@@ -870,13 +883,13 @@ func opSHA3_256(c *parserContext) {
 	c.emit(Sha3256)
 }
 func opBn256Add(c *parserContext) {
-	// TODO
+	c.emit(Bn256Add)
 }
 func opBn256ScalarMul(c *parserContext) {
-	// TODO
+	c.emit(Bn256ScalarMul)
 }
 func opBn256Pairing(c *parserContext) {
-	// TODO
+	c.emit(Bn256Pairing)
 }
 func opBytesPlus(c *parserContext) {
 	c.emit(BytesPlus)

@@ -1207,11 +1207,26 @@ func (e *GitxnasExpr) String() string {
 	return fmt.Sprintf("gitxnas %d %s", e.Index, e.Field)
 }
 
+type PushIntsExpr struct {
+	Ints []uint64
+}
+
+func (e *PushIntsExpr) String() string {
+	var ss []string
+
+	for _, i := range e.Ints {
+		ss = append(ss, strconv.FormatUint(i, 10))
+	}
+
+	return fmt.Sprintf("pushbytess %s", strings.Join(ss, " "))
+
+}
+
 type PushBytessExpr struct {
 	Bytess [][]byte
 }
 
-func (e PushBytessExpr) String() string {
+func (e *PushBytessExpr) String() string {
 	var ss []string
 
 	for _, bs := range e.Bytess {
@@ -1220,6 +1235,30 @@ func (e PushBytessExpr) String() string {
 
 	return fmt.Sprintf("pushbytess %s", strings.Join(ss, " "))
 }
+
+type Bn256AddExpr struct{}
+
+func (e *Bn256AddExpr) String() string {
+	return "bn256_add"
+}
+
+var Bn256Add = &Bn256AddExpr{}
+
+type Bn256ScalarMulExpr struct{}
+
+func (e *Bn256ScalarMulExpr) String() string {
+	return "bn256_scalar_mul"
+}
+
+var Bn256ScalarMul = &Bn256ScalarMulExpr{}
+
+type Bn256PairingExpr struct{}
+
+func (e *Bn256PairingExpr) String() string {
+	return "bn256_pairing"
+}
+
+var Bn256Pairing = &Bn256PairingExpr{}
 
 type FrameBuryExpr struct {
 	Index int8
