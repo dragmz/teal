@@ -1293,9 +1293,6 @@ func (l *lsp) Run() (int, error) {
 		err := func() error {
 			mh, err := l.tp.ReadMIMEHeader()
 			if err != nil {
-				if errors.Is(err, io.EOF) {
-					l.exit = true
-				}
 				return errors.Wrap(err, "failed to read request headers")
 			}
 
@@ -1330,6 +1327,10 @@ func (l *lsp) Run() (int, error) {
 
 		if err != nil {
 			l.trace(fmt.Sprintf("ERR: %s", err))
+
+			if errors.Is(err, io.EOF) {
+				break
+			}
 		}
 	}
 
