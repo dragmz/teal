@@ -27,10 +27,11 @@ type parserContext struct {
 	args *arguments
 	diag []Diagnostic
 
-	ns []Token
-	ss []Token
-	ks []Token
-	ms []Token
+	nums []Token
+	strs []Token
+	keys []Token
+	mcrs []Token
+	refs []Token
 }
 
 func (c *parserContext) emit(e Op) {
@@ -66,7 +67,7 @@ func (c *parserContext) parseUint64(name string) uint64 {
 		c.failCurr(errors.Wrapf(err, "failed to parse uint64: %s", name))
 	}
 
-	c.ns = append(c.ns, c.args.Curr())
+	c.nums = append(c.nums, c.args.Curr())
 
 	return v
 }
@@ -77,7 +78,7 @@ func (c *parserContext) parseUint8(name string) uint8 {
 		c.failCurr(errors.Wrapf(err, "failed to parse uint8: %s", name))
 	}
 
-	c.ns = append(c.ns, c.args.Curr())
+	c.nums = append(c.nums, c.args.Curr())
 
 	return v
 }
@@ -88,7 +89,7 @@ func (c *parserContext) parseInt8(name string) int8 {
 		c.failCurr(errors.Wrapf(err, "failed to parse int8: %s", name))
 	}
 
-	c.ns = append(c.ns, c.args.Curr())
+	c.nums = append(c.nums, c.args.Curr())
 
 	return v
 }
@@ -117,7 +118,7 @@ func (c *parserContext) parseBytes(name string) []byte {
 			c.failCurr(err)
 		}
 
-		c.ss = append(c.ss, c.args.Curr())
+		c.strs = append(c.strs, c.args.Curr())
 		return val
 	}
 
@@ -132,7 +133,7 @@ func (c *parserContext) parseBytes(name string) []byte {
 		if err != nil {
 			c.failCurr(err)
 		}
-		c.ss = append(c.ss, c.args.Curr())
+		c.strs = append(c.strs, c.args.Curr())
 		return val
 	}
 
@@ -141,12 +142,12 @@ func (c *parserContext) parseBytes(name string) []byte {
 		if err != nil {
 			c.failCurr(err)
 		}
-		c.ss = append(c.ss, c.args.Curr())
+		c.strs = append(c.strs, c.args.Curr())
 		return val
 	}
 
 	if arg == "base32" || arg == "b32" {
-		c.ks = append(c.ks, c.args.Curr())
+		c.keys = append(c.keys, c.args.Curr())
 
 		l := c.mustRead("literal")
 		val, err := base32DecodeAnyPadding(l)
@@ -154,13 +155,13 @@ func (c *parserContext) parseBytes(name string) []byte {
 			c.failCurr(err)
 		}
 
-		c.ss = append(c.ss, c.args.Curr())
+		c.strs = append(c.strs, c.args.Curr())
 
 		return val
 	}
 
 	if arg == "base64" || arg == "b64" {
-		c.ks = append(c.ks, c.args.Curr())
+		c.keys = append(c.keys, c.args.Curr())
 
 		l := c.mustRead("literal")
 		val, err := base64.StdEncoding.DecodeString(l)
@@ -168,7 +169,7 @@ func (c *parserContext) parseBytes(name string) []byte {
 			c.failCurr(err)
 		}
 
-		c.ss = append(c.ss, c.args.Curr())
+		c.strs = append(c.strs, c.args.Curr())
 
 		return val
 	}
@@ -178,7 +179,7 @@ func (c *parserContext) parseBytes(name string) []byte {
 		if err != nil {
 			c.failCurr(err)
 		}
-		c.ss = append(c.ss, c.args.Curr())
+		c.strs = append(c.strs, c.args.Curr())
 		return val
 	}
 
@@ -631,14 +632,17 @@ func opStores(c *parserContext) {
 }
 func opBnz(c *parserContext) {
 	name := c.mustRead("label name")
+	c.refs = append(c.refs, c.args.Curr())
 	c.emit(&BnzExpr{Label: &LabelExpr{Name: name}})
 }
 func opBz(c *parserContext) {
 	name := c.mustRead("label name")
+	c.refs = append(c.refs, c.args.Curr())
 	c.emit(&BzExpr{Label: &LabelExpr{Name: name}})
 }
 func opB(c *parserContext) {
 	name := c.mustRead("label name")
+	c.refs = append(c.refs, c.args.Curr())
 	c.emit(&BExpr{Label: &LabelExpr{Name: name}})
 }
 func opReturn(c *parserContext) {
@@ -862,6 +866,7 @@ func opPushInts(c *parserContext) {
 }
 func opCallSub(c *parserContext) {
 	name := c.mustRead("label name")
+	c.refs = append(c.refs, c.args.Curr())
 	c.emit(&CallSubExpr{Label: &LabelExpr{Name: name}})
 }
 func opRetSub(c *parserContext) {
@@ -884,6 +889,7 @@ func opFrameBury(c *parserContext) {
 func opSwitch(c *parserContext) {
 	var labels []*LabelExpr
 	for c.args.Scan() {
+		c.refs = append(c.refs, c.args.Curr())
 		labels = append(labels, &LabelExpr{Name: c.args.Text()})
 	}
 	c.emit(&SwitchExpr{Targets: labels})
@@ -891,6 +897,7 @@ func opSwitch(c *parserContext) {
 func opMatch(c *parserContext) {
 	var labels []*LabelExpr
 	for c.args.Scan() {
+		c.refs = append(c.refs, c.args.Curr())
 		labels = append(labels, &LabelExpr{Name: c.args.Text()})
 	}
 	c.emit(&MatchExpr{Targets: labels})
@@ -1130,7 +1137,7 @@ type ProcessResult struct {
 	Version     uint8
 	Diagnostics []Diagnostic
 	Symbols     []Symbol
-	SymbolRefs  []Symbol
+	SymbolRefs  []Token
 	Tokens      []Token
 	Listing     Listing
 	Lines       [][]Token
@@ -1198,6 +1205,7 @@ func Process(source string) *ProcessResult {
 
 	var lts [][]Token
 	var ops []Token
+	var syms []Symbol
 
 	version := uint8(1)
 
@@ -1227,6 +1235,15 @@ func Process(source string) *ProcessResult {
 					c.failCurr(errors.New("missing label name"))
 					return
 				}
+
+				t := c.args.Curr()
+				syms = append(syms, labelSymbol{
+					n: name,
+					l: t.l,
+					b: t.b, // TODO: what about whitespaces before label name?
+					e: t.e,
+				})
+
 				c.emit(&LabelExpr{Name: name})
 				return
 			}
@@ -1236,13 +1253,13 @@ func Process(source string) *ProcessResult {
 			case "":
 				c.emit(Empty)
 			case "#pragma":
-				c.ms = append(c.ms, c.args.Curr())
+				c.mcrs = append(c.mcrs, c.args.Curr())
 				name := c.mustRead("name")
 				switch name {
 				case "version":
-					c.ms = append(c.ms, c.args.Curr())
+					c.mcrs = append(c.mcrs, c.args.Curr())
 					version = c.mustReadUint8("version value")
-					c.ms = append(c.ms, c.args.Curr())
+					c.mcrs = append(c.mcrs, c.args.Curr())
 					c.emit(&PragmaExpr{Version: uint8(version)})
 				default:
 					c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
@@ -1293,50 +1310,19 @@ func Process(source string) *ProcessResult {
 		})
 	}
 
-	syms := []Symbol{}
-	refs := []Symbol{}
-
-	for i, op := range c.ops {
-		switch op := op.(type) {
-		case *LabelExpr:
-			// TODO: hack - assumes label is the first token on the line
-			ts := lts[i]
-			t := ts[0]
-			syms = append(syms, labelSymbol{
-				n: op.Name,
-				l: i,
-				b: t.b, // TODO: what about whitespaces before label name?
-				e: t.e,
-			})
-		case usesLabels:
-			// TODO: this is a hack that assumes label tokens start right after the op which seems to be the case currently but may be changed in the future
-			ts := lts[i]
-			lbls := op.Labels()
-			for j, lbl := range lbls {
-				t := ts[j+1]
-				refs = append(refs, labelSymbol{
-					n: lbl.Name,
-					l: i,
-					b: t.b,
-					e: t.e,
-				})
-			}
-		}
-	}
-
 	result := &ProcessResult{
 		Version:     version,
 		Diagnostics: c.diag,
 		Symbols:     syms,
-		SymbolRefs:  refs,
+		SymbolRefs:  c.refs,
 		Tokens:      ts,
 		Listing:     c.ops,
 		Lines:       lts,
 		Ops:         ops,
-		Numbers:     c.ns,
-		Strings:     c.ss,
-		Keywords:    c.ks,
-		Macros:      c.ms,
+		Numbers:     c.nums,
+		Strings:     c.strs,
+		Keywords:    c.keys,
+		Macros:      c.mcrs,
 	}
 
 	return result

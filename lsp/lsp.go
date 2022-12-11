@@ -204,6 +204,8 @@ type lspServerCapabilities struct {
 	DocumentHighlightProvider  *bool                      `json:"documentHighlightProvider,omitempty"`
 	SemanticTokensProvider     *lspSemanticTokensProvider `json:"semanticTokensProvider,omitempty"`
 	DocumentFormattingProvider *bool                      `json:"documentFormattingProvider,omitempty"`
+	DefinitionProvider         *bool                      `json:"definitionProvider,omitempty"`
+	HoverProvider              *bool                      `json:"hoverProvider,omitempty"`
 }
 
 type lspInitializeResult struct {
@@ -412,9 +414,31 @@ type lspPosition struct {
 	Character int `json:"character"`
 }
 
+func (p lspPosition) Overlaps(line int, begin int, end int) bool {
+	return line == p.Line && p.Character >= begin && p.Character <= end
+}
+
 type lspRange struct {
 	Start lspPosition `json:"start"`
 	End   lspPosition `json:"end"`
+}
+
+func (r lspRange) Overlaps(line int, begin int, end int) bool {
+	if line < r.Start.Line || line > r.End.Line {
+		return false
+	}
+
+	if line == r.Start.Line {
+		if begin < r.Start.Character && end < r.Start.Character {
+			return false
+		}
+	} else if line == r.End.Line {
+		if begin > r.End.Character && end > r.End.Character {
+			return false
+		}
+	}
+
+	return true
 }
 
 type lspDiagnostic struct {
@@ -469,6 +493,31 @@ type lspDocumentFormattingRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
 }
 
+type lspDefinitionRequestParams struct {
+	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
+	Position     lspPosition               `json:"position"`
+}
+
+type lspLocation struct {
+	Uri   string   `json:"uri"`
+	Range lspRange `json:"range"`
+}
+
+type lspMarkupContent struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+}
+
+type lspHover struct {
+	Contents lspMarkupContent `json:"contents"`
+	Range    lspRange         `json:"range,omitempty"`
+}
+
+type lspHoverRequestParams struct {
+	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
+	Position     lspPosition               `json:"position"`
+}
+
 // notifications
 type lspDidChange lspRequest[*lspDidChangeParams]
 type lspDidOpen lspRequest[*lspDidOpenParams]
@@ -487,6 +536,8 @@ type lspDocumentHighlightRequest lspRequest[*lspDocumentHighlightRequestParams]
 type lspSemanticTokensFullRequest lspRequest[*lspSemanticTokensFullRequestParams]
 type lspCompletionRequest lspRequest[*lspCompletionRequestParams]
 type lspDocumentFormattingRequest lspRequest[*lspDocumentFormattingRequestParams]
+type lspDefinitionRequest lspRequest[*lspDefinitionRequestParams]
+type lspHoverRequest lspRequest[*lspHoverRequestParams]
 
 func readInto(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, &v)
@@ -733,7 +784,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			res := doc.Results()
 
 			for _, sym := range res.Symbols {
-				if sym.Line() == req.Params.Position.Line && req.Params.Position.Character >= sym.Begin() && req.Params.Position.Character <= sym.End() {
+				if req.Params.Position.Overlaps(sym.Line(), sym.Begin(), sym.End()) {
 					return l.success(h.Id, lspPrepareRenameResponse{
 						Range: lspRange{
 							Start: lspPosition{
@@ -751,7 +802,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			for _, ref := range res.SymbolRefs {
-				if ref.Line() == req.Params.Position.Line && req.Params.Position.Character >= ref.Begin() && req.Params.Position.Character <= ref.End() {
+				if req.Params.Position.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
 					return l.success(h.Id, lspPrepareRenameResponse{
 						Range: lspRange{
 							Start: lspPosition{
@@ -760,13 +811,15 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							},
 							End: lspPosition{
 								Line:      ref.Line(),
-								Character: ref.Begin() + len(ref.Name()),
+								Character: ref.Begin() + len(ref.String()),
 							},
 						},
-						Placeholder: ref.Name(),
+						Placeholder: ref.String(),
 					})
 				}
 			}
+
+			return l.success(h.Id, struct{}{})
 
 		case "textDocument/rename":
 			req, err := read[lspRenameRequest](b)
@@ -783,40 +836,42 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			chs := []lspTextEdit{}
 			for _, edited := range res.Symbols {
-				if edited.Line() == req.Params.Position.Line && req.Params.Position.Character >= edited.Begin() && req.Params.Position.Character <= edited.End() {
-					for _, sym := range res.Symbols {
-						if sym.Name() == edited.Name() {
-							chs = append(chs, lspTextEdit{
-								Range: lspRange{
-									Start: lspPosition{
-										Line:      sym.Line(),
-										Character: sym.Begin(),
-									},
-									End: lspPosition{
-										Line:      sym.Line(),
-										Character: sym.Begin() + len(sym.Name()),
-									},
+				if !req.Params.Position.Overlaps(edited.Line(), edited.Begin(), edited.End()) {
+					continue
+				}
+
+				for _, sym := range res.Symbols {
+					if sym.Name() == edited.Name() {
+						chs = append(chs, lspTextEdit{
+							Range: lspRange{
+								Start: lspPosition{
+									Line:      sym.Line(),
+									Character: sym.Begin(),
 								},
-								NewText: req.Params.NewName,
-							})
-						}
+								End: lspPosition{
+									Line:      sym.Line(),
+									Character: sym.Begin() + len(sym.Name()),
+								},
+							},
+							NewText: req.Params.NewName,
+						})
 					}
-					for _, ref := range res.SymbolRefs {
-						if ref.Name() == edited.Name() {
-							chs = append(chs, lspTextEdit{
-								Range: lspRange{
-									Start: lspPosition{
-										Line:      ref.Line(),
-										Character: ref.Begin(),
-									},
-									End: lspPosition{
-										Line:      ref.Line(),
-										Character: ref.End(),
-									},
+				}
+				for _, ref := range res.SymbolRefs {
+					if ref.String() == edited.Name() {
+						chs = append(chs, lspTextEdit{
+							Range: lspRange{
+								Start: lspPosition{
+									Line:      ref.Line(),
+									Character: ref.Begin(),
 								},
-								NewText: req.Params.NewName,
-							})
-						}
+								End: lspPosition{
+									Line:      ref.Line(),
+									Character: ref.End(),
+								},
+							},
+							NewText: req.Params.NewName,
+						})
 					}
 				}
 			}
@@ -824,7 +879,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			for _, edited := range res.SymbolRefs {
 				if edited.Line() == req.Params.Position.Line && req.Params.Position.Character >= edited.Begin() && req.Params.Position.Character <= edited.End() {
 					for _, sym := range res.Symbols {
-						if sym.Name() == edited.Name() {
+						if sym.Name() == edited.String() {
 							chs = append(chs, lspTextEdit{
 								Range: lspRange{
 									Start: lspPosition{
@@ -841,7 +896,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						}
 					}
 					for _, ref := range res.SymbolRefs {
-						if ref.Name() == edited.Name() {
+						if ref.String() == edited.String() {
 							chs = append(chs, lspTextEdit{
 								Range: lspRange{
 									Start: lspPosition{
@@ -954,6 +1009,77 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			return l.success(h.Id, ccs)
+
+		case "textDocument/hover":
+			req, err := read[lspDefinitionRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return l.fail(h.Id, "document not found")
+			}
+
+			res := doc.Results()
+			var c interface{} = struct{}{}
+
+			for _, op := range res.Ops {
+				if req.Params.Position.Overlaps(op.Line(), op.Begin(), op.End()) {
+					s := teal.OpDocByName[op.String()]
+					if s != "" {
+						c = lspHover{
+							Contents: lspMarkupContent{
+								Kind:  "plaintext",
+								Value: s,
+							},
+						}
+					}
+				}
+			}
+
+			return l.success(h.Id, c)
+
+		case "textDocument/definition":
+			req, err := read[lspDefinitionRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return l.fail(h.Id, "document not found")
+			}
+
+			res := doc.Results()
+
+			ls := []lspLocation{}
+
+			for _, ref := range res.SymbolRefs {
+				if req.Params.Position.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
+					for _, sym := range res.Symbols {
+						if sym.Name() == ref.String() {
+							ls = append(ls, lspLocation{
+								Uri: req.Params.TextDocument.Uri,
+								Range: lspRange{
+									Start: lspPosition{
+										Line:      sym.Line(),
+										Character: sym.Begin(),
+									},
+									End: lspPosition{
+										Line:      sym.Line(),
+										Character: sym.Begin() + len(sym.Name()),
+									},
+								},
+							})
+						}
+					}
+					break
+				}
+			}
+
+			return l.success(h.Id, ls)
+
 		case "textDocument/formatting":
 			req, err := read[lspDocumentFormattingRequest](b)
 			if err != nil {
@@ -999,23 +1125,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			cas := []lspCodeAction{}
 			for _, ref := range res.SymbolRefs {
-				if ref.Line() < req.Params.Range.Start.Line || ref.Line() > req.Params.Range.End.Line {
+				if !req.Params.Range.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
 					continue
-				}
-
-				if ref.Line() == req.Params.Range.Start.Line {
-					if ref.Begin() < req.Params.Range.Start.Character && ref.End() < req.Params.Range.Start.Character {
-						continue
-					}
-				} else if ref.Line() == req.Params.Range.End.Line {
-					if ref.Begin() > req.Params.Range.End.Character && ref.End() > req.Params.Range.End.Character {
-						continue
-					}
 				}
 
 				found := func() bool {
 					for _, sym := range res.Symbols {
-						if sym.Name() == ref.Name() {
+						if sym.Name() == ref.String() {
 							return true
 						}
 					}
@@ -1029,7 +1145,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 				kind := "quickfix"
 				cas = append(cas, lspCodeAction{
-					Title: fmt.Sprintf("Create label '%s'", ref.Name()),
+					Title: fmt.Sprintf("Create label '%s'", ref.String()),
 					Kind:  &kind,
 					Command: &lspCommand{
 						Title:   "Create label",
@@ -1037,7 +1153,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						Arguments: []interface{}{
 							tealCreateLabelCommandArgs{
 								Uri:  req.Params.TextDocument.Uri,
-								Name: ref.Name(),
+								Name: ref.String(),
 							},
 						},
 					},
@@ -1065,6 +1181,77 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				Items: ds,
 			})
 
+		case "textDocument/documentHighlight":
+			req, err := read[lspDocumentHighlightRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			res := doc.Results()
+
+			kind := new(int)
+			*kind = 1
+			hs := []lspDocumentHighlight{}
+
+			name := func() string {
+				for _, sym := range res.Symbols {
+					if req.Params.Position.Overlaps(sym.Line(), sym.Begin(), sym.End()) {
+						return sym.Name()
+					}
+				}
+
+				for _, ref := range res.SymbolRefs {
+					if req.Params.Position.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
+						return ref.String()
+					}
+				}
+
+				return ""
+			}()
+
+			for _, sym := range res.Symbols {
+				if sym.Name() == name {
+					hs = append(hs, lspDocumentHighlight{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      sym.Line(),
+								Character: sym.Begin(),
+							},
+							End: lspPosition{
+								Line:      sym.Line(),
+								Character: sym.Begin() + len(sym.Name()),
+							},
+						},
+						Kind: kind,
+					})
+				}
+			}
+
+			for _, ref := range res.SymbolRefs {
+				if ref.String() == name {
+					hs = append(hs, lspDocumentHighlight{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      ref.Line(),
+								Character: ref.Begin(),
+							},
+							End: lspPosition{
+								Line:      ref.Line(),
+								Character: ref.End(),
+							},
+						},
+						Kind: kind,
+					})
+
+				}
+			}
+
+			l.success(h.Id, hs)
 		case "textDocument/documentSymbol":
 			req, err := read[lspDocumentSymbolRequest](b)
 			if err != nil {
@@ -1210,6 +1397,9 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			sync := new(int)
 			*sync = 1
 
+			definition := new(bool)
+			*definition = true
+
 			symbol := new(bool)
 			*symbol = true
 
@@ -1228,12 +1418,16 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			formatting := new(bool)
 			*formatting = true
 
+			hover := new(bool)
+			*hover = true
+
 			return l.success(h.Id, lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
-					TextDocumentSync:       sync,
-					DiagnosticProvider:     &lspDiagnosticProvider{},
-					DocumentSymbolProvider: symbol,
-					CodeActionProvider:     action,
+					TextDocumentSync:          sync,
+					DocumentHighlightProvider: highlight,
+					DiagnosticProvider:        &lspDiagnosticProvider{},
+					DocumentSymbolProvider:    symbol,
+					CodeActionProvider:        action,
 					ExecuteCommandProvider: &lspExecuteCommandProvider{
 						Commands: []string{
 							"teal.label.create",
@@ -1251,6 +1445,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					},
 					CompletionProvider:         &lspCompletionProvider{},
 					DocumentFormattingProvider: formatting,
+					DefinitionProvider:         definition,
+					HoverProvider:              hover,
 				},
 			})
 		default:
