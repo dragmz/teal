@@ -1276,7 +1276,17 @@ func Process(source string) *ProcessResult {
 			default:
 				spec, ok := opSpecByName[name]
 				if ok {
-					ops = append(ops, c.args.Curr())
+					curr := c.args.Curr()
+					ops = append(ops, curr)
+					if spec.Version > version {
+						c.diag = append(c.diag, lintError{
+							error: errors.Errorf("opcode requires version >= %d (current: %d)", spec.Version, version),
+							l:     curr.l,
+							b:     curr.b,
+							e:     curr.e,
+							s:     DiagErr,
+						})
+					}
 					spec.Parse(c)
 				} else {
 					c.failCurr(errors.Errorf("unexpected opcode: %s", c.args.Text()))
