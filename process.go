@@ -10,8 +10,26 @@ import (
 )
 
 var PseudoOps = pseudoOps
+
 var OpDocByName = opDocByName
 var OpDocExtras = opDocExtras
+var OpFullDocByname = func() map[string]string {
+	res := map[string]string{}
+
+	for name, s := range opDocByName {
+		e := OpDocExtras[name]
+		if e != "" {
+			if s != "" {
+				s += "\n"
+			}
+			s += e
+		}
+		res[name] = s + e
+	}
+
+	return res
+}()
+
 var opSpecByName = func() map[string]OpSpec {
 	res := map[string]OpSpec{}
 	for _, spec := range OpSpecs {
@@ -239,6 +257,7 @@ type parserFunc func(c *parserContext)
 type OpSpecProto struct{}
 type OpSpecDetails struct {
 	NamesMap map[string]bool
+	Groups   map[string]*FieldGroup
 	Names    []string
 	Cost     int
 }
@@ -316,18 +335,24 @@ func immediates(names ...string) OpSpecDetails {
 	return OpSpecDetails{
 		NamesMap: m,
 		Names:    r,
+		Groups:   map[string]*FieldGroup{},
 	}
 }
 
-func field(name string, vs ...interface{}) OpSpecDetails {
+func field(name string, g *FieldGroup) OpSpecDetails {
 	return OpSpecDetails{
 		NamesMap: map[string]bool{name: true},
 		Names:    []string{name},
+		Groups:   map[string]*FieldGroup{name: g},
 	}
 }
 
-func detBranch(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
+func detBranch() OpSpecDetails {
+	return OpSpecDetails{
+		NamesMap: map[string]bool{"label": true},
+		Names:    []string{"label"},
+		Groups:   map[string]*FieldGroup{},
+	}
 }
 
 var typeBury = []interface{}{}
@@ -336,11 +361,13 @@ func (d OpSpecDetails) costs(vs ...interface{}) OpSpecDetails {
 	return d
 }
 
-func (d OpSpecDetails) field(name string, vs ...interface{}) OpSpecDetails {
+func (d OpSpecDetails) field(name string, g *FieldGroup) OpSpecDetails {
 	if !d.NamesMap[name] {
 		d.NamesMap[name] = true
 		d.Names = append(d.Names, name)
 	}
+
+	d.Groups[name] = g
 
 	return d
 }

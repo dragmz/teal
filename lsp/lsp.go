@@ -135,24 +135,27 @@ type lspCompletionItemLabelDetails struct {
 }
 
 type lspCompletionItem struct {
-	Label               string                         `json:"label"`
-	LabelDetails        *lspCompletionItemLabelDetails `json:"labelDetails,omitempty"`
-	Kind                *int                           `json:"kind,omitempty"`
-	Detail              string                         `json:"detail,omitempty"`
-	Documentation       string                         `json:"documentation,omitempty"`
-	Deprecated          *bool                          `json:"deprecated,omitempty"`
-	Preselect           *bool                          `json:"preselect,omitempty"`
-	SortText            string                         `json:"sortText,omitempty"`
-	FilterText          string                         `json:"filterText,omitempty"`
-	InsertText          string                         `json:"insertText,omitempty"`
-	InsertTextFormat    *int                           `json:"insertTextFormat,omitempty"`
-	InsertTextMode      *int                           `json:"insertTextMode,omitempty"`
-	TextEdit            *lspTextEdit                   `json:"textEdit,omitempty"`
-	TextEditText        string                         `json:"textEditText,omitempty"`
-	AdditionalTextEdits []lspTextEdit                  `json:"additionalTextEdits,omitempty"`
-	CommitCharacters    []string                       `json:"commitCharacters,omitempty"`
-	Command             *lspCommand                    `json:"command,omitempty"`
-	Data                interface{}                    `json:"data,omitempty"`
+	Label        string                         `json:"label"`
+	LabelDetails *lspCompletionItemLabelDetails `json:"labelDetails,omitempty"`
+	Kind         *int                           `json:"kind,omitempty"`
+	Detail       string                         `json:"detail,omitempty"`
+
+	// string | MarkupContent
+	Documentation interface{} `json:"documentation,omitempty"`
+
+	Deprecated          *bool         `json:"deprecated,omitempty"`
+	Preselect           *bool         `json:"preselect,omitempty"`
+	SortText            string        `json:"sortText,omitempty"`
+	FilterText          string        `json:"filterText,omitempty"`
+	InsertText          string        `json:"insertText,omitempty"`
+	InsertTextFormat    *int          `json:"insertTextFormat,omitempty"`
+	InsertTextMode      *int          `json:"insertTextMode,omitempty"`
+	TextEdit            *lspTextEdit  `json:"textEdit,omitempty"`
+	TextEditText        string        `json:"textEditText,omitempty"`
+	AdditionalTextEdits []lspTextEdit `json:"additionalTextEdits,omitempty"`
+	CommitCharacters    []string      `json:"commitCharacters,omitempty"`
+	Command             *lspCommand   `json:"command,omitempty"`
+	Data                interface{}   `json:"data,omitempty"`
 }
 
 type lspCompletionList struct {
@@ -198,13 +201,18 @@ type lspSignatureHelpOptions struct {
 }
 
 type lspParameterInformation struct {
-	Label         string `json:"label"`
-	Documentation string `json:"documentation,omitempty"`
+	Label string `json:"label"`
+
+	// string | [uinteger, uinteger]
+	Documentation interface{} `json:"documentation,omitempty"`
 }
 
 type lspSignatureInformation struct {
-	Label           string                    `json:"label"`
-	Documentation   string                    `json:"documentation,omitempty"`
+	Label string `json:"label"`
+
+	//string | Markupcontent
+	Documentation interface{} `json:"documentation,omitempty"`
+
 	Parameters      []lspParameterInformation `json:"parameters,omitempty"`
 	ActiveParameter *uint                     `json:"activeParameter,omitempty"`
 }
@@ -1015,14 +1023,19 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						}
 
 						detail := " " + strings.Join(spec.OpDetails.Names, " ")
+						ld := fmt.Sprintf("v%d", spec.Version)
 						ccs = append(ccs, lspCompletionItem{
-							Label:            spec.Name,
-							Documentation:    teal.OpDocByName[spec.Name],
+							Label: spec.Name,
+							Documentation: lspMarkupContent{
+								Kind:  "markdown",
+								Value: teal.OpDocByName[spec.Name],
+							},
 							Kind:             operator,
 							InsertText:       insert,
 							InsertTextFormat: format,
 							LabelDetails: &lspCompletionItemLabelDetails{
-								Detail: detail,
+								Description: ld,
+								Detail:      detail,
 							},
 						})
 					}
@@ -1054,15 +1067,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			for _, op := range res.Ops {
 				if req.Params.Position.Overlaps(op.Line(), op.Begin(), op.End()) {
-					s := teal.OpDocByName[op.String()]
-					e := teal.OpDocExtras[op.String()]
-					if e != "" {
-						if s != "" {
-							s += "\n"
-						}
-
-						s += e
-					}
+					s := teal.OpFullDocByname[op.String()]
 					if s != "" {
 						c = lspHover{
 							Contents: lspMarkupContent{
@@ -1179,30 +1184,31 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 					spec, ok := teal.OpSpecByName[op.String()]
 					if ok {
-						s := teal.OpDocByName[op.String()]
-						e := teal.OpDocExtras[op.String()]
-						if e != "" {
-							if s != "" {
-								s += "\n"
-							}
+						var d interface{}
 
-							s += e
+						s := teal.OpFullDocByname[op.String()]
+						if s != "" {
+							d = lspMarkupContent{
+								Kind:  "markdown",
+								Value: s,
+							}
 						}
 
 						ps := []lspParameterInformation{}
 
+						label := spec.Name + " " + strings.Join(spec.OpDetails.Names, " ")
+
 						for _, name := range spec.OpDetails.Names {
 							ps = append(ps, lspParameterInformation{
-								Label:         name,
-								Documentation: name + " immediate",
+								Label: name,
 							})
 						}
 
 						sh = &lspSignatureHelp{
 							Signatures: []lspSignatureInformation{
 								{
-									Label:           spec.Name,
-									Documentation:   s,
+									Label:           label,
+									Documentation:   d,
 									Parameters:      ps,
 									ActiveParameter: active,
 								},
@@ -1552,9 +1558,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					DocumentFormattingProvider: formatting,
 					DefinitionProvider:         definition,
 					HoverProvider:              hover,
-					SignatureHelpProvider: &lspSignatureHelpOptions{
-						TriggerCharacters: []string{" "},
-					},
+					SignatureHelpProvider:      &lspSignatureHelpOptions{},
 				},
 			})
 		default:
