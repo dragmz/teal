@@ -20,6 +20,8 @@ var opSpecByName = func() map[string]OpSpec {
 	return res
 }()
 
+var OpSpecByName = opSpecByName
+
 type recoverable struct{}
 
 type parserContext struct {

@@ -192,6 +192,27 @@ type lspSemanticTokens struct {
 	Data []uint32 `json:"data"`
 }
 
+type lspSignatureHelpOptions struct {
+	TriggerCharacters   []string `json:"triggerCharacters,omitempty"`
+	RetriggerCharacters []string `json:"retriggerCharacters,omitempty"`
+}
+
+type lspParameterInformation struct {
+	Label         string `json:"label"`
+	Documentation string `json:"documentation,omitempty"`
+}
+
+type lspSignatureInformation struct {
+	Label           string                    `json:"label"`
+	Documentation   string                    `json:"documentation,omitempty"`
+	Parameters      []lspParameterInformation `json:"parameters,omitempty"`
+	ActiveParameter *uint                     `json:"activeParameter,omitempty"`
+}
+
+type lspSignatureHelp struct {
+	Signatures []lspSignatureInformation `json:"signatures,omitempty"`
+}
+
 type lspServerCapabilities struct {
 	TextDocumentSync           *int                       `json:"textDocumentSync,omitempty"`
 	DiagnosticProvider         *lspDiagnosticProvider     `json:"diagnosticProvider,omitempty"`
@@ -206,6 +227,7 @@ type lspServerCapabilities struct {
 	DocumentFormattingProvider *bool                      `json:"documentFormattingProvider,omitempty"`
 	DefinitionProvider         *bool                      `json:"definitionProvider,omitempty"`
 	HoverProvider              *bool                      `json:"hoverProvider,omitempty"`
+	SignatureHelpProvider      *lspSignatureHelpOptions   `json:"signatureHelpProvider,omitempty"`
 }
 
 type lspInitializeResult struct {
@@ -518,6 +540,11 @@ type lspHoverRequestParams struct {
 	Position     lspPosition               `json:"position"`
 }
 
+type lspSignatureHelpRequestParams struct {
+	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
+	Position     lspPosition               `json:"position"`
+}
+
 // notifications
 type lspDidChange lspRequest[*lspDidChangeParams]
 type lspDidOpen lspRequest[*lspDidOpenParams]
@@ -538,6 +565,7 @@ type lspCompletionRequest lspRequest[*lspCompletionRequestParams]
 type lspDocumentFormattingRequest lspRequest[*lspDocumentFormattingRequestParams]
 type lspDefinitionRequest lspRequest[*lspDefinitionRequestParams]
 type lspHoverRequest lspRequest[*lspHoverRequestParams]
+type lspSignatureHelpRequest lspRequest[*lspSignatureHelpRequestParams]
 
 func readInto(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, &v)
@@ -1011,7 +1039,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			return l.success(h.Id, ccs)
 
 		case "textDocument/hover":
-			req, err := read[lspDefinitionRequest](b)
+			req, err := read[lspHoverRequest](b)
 			if err != nil {
 				return err
 			}
@@ -1118,6 +1146,75 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					NewText: formatted,
 				},
 			})
+
+		case "textDocument/signatureHelp":
+			req, err := read[lspSignatureHelpRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			res := doc.Results()
+			var sh interface{} = struct{}{}
+
+			for _, op := range res.Ops {
+				if op.Line() == req.Params.Position.Line {
+
+					ln := res.Lines[req.Params.Position.Line]
+
+					active := new(uint)
+					*active = uint(len(ln) - 1)
+
+					for i, t := range ln {
+						if i > 0 {
+							if req.Params.Position.Overlaps(t.Line(), t.Begin(), t.End()) {
+								*active = uint(i) - 1
+							}
+						}
+					}
+
+					spec, ok := teal.OpSpecByName[op.String()]
+					if ok {
+						s := teal.OpDocByName[op.String()]
+						e := teal.OpDocExtras[op.String()]
+						if e != "" {
+							if s != "" {
+								s += "\n"
+							}
+
+							s += e
+						}
+
+						ps := []lspParameterInformation{}
+
+						for _, name := range spec.OpDetails.Names {
+							ps = append(ps, lspParameterInformation{
+								Label:         name,
+								Documentation: name + " immediate",
+							})
+						}
+
+						sh = &lspSignatureHelp{
+							Signatures: []lspSignatureInformation{
+								{
+									Label:           spec.Name,
+									Documentation:   s,
+									Parameters:      ps,
+									ActiveParameter: active,
+								},
+							},
+						}
+					}
+					break
+				}
+			}
+
+			return l.success(h.Id, sh)
+
 		case "textDocument/codeAction":
 			req, err := read[lspCodeActionRequest](b)
 			if err != nil {
@@ -1455,6 +1552,9 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					DocumentFormattingProvider: formatting,
 					DefinitionProvider:         definition,
 					HoverProvider:              hover,
+					SignatureHelpProvider: &lspSignatureHelpOptions{
+						TriggerCharacters: []string{" "},
+					},
 				},
 			})
 		default:
