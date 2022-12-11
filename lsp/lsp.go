@@ -1027,6 +1027,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			for _, op := range res.Ops {
 				if req.Params.Position.Overlaps(op.Line(), op.Begin(), op.End()) {
 					s := teal.OpDocByName[op.String()]
+					e := teal.OpDocExtras[op.String()]
+					if e != "" {
+						if s != "" {
+							s += "\n"
+						}
+
+						s += e
+					}
 					if s != "" {
 						c = lspHover{
 							Contents: lspMarkupContent{
