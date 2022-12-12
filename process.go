@@ -6,8 +6,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/algorand/go-algorand-sdk/types"
 	"github.com/pkg/errors"
 )
+
+/*
+	TODO: add missing specs for pseudops
+*/
 
 var PseudoOps = pseudoOps
 
@@ -1302,6 +1307,27 @@ func Process(source string) *ProcessResult {
 				ops = append(ops, c.args.Curr())
 				value := c.mustReadInt("value")
 				c.emit(&IntExpr{Value: value})
+			case "method":
+				ops = append(ops, c.args.Curr())
+				value := c.mustRead("signature")
+
+				b := 0
+				e := len(value) - 1
+				if value[b] != '"' || value[e] != '"' {
+					c.failCurr(errors.New("missing quotes"))
+				}
+				// TODO: validate method sig
+				c.strs = append(c.strs, c.args.Curr())
+				c.emit(&MethodExpr{Signature: value[b+1 : e-1]})
+			case "addr":
+				ops = append(ops, c.args.Curr())
+				value := c.mustRead("address")
+				_, err := types.DecodeAddress(value)
+				if err != nil {
+					c.failCurr(err)
+				}
+				c.strs = append(c.strs, c.args.Curr())
+				c.emit(&AddrExpr{Address: value})
 			default:
 				spec, ok := opSpecByName[name]
 				if ok {

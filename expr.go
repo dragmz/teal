@@ -1222,6 +1222,22 @@ func (e *PushIntsExpr) String() string {
 
 }
 
+type MethodExpr struct {
+	Signature string
+}
+
+func (e *MethodExpr) String() string {
+	return fmt.Sprintf("method \"%s\"", strings.ReplaceAll(e.Signature, "\"", "\\\""))
+}
+
+type AddrExpr struct {
+	Address string
+}
+
+func (e *AddrExpr) String() string {
+	return fmt.Sprintf("addr %s", e.Address)
+}
+
 type PushBytessExpr struct {
 	Bytess [][]byte
 }
