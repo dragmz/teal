@@ -1292,7 +1292,11 @@ func Process(source string) *ProcessResult {
 				switch name {
 				case "version":
 					c.mcrs = append(c.mcrs, c.args.Curr())
-					version = c.mustReadUint8("version value")
+					v := c.mustReadUint8("version value")
+					if v < 1 {
+						c.failCurr(errors.New("version must be at least 1"))
+					}
+					version = v
 					c.mcrs = append(c.mcrs, c.args.Curr())
 					c.emit(&PragmaExpr{Version: uint8(version)})
 				default:

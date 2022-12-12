@@ -195,19 +195,14 @@ func readTxnField(s string) (TxnField, error) {
 }
 
 func readInt(a *arguments) (uint64, error) {
-	switch a.Text() {
-	case "pay":
-		return 1, nil
-	case "keyreg":
-		return 2, nil
-	case "acfg":
-		return 3, nil
-	case "axfer":
-		return 4, nil
-	case "afrz":
-		return 5, nil
-	case "appl":
-		return 6, nil
+	i, ok := txnTypeMap[a.Text()]
+	if ok {
+		return i, nil
+	}
+
+	oc, ok := onCompletionMap[a.Text()]
+	if ok {
+		return oc, nil
 	}
 
 	val, err := strconv.ParseUint(a.Text(), 0, 64)
