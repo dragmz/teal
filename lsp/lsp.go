@@ -975,23 +975,25 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				ln = res.Lines[req.Params.Position.Line]
 			}
 
+			var ccs []lspCompletionItem
+
 			var prefix string
 
 			ok := len(ln) == 0
-			if !ok {
+			if ok {
+				ccs = []lspCompletionItem{
+					{
+						Label: "#pragma",
+						// TODO: need to set TextEdit because vs code adds extra # if one is already there by default
+					},
+				}
+			} else {
 				if len(ln) > 0 {
 					if req.Params.Position.Character <= ln[0].End() {
 						ok = true
 						prefix = ln[0].String()
 					}
 				}
-			}
-
-			ccs := []lspCompletionItem{
-				{
-					Label: "#pragma",
-					// TODO: need to set TextEdit because vs code adds extra # if one is already there by default
-				},
 			}
 
 			operator := new(int)
@@ -1001,13 +1003,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			*snippetFormat = 2
 
 			if ok {
-				for _, spec := range teal.OpSpecs {
-					if spec.Version <= res.Version && strings.HasPrefix(spec.Name, prefix) {
+				for name, info := range teal.OpInfoByName {
+					if info.Spec.Version <= res.Version && strings.HasPrefix(name, prefix) {
 						var insert string
 						var format *int
-						if len(spec.OpDetails.Names) > 0 {
+						if len(info.Spec.OpDetails.Names) > 0 {
 							var placeholders string
-							for i, name := range spec.OpDetails.Names {
+							for i, name := range info.Spec.OpDetails.Names {
 								if i > 0 {
 									placeholders += " "
 								}
@@ -1015,20 +1017,20 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 								placeholders += fmt.Sprintf("${%d:%s}", i+1, name)
 							}
 
-							insert = fmt.Sprintf("%s %s", spec.Name, placeholders)
+							insert = fmt.Sprintf("%s %s", name, placeholders)
 							format = snippetFormat
 						} else {
 							insert = ""
 							format = nil
 						}
 
-						detail := " " + strings.Join(spec.OpDetails.Names, " ")
-						ld := fmt.Sprintf("v%d", spec.Version)
+						detail := " " + strings.Join(info.Spec.OpDetails.Names, " ")
+						ld := fmt.Sprintf("v%d", info.Spec.Version)
 						ccs = append(ccs, lspCompletionItem{
-							Label: spec.Name,
+							Label: name,
 							Documentation: lspMarkupContent{
 								Kind:  "markdown",
-								Value: teal.OpDocByName[spec.Name],
+								Value: info.Doc,
 							},
 							Kind:             operator,
 							InsertText:       insert,
@@ -1037,13 +1039,6 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 								Description: ld,
 								Detail:      detail,
 							},
-						})
-					}
-				}
-				for name := range teal.PseudoOps {
-					if strings.HasPrefix(name, prefix) {
-						ccs = append(ccs, lspCompletionItem{
-							Label: name,
 						})
 					}
 				}
@@ -1067,7 +1062,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			for _, op := range res.Ops {
 				if req.Params.Position.Overlaps(op.Line(), op.Begin(), op.End()) {
-					s := teal.OpFullDocByname[op.String()]
+					info := teal.OpInfoByName[op.String()]
+					s := info.FullDoc
 					if s != "" {
 						c = lspHover{
 							Contents: lspMarkupContent{
@@ -1182,11 +1178,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						}
 					}
 
-					spec, ok := teal.OpSpecByName[op.String()]
+					name := op.String()
+					info, ok := teal.OpInfoByName[name]
 					if ok {
 						var d interface{}
 
-						s := teal.OpFullDocByname[op.String()]
+						s := info.FullDoc
 						if s != "" {
 							d = lspMarkupContent{
 								Kind:  "markdown",
@@ -1196,9 +1193,9 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 						ps := []lspParameterInformation{}
 
-						label := spec.Name + " " + strings.Join(spec.OpDetails.Names, " ")
+						label := name + " " + strings.Join(info.Spec.OpDetails.Names, " ")
 
-						for _, name := range spec.OpDetails.Names {
+						for _, name := range info.Spec.OpDetails.Names {
 							ps = append(ps, lspParameterInformation{
 								Label: name,
 							})

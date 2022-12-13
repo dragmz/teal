@@ -14,36 +14,54 @@ import (
 	TODO: add missing specs for pseudops
 */
 
-var PseudoOps = pseudoOps
+type OpInfo struct {
+	Spec OpSpec
 
-var OpDocByName = opDocByName
-var OpDocExtras = opDocExtras
-var OpFullDocByname = func() map[string]string {
-	res := map[string]string{}
+	Doc     string
+	FullDoc string
+}
 
-	for name, s := range opDocByName {
-		e := OpDocExtras[name]
-		if e != "" {
-			if s != "" {
-				s += "\n"
-			}
-			s += e
-		}
-		res[name] = s + e
-	}
+var OpInfoByName = func() map[string]OpInfo {
+	res := map[string]OpInfo{}
 
-	return res
-}()
-
-var opSpecByName = func() map[string]OpSpec {
-	res := map[string]OpSpec{}
 	for _, spec := range OpSpecs {
-		res[spec.Name] = spec
+		doc := opDocByName[spec.Name]
+		full := doc
+
+		extra := opDocExtras[spec.Name]
+		if extra != "" {
+			if full != "" {
+				full += "\n"
+			}
+			full += extra
+		}
+
+		res[spec.Name] = OpInfo{
+			Spec:    spec,
+			Doc:     doc,
+			FullDoc: full,
+		}
+	}
+
+	// TODO: needs a support for multisig
+	for name, pspecs := range pseudoOps {
+		_, sok := res[name]
+		if !sok {
+			for _, pspec := range pspecs {
+				spec, ok := res[pspec.Name]
+
+				if ok {
+					res[name] = spec
+				} else {
+					res[name] = OpInfo{
+						Spec: pspec,
+					}
+				}
+			}
+		}
 	}
 	return res
 }()
-
-var OpSpecByName = opSpecByName
 
 type recoverable struct{}
 
@@ -276,8 +294,30 @@ type OpSpec struct {
 	OpDetails OpSpecDetails
 }
 
-func assembler(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
+func assembler(t asmType) OpSpecDetails {
+	var name string
+	switch t {
+	case asmAddr:
+		name = "a"
+	case asmByte:
+		name = "b"
+	case asmArg:
+		name = "a"
+	case asmInt:
+		name = "i"
+	case asmIntC:
+		name = "i"
+	case asmMethod:
+		name = "m"
+	default:
+		return OpSpecDetails{}
+	}
+
+	return OpSpecDetails{
+		NamesMap: map[string]bool{name: true},
+		Names:    []string{name},
+		Groups:   map[string]*FieldGroup{},
+	}
 }
 
 func costly(vs ...interface{}) OpSpecDetails {
@@ -312,12 +352,17 @@ func only(vs ...interface{}) OpSpecDetails {
 	return OpSpecDetails{}
 }
 
-var asmInt = []interface{}{}
-var asmByte = []interface{}{}
-var asmIntC = []interface{}{}
-var asmArg = []interface{}{}
-var asmAddr = []interface{}{}
-var asmMethod = []interface{}{}
+type asmType int
+
+const (
+	asmNone = iota
+	asmInt
+	asmByte
+	asmIntC
+	asmArg
+	asmAddr
+	asmMethod
+)
 
 var typeLoads = []interface{}{}
 var typeStores = []interface{}{}
@@ -1333,20 +1378,20 @@ func Process(source string) *ProcessResult {
 				c.strs = append(c.strs, c.args.Curr())
 				c.emit(&AddrExpr{Address: value})
 			default:
-				spec, ok := opSpecByName[name]
+				info, ok := OpInfoByName[name]
 				if ok {
 					curr := c.args.Curr()
 					ops = append(ops, curr)
-					if spec.Version > version {
+					if info.Spec.Version > version {
 						c.diag = append(c.diag, lintError{
-							error: errors.Errorf("opcode requires version >= %d (current: %d)", spec.Version, version),
+							error: errors.Errorf("opcode requires version >= %d (current: %d)", info.Spec.Version, version),
 							l:     curr.l,
 							b:     curr.b,
 							e:     curr.e,
 							s:     DiagErr,
 						})
 					}
-					spec.Parse(c)
+					info.Spec.Parse(c)
 				} else {
 					c.failCurr(errors.Errorf("unexpected opcode: %s", c.args.Text()))
 				}
