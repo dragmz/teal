@@ -17,63 +17,63 @@ import (
 type NewOpArgType int
 
 const (
-	opArgTypeNone = iota
-	opArgTypeUint64
-	opArgTypeUint8
-	opArgTypeInt8
-	opArgTypeBytes
-	opArgTypeTxnField
-	opArgTypeJSONRefField
-	opArgTypeEcdsaCurve
-	opArgTypeGlobalField
-	opArgTypeLabel
-	opArgTypeAssetHoldingField
-	opArgTypeAssetParamsField
-	opArgTypeAppParamsField
-	opArgTypeAcctParamsField
-	opArgTypeVrfStandard
-	opArgTypeSignature
-	opArgTypeAddr
-	opArgTypePragmaName
+	OpArgTypeNone = iota
+	OpArgTypeUint64
+	OpArgTypeUint8
+	OpArgTypeInt8
+	OpArgTypeBytes
+	OpArgTypeTxnField
+	OpArgTypeJSONRefField
+	OpArgTypeEcdsaCurve
+	OpArgTypeGlobalField
+	OpArgTypeLabel
+	OpArgTypeAssetHoldingField
+	OpArgTypeAssetParamsField
+	OpArgTypeAppParamsField
+	OpArgTypeAcctParamsField
+	OpArgTypeVrfStandard
+	OpArgTypeSignature
+	OpArgTypeAddr
+	OpArgTypePragmaName
 )
 
 func (t NewOpArgType) String() string {
 	switch t {
 	default:
 		return "(none)"
-	case opArgTypeUint64:
+	case OpArgTypeUint64:
 		return "uint64"
-	case opArgTypeUint8:
+	case OpArgTypeUint8:
 		return "uint8"
-	case opArgTypeInt8:
+	case OpArgTypeInt8:
 		return "int8"
-	case opArgTypeBytes:
+	case OpArgTypeBytes:
 		return "bytes"
-	case opArgTypeTxnField:
+	case OpArgTypeTxnField:
 		return "transaction field index"
-	case opArgTypeJSONRefField:
+	case OpArgTypeJSONRefField:
 		return "json_Ref"
-	case opArgTypeEcdsaCurve:
+	case OpArgTypeEcdsaCurve:
 		return "ECDSA Curve"
-	case opArgTypeGlobalField:
+	case OpArgTypeGlobalField:
 		return "global field index"
-	case opArgTypeLabel:
+	case OpArgTypeLabel:
 		return "label name"
-	case opArgTypeAssetHoldingField:
+	case OpArgTypeAssetHoldingField:
 		return "asset holding field index"
-	case opArgTypeAssetParamsField:
+	case OpArgTypeAssetParamsField:
 		return "asset params field index"
-	case opArgTypeAppParamsField:
+	case OpArgTypeAppParamsField:
 		return "app params field index"
-	case opArgTypeAcctParamsField:
+	case OpArgTypeAcctParamsField:
 		return "account params field index"
-	case opArgTypeVrfStandard:
+	case OpArgTypeVrfStandard:
 		return "parameters index"
-	case opArgTypeSignature:
+	case OpArgTypeSignature:
 		return "signature"
-	case opArgTypeAddr:
+	case OpArgTypeAddr:
 		return "address"
-	case opArgTypePragmaName:
+	case OpArgTypePragmaName:
 		return "pragma name"
 	}
 }
@@ -359,12 +359,12 @@ func (c *docContext) minVersion(v uint8) {
 func (c *docContext) mustReadPragma(name string) (v uint8) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypePragmaName,
+		Type: OpArgTypePragmaName,
 	})
 
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeUint8,
+		Type: OpArgTypeUint8,
 	})
 
 	return
@@ -373,7 +373,7 @@ func (c *docContext) mustReadPragma(name string) (v uint8) {
 func (c *docContext) mustReadAddr(name string) (v string) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeAddr,
+		Type: OpArgTypeAddr,
 	})
 
 	return
@@ -382,7 +382,7 @@ func (c *docContext) mustReadAddr(name string) (v string) {
 func (c *docContext) mustReadSignature(name string) (v string) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeSignature,
+		Type: OpArgTypeSignature,
 	})
 
 	return
@@ -391,7 +391,7 @@ func (c *docContext) mustReadSignature(name string) (v string) {
 func (c *docContext) mustReadJsonRef(name string) (v JSONRefType) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeTxnField,
+		Type: OpArgTypeTxnField,
 	})
 
 	return
@@ -400,7 +400,7 @@ func (c *docContext) mustReadJsonRef(name string) (v JSONRefType) {
 func (c *docContext) mustReadTxnField(name string) (f TxnField) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeTxnField,
+		Type: OpArgTypeTxnField,
 	})
 
 	return
@@ -409,7 +409,7 @@ func (c *docContext) mustReadTxnField(name string) (f TxnField) {
 func (c *docContext) maybeReadUint8(name string) (v uint8, ok bool) {
 	c.arg(opItemArg{
 		Name:     name,
-		Type:     opArgTypeUint8,
+		Type:     OpArgTypeUint8,
 		Optional: true,
 	})
 
@@ -421,7 +421,7 @@ func (c *docContext) maybeReadUint8(name string) (v uint8, ok bool) {
 func (c *docContext) mustReadEcdsaCurveIndex(name string) (v EcdsaCurve) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeTxnField,
+		Type: OpArgTypeTxnField,
 	})
 
 	return
@@ -429,7 +429,7 @@ func (c *docContext) mustReadEcdsaCurveIndex(name string) (v EcdsaCurve) {
 func (c *docContext) readUint64Array(name string) (v []uint64) {
 	c.arg(opItemArg{
 		Name:  name,
-		Type:  opArgTypeUint64,
+		Type:  OpArgTypeUint64,
 		Array: true,
 	})
 
@@ -438,7 +438,7 @@ func (c *docContext) readUint64Array(name string) (v []uint64) {
 func (c *docContext) mustReadUint8(name string) (v uint8) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeUint8,
+		Type: OpArgTypeUint8,
 	})
 
 	return
@@ -447,7 +447,7 @@ func (c *docContext) mustReadUint8(name string) (v uint8) {
 func (c *docContext) mustReadInt8(name string) (v int8) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeInt8,
+		Type: OpArgTypeInt8,
 	})
 
 	return
@@ -455,7 +455,7 @@ func (c *docContext) mustReadInt8(name string) (v int8) {
 func (c *docContext) readBytesArray(name string) (v [][]byte) {
 	c.arg(opItemArg{
 		Name:  name,
-		Type:  opArgTypeBytes,
+		Type:  OpArgTypeBytes,
 		Array: true,
 	})
 
@@ -464,7 +464,7 @@ func (c *docContext) readBytesArray(name string) (v [][]byte) {
 func (c *docContext) mustReadGlobalField(name string) (v GlobalField) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeGlobalField,
+		Type: OpArgTypeGlobalField,
 	})
 
 	return
@@ -472,7 +472,7 @@ func (c *docContext) mustReadGlobalField(name string) (v GlobalField) {
 func (c *docContext) mustReadInt(name string) (v uint64) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeUint64,
+		Type: OpArgTypeUint64,
 	})
 
 	return
@@ -480,7 +480,7 @@ func (c *docContext) mustReadInt(name string) (v uint64) {
 func (c *docContext) mustReadLabel(name string) (v string) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeLabel,
+		Type: OpArgTypeLabel,
 	})
 
 	return
@@ -488,7 +488,7 @@ func (c *docContext) mustReadLabel(name string) (v string) {
 func (c *docContext) readLabelsArray(name string) (v []string) {
 	c.arg(opItemArg{
 		Name:  name,
-		Type:  opArgTypeLabel,
+		Type:  OpArgTypeLabel,
 		Array: true,
 	})
 
@@ -498,7 +498,7 @@ func (c *docContext) readLabelsArray(name string) (v []string) {
 func (c *docContext) mustReadAssetHoldingField(name string) (v AssetHoldingField) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeAssetHoldingField,
+		Type: OpArgTypeAssetHoldingField,
 	})
 
 	return
@@ -506,7 +506,7 @@ func (c *docContext) mustReadAssetHoldingField(name string) (v AssetHoldingField
 func (c *docContext) mustReadAssetParamsField(name string) (v AssetParamsField) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeAssetParamsField,
+		Type: OpArgTypeAssetParamsField,
 	})
 
 	return
@@ -514,7 +514,7 @@ func (c *docContext) mustReadAssetParamsField(name string) (v AssetParamsField) 
 func (c *docContext) mustReadAppParamsField(name string) (v AppParamsField) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeAppParamsField,
+		Type: OpArgTypeAppParamsField,
 	})
 
 	return
@@ -522,7 +522,7 @@ func (c *docContext) mustReadAppParamsField(name string) (v AppParamsField) {
 func (c *docContext) mustReadAcctParamsField(name string) (v AcctParamsField) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeAcctParamsField,
+		Type: OpArgTypeAcctParamsField,
 	})
 
 	return
@@ -530,7 +530,7 @@ func (c *docContext) mustReadAcctParamsField(name string) (v AcctParamsField) {
 func (c *docContext) mustReadBytes(name string) (v []byte) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeBytes,
+		Type: OpArgTypeBytes,
 	})
 
 	return
@@ -538,7 +538,7 @@ func (c *docContext) mustReadBytes(name string) (v []byte) {
 func (c *docContext) mustReadVrfVerifyField(name string) (v VrfStandard) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeVrfStandard,
+		Type: OpArgTypeVrfStandard,
 	})
 
 	return
@@ -546,7 +546,7 @@ func (c *docContext) mustReadVrfVerifyField(name string) (v VrfStandard) {
 func (c *docContext) mustReadBlockField(name string) (v BlockField) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypeTxnField,
+		Type: OpArgTypeTxnField,
 	})
 
 	return

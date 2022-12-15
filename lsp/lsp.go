@@ -15,6 +15,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+type tealCompletionMode int
+
+const (
+	tealCompletionNone = tealCompletionMode(iota)
+	tealCompletionOp
+	tealCompletionArg
+)
+
 const (
 	semanticTokenKeyword  = 0
 	semanticTokenString   = 1
@@ -1041,30 +1049,111 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			var prefix string
 
-			ok := len(ln) == 0
-			if ok {
-				ccs = []lspCompletionItem{
-					{
-						Label: "#pragma",
-						// TODO: need to set TextEdit because vs code adds extra # if one is already there by default
-					},
-				}
+			mode := tealCompletionArg
+
+			if len(ln) == 0 {
+				mode = tealCompletionOp
 			} else {
 				if len(ln) > 0 {
 					if req.Params.Position.Character <= ln[0].End() {
-						ok = true
+						mode = tealCompletionOp
 						prefix = ln[0].String()
 					}
 				}
 			}
 
-			operator := new(int)
-			*operator = 25
+			switch mode {
+			case tealCompletionArg:
+				active := len(ln) - 1
 
-			snippetFormat := new(int)
-			*snippetFormat = 2
+				for idx, tok := range ln {
+					if idx > 0 {
+						if req.Params.Position.Overlaps(tok.Line(), tok.Begin(), tok.End()) {
+							active = idx - 1
+						}
+					}
+				}
 
-			if ok {
+				op := ln[0]
+				info, ok := teal.OpDocs.GetDoc(teal.OpDocContext{
+					Name:    op.String(),
+					Version: res.Version,
+				})
+
+				if ok && active < len(info.Args) {
+					arg := info.Args[active]
+					switch arg.Type {
+					case teal.OpArgTypeTxnField:
+						for _, f := range teal.TxnFieldNames {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+					case teal.OpArgTypeAcctParamsField:
+						for _, f := range teal.AcctParamsFields.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+
+					case teal.OpArgTypeAppParamsField:
+						for _, f := range teal.AppParamsFields.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+
+					case teal.OpArgTypeAssetHoldingField:
+						for _, f := range teal.AssetHoldingFields.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+
+					case teal.OpArgTypeAssetParamsField:
+						for _, f := range teal.AssetParamsFields.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+
+					case teal.OpArgTypeEcdsaCurve:
+						for _, f := range teal.EcdsaCurves.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+
+					case teal.OpArgTypeGlobalField:
+						for _, f := range teal.GlobalFieldNames {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+
+					case teal.OpArgTypeJSONRefField:
+						for _, f := range teal.JSONRefTypes.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+
+					case teal.OpArgTypeVrfStandard:
+						for _, f := range teal.VrfStandards.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+					}
+				}
+
+			case tealCompletionOp:
+				operator := new(int)
+				*operator = 25
+
+				snippetFormat := new(int)
+				*snippetFormat = 2
+
 				for name, info := range teal.OpDocs.Items {
 					if info.Version <= res.Version && strings.HasPrefix(name, prefix) {
 						var insert string
