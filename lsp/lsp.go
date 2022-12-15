@@ -1320,26 +1320,29 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			for _, op := range res.Ops {
 				if op.Line() == req.Params.Position.Line {
-
-					ln := res.Lines[req.Params.Position.Line]
-
-					active := new(uint)
-					*active = uint(len(ln) - 1)
-
-					for i, t := range ln {
-						if i > 0 {
-							if req.Params.Position.Overlaps(t.Line(), t.Begin(), t.End()) {
-								*active = uint(i) - 1
-							}
-						}
-					}
-
-					name := op.String()
 					info, ok := teal.OpDocs.GetDoc(teal.OpDocContext{
-						Name:    name,
+						Name:    op.String(),
 						Version: res.Version,
 					})
 					if ok {
+						ln := res.Lines[req.Params.Position.Line]
+
+						active := new(uint)
+						*active = uint(len(ln) - 1)
+
+						_, idx, ok := ln.ImmAt(req.Params.Position.Character)
+						if ok {
+							*active = uint(idx)
+						}
+
+						if len(info.Args) > 0 {
+							if *active >= uint(len(info.Args)) {
+								if info.Args[len(info.Args)-1].Array {
+									*active = uint(len(info.Args)) - 1
+								}
+							}
+						}
+
 						var d interface{}
 
 						s := info.FullDoc

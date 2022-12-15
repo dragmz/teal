@@ -1662,14 +1662,14 @@ func opPushInt(c OpContext) {
 }
 func opPushBytess(c OpContext) {
 	c.minVersion(8)
-	bss := c.readBytesArray("bytes")
+	bss := c.readBytesArray("value")
 	c.emit(&PushBytessExpr{
 		Bytess: bss,
 	})
 }
 func opPushInts(c OpContext) {
 	c.minVersion(8)
-	iss := c.readUint64Array("bytes")
+	iss := c.readUint64Array("value")
 	c.emit(&PushIntsExpr{
 		Ints: iss,
 	})
@@ -1959,6 +1959,20 @@ func opBlock(c OpContext) {
 	c.emit(&BlockExpr{Field: f})
 }
 
+type Line []Token
+
+func (ln Line) ImmAt(pos int) (Token, int, bool) {
+	for idx, tok := range ln {
+		if idx > 0 {
+			if pos >= tok.Begin() && pos <= tok.End() {
+				return tok, idx, true
+			}
+		}
+	}
+
+	return Token{}, 0, false
+}
+
 type ProcessResult struct {
 	Version     uint8
 	Diagnostics []Diagnostic
@@ -1966,7 +1980,7 @@ type ProcessResult struct {
 	SymbolRefs  []Token
 	Tokens      []Token
 	Listing     Listing
-	Lines       [][]Token
+	Lines       []Line
 	Ops         []Token
 	Numbers     []Token
 	Strings     []Token
@@ -2029,7 +2043,7 @@ func Process(source string) *ProcessResult {
 		}
 	}
 
-	var lts [][]Token
+	var lts []Line
 	var ops []Token
 	var syms []Symbol
 
@@ -2099,6 +2113,11 @@ func Process(source string) *ProcessResult {
 					}
 
 					info.Parse(c)
+					if c.args.i < len(c.args.ts) {
+						if c.args.Scan() {
+							c.failCurr(errors.Errorf("too many values"))
+						}
+					}
 				} else {
 					c.failCurr(errors.Errorf("unexpected opcode: %s", c.args.Text()))
 				}
