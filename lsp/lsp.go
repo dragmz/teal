@@ -222,7 +222,7 @@ type lspSignatureInformation struct {
 	Documentation interface{} `json:"documentation,omitempty"`
 
 	Parameters      []lspParameterInformation `json:"parameters,omitempty"`
-	ActiveParameter *uint                     `json:"activeParameter,omitempty"`
+	ActiveParameter *int                      `json:"activeParameter,omitempty"`
 }
 
 type lspSignatureHelp struct {
@@ -1040,7 +1040,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			res := doc.Results()
 
-			var ln []teal.Token
+			var ln teal.Line
 			if len(res.Lines) > req.Params.Position.Line {
 				ln = res.Lines[req.Params.Position.Line]
 			}
@@ -1064,14 +1064,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			switch mode {
 			case tealCompletionArg:
-				active := len(ln) - 1
+				curr := len(ln) - 1
 
-				for idx, tok := range ln {
-					if idx > 0 {
-						if req.Params.Position.Overlaps(tok.Line(), tok.Begin(), tok.End()) {
-							active = idx - 1
-						}
-					}
+				_, idx, ok := ln.ImmAt(req.Params.Position.Character)
+				if ok {
+					curr = idx
 				}
 
 				op := ln[0]
@@ -1080,9 +1077,23 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					Version: res.Version,
 				})
 
-				if ok && active < len(info.Args) {
-					arg := info.Args[active]
+				if len(info.Args) > 0 {
+					if curr >= len(info.Args) {
+						if info.Args[len(info.Args)-1].Array {
+							curr = len(info.Args) - 1
+						}
+					}
+				}
+
+				if ok && curr < len(info.Args) {
+					arg := info.Args[curr]
 					switch arg.Type {
+					case teal.OpArgTypeLabel:
+						for _, sym := range res.Symbols {
+							ccs = append(ccs, lspCompletionItem{
+								Label: sym.Name(),
+							})
+						}
 					case teal.OpArgTypeTxnField:
 						for _, f := range teal.TxnFieldNames {
 							ccs = append(ccs, lspCompletionItem{
@@ -1327,18 +1338,18 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					if ok {
 						ln := res.Lines[req.Params.Position.Line]
 
-						active := new(uint)
-						*active = uint(len(ln) - 1)
+						active := new(int)
+						*active = len(ln) - 1
 
 						_, idx, ok := ln.ImmAt(req.Params.Position.Character)
 						if ok {
-							*active = uint(idx)
+							*active = idx
 						}
 
 						if len(info.Args) > 0 {
-							if *active >= uint(len(info.Args)) {
+							if *active >= len(info.Args) {
 								if info.Args[len(info.Args)-1].Array {
-									*active = uint(len(info.Args)) - 1
+									*active = len(info.Args) - 1
 								}
 							}
 						}
