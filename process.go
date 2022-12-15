@@ -557,7 +557,6 @@ func (c *parserContext) mustReadPragma(argName string) uint8 {
 			c.failCurr(errors.New("version must be at least 1"))
 		}
 		version = v
-		c.mcrs = append(c.mcrs, c.args.Curr())
 	default:
 		c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
 	}
