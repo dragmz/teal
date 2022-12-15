@@ -311,6 +311,11 @@ type tealCreateLabelCommandArgs struct {
 	Name string `json:"name"`
 }
 
+type tealRemoveLabelCommandArgs struct {
+	Uri  string `json:"uri"`
+	Name string `json:"name"`
+}
+
 type lspWorkspaceExecuteCommandHeader struct {
 	Command string `json:"command"`
 }
@@ -458,11 +463,12 @@ func (r lspRange) Overlaps(line int, begin int, end int) bool {
 		return false
 	}
 
-	if line == r.Start.Line {
+	switch line {
+	case r.Start.Line:
 		if begin < r.Start.Character && end < r.Start.Character {
 			return false
 		}
-	} else if line == r.End.Line {
+	case r.End.Line:
 		if begin > r.End.Character && end > r.End.Character {
 			return false
 		}
@@ -748,6 +754,62 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			switch req.Params.Command {
+			case "teal.label.remove":
+				var body lspWorkspaceExecuteCommandBody[[]tealRemoveLabelCommandArgs]
+				err := readInto(b, &body)
+				if err != nil {
+					return err
+				}
+
+				args := body.Params.Arguments
+				if len(args) != 1 {
+					return errors.New("unexpected number of args")
+				}
+
+				doc := l.docs[args[0].Uri]
+				if doc == nil {
+					return errors.New("doc not found")
+				}
+
+				res := doc.Results()
+
+				name := args[0].Name
+
+				edits := []lspTextEdit{}
+				for _, sym := range res.Symbols {
+					if sym.Name() == body.Params.Arguments[0].Name {
+						edits = append(edits, lspTextEdit{
+							Range: lspRange{
+								Start: lspPosition{
+									Line:      sym.Line(),
+									Character: sym.Begin(),
+								},
+								End: lspPosition{
+									Line:      sym.Line(),
+									Character: sym.End(),
+								},
+							},
+							NewText: "",
+						})
+					}
+				}
+
+				l.id++
+
+				return l.request(strconv.Itoa(l.id), "workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
+					Label: fmt.Sprintf("Remove label: %s", name),
+					Edit: lspWorkspaceEdit{
+						DocumentChanges: []lspTextDocumentEdit{
+							{
+								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
+									Uri: args[0].Uri,
+								},
+								Edits: edits,
+							},
+						},
+					},
+				})
+
 			case "teal.label.create":
 				var body lspWorkspaceExecuteCommandBody[[]tealCreateLabelCommandArgs]
 				err := readInto(b, &body)
@@ -1003,18 +1065,18 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			*snippetFormat = 2
 
 			if ok {
-				for name, info := range teal.OpInfoByName {
-					if info.Spec.Version <= res.Version && strings.HasPrefix(name, prefix) {
+				for name, info := range teal.OpDocs.Items {
+					if info.Version <= res.Version && strings.HasPrefix(name, prefix) {
 						var insert string
 						var format *int
-						if len(info.Spec.OpDetails.Names) > 0 {
+						if len(info.Args) > 0 {
 							var placeholders string
-							for i, name := range info.Spec.OpDetails.Names {
+							for i, arg := range info.Args {
 								if i > 0 {
 									placeholders += " "
 								}
 
-								placeholders += fmt.Sprintf("${%d:%s}", i+1, name)
+								placeholders += fmt.Sprintf("${%d:%s}", i+1, arg.Name)
 							}
 
 							insert = fmt.Sprintf("%s %s", name, placeholders)
@@ -1024,8 +1086,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							format = nil
 						}
 
-						detail := " " + strings.Join(info.Spec.OpDetails.Names, " ")
-						ld := fmt.Sprintf("v%d", info.Spec.Version)
+						ld := fmt.Sprintf("v%d", info.Version)
 						ccs = append(ccs, lspCompletionItem{
 							Label: name,
 							Documentation: lspMarkupContent{
@@ -1037,7 +1098,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							InsertTextFormat: format,
 							LabelDetails: &lspCompletionItemLabelDetails{
 								Description: ld,
-								Detail:      detail,
+								Detail:      " " + info.ArgsSig,
 							},
 						})
 					}
@@ -1062,14 +1123,20 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			for _, op := range res.Ops {
 				if req.Params.Position.Overlaps(op.Line(), op.Begin(), op.End()) {
-					info := teal.OpInfoByName[op.String()]
-					s := info.FullDoc
-					if s != "" {
-						c = lspHover{
-							Contents: lspMarkupContent{
-								Kind:  "plaintext",
-								Value: s,
-							},
+					info, ok := teal.OpDocs.GetDoc(teal.OpDocContext{
+						Name:    op.String(),
+						Version: res.Version,
+					})
+
+					if ok {
+						s := info.FullDoc
+						if s != "" {
+							c = lspHover{
+								Contents: lspMarkupContent{
+									Kind:  "plaintext",
+									Value: s,
+								},
+							}
 						}
 					}
 				}
@@ -1179,7 +1246,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					}
 
 					name := op.String()
-					info, ok := teal.OpInfoByName[name]
+					info, ok := teal.OpDocs.GetDoc(teal.OpDocContext{
+						Name:    name,
+						Version: res.Version,
+					})
 					if ok {
 						var d interface{}
 
@@ -1193,18 +1263,16 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 						ps := []lspParameterInformation{}
 
-						label := name + " " + strings.Join(info.Spec.OpDetails.Names, " ")
-
-						for _, name := range info.Spec.OpDetails.Names {
+						for _, arg := range info.Args {
 							ps = append(ps, lspParameterInformation{
-								Label: name,
+								Label: arg.Name,
 							})
 						}
 
 						sh = &lspSignatureHelp{
 							Signatures: []lspSignatureInformation{
 								{
-									Label:           label,
+									Label:           info.FullSig,
 									Documentation:   d,
 									Parameters:      ps,
 									ActiveParameter: active,
@@ -1232,6 +1300,41 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			res := doc.Results()
 
 			cas := []lspCodeAction{}
+			for _, sym := range res.Symbols {
+				if !req.Params.Range.Overlaps(sym.Line(), sym.Begin(), sym.End()) {
+					continue
+				}
+				found := func() bool {
+					for _, ref := range res.SymbolRefs {
+						if sym.Name() == ref.String() {
+							return true
+						}
+					}
+
+					return false
+				}()
+
+				if found {
+					continue
+				}
+
+				kind := "quickfix"
+				cas = append(cas, lspCodeAction{
+					Title: fmt.Sprintf("Remove label '%s'", sym.Name()),
+					Kind:  &kind,
+					Command: &lspCommand{
+						Title:   "Remove label",
+						Command: "teal.label.remove",
+						Arguments: []interface{}{
+							tealRemoveLabelCommandArgs{
+								Uri:  req.Params.TextDocument.Uri,
+								Name: sym.Name(),
+							},
+						},
+					},
+				})
+			}
+
 			for _, ref := range res.SymbolRefs {
 				if !req.Params.Range.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
 					continue
@@ -1539,6 +1642,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					ExecuteCommandProvider: &lspExecuteCommandProvider{
 						Commands: []string{
 							"teal.label.create",
+							"teal.label.remove",
 						},
 					},
 					RenameProvider: &lspRenameOptions{

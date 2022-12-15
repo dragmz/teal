@@ -7,6 +7,21 @@ import (
 	"testing"
 )
 
+func TestDocs(t *testing.T) {
+	i, ok := OpDocs.GetDoc(OpDocContext{
+		Name:    "txn",
+		Version: 9,
+	})
+
+	if !ok {
+		t.Error("txn not found")
+	}
+
+	if i.Name != "txn" {
+		t.Error("unexpected name")
+	}
+}
+
 func TestParser(t *testing.T) {
 	type test struct {
 		Path  string

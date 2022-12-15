@@ -14,56 +14,492 @@ import (
 	TODO: add missing specs for pseudops
 */
 
-type OpInfo struct {
-	Spec OpSpec
+type NewOpArgType int
+
+const (
+	opArgTypeNone = iota
+	opArgTypeUint64
+	opArgTypeUint8
+	opArgTypeInt8
+	opArgTypeBytes
+	opArgTypeTxnField
+	opArgTypeJSONRefField
+	opArgTypeEcdsaCurve
+	opArgTypeGlobalField
+	opArgTypeLabel
+	opArgTypeAssetHoldingField
+	opArgTypeAssetParamsField
+	opArgTypeAppParamsField
+	opArgTypeAcctParamsField
+	opArgTypeVrfStandard
+	opArgTypeSignature
+	opArgTypeAddr
+	opArgTypePragmaName
+	opArgTypePragmaVersion
+)
+
+type opItemArg struct {
+	Name     string
+	Type     NewOpArgType
+	Array    bool
+	Optional bool
+}
+
+type opItem struct {
+	Name string
+
+	Version uint8
+
+	Args []opItemArg
+
+	ArgsSig string
+	FullSig string
+
+	Parse parserFunc
 
 	Doc     string
 	FullDoc string
 }
 
-var OpInfoByName = func() map[string]OpInfo {
-	res := map[string]OpInfo{}
+type opListItem struct {
+	Name  string
+	Parse parserFunc
+}
 
-	for _, spec := range OpSpecs {
-		doc := opDocByName[spec.Name]
-		full := doc
-
-		extra := opDocExtras[spec.Name]
-		if extra != "" {
-			if full != "" {
-				full += "\n"
-			}
-			full += extra
-		}
-
-		res[spec.Name] = OpInfo{
-			Spec:    spec,
-			Doc:     doc,
-			FullDoc: full,
-		}
-	}
-
-	// TODO: needs a support for multisig
-	for name, pspecs := range pseudoOps {
-		_, sok := res[name]
-		if !sok {
-			for _, pspec := range pspecs {
-				spec, ok := res[pspec.Name]
-
-				if ok {
-					res[name] = spec
-				} else {
-					res[name] = OpInfo{
-						Spec: pspec,
-					}
-				}
-			}
-		}
-	}
-	return res
-}()
+var opsList = []opListItem{
+	{"replace", opReplace},
+	{"byte", opByte},
+	{"int", opInt},
+	{"method", opMethod},
+	{"addr", opAddr},
+	{"err", opErr},
+	{"sha256", opSHA256},
+	{"keccak256", opKeccak256},
+	{"sha512_256", opSHA512_256},
+	{"sha256", opSHA256},
+	{"keccak256", opKeccak256},
+	{"sha512_256", opSHA512_256},
+	{"ed25519verify", opEd25519Verify},
+	{"ecdsa_verify", opEcdsaVerify},
+	{"ecdsa_pk_decompress", opEcdsaPkDecompress},
+	{"ecdsa_pk_recover", opEcdsaPkRecover},
+	{"+", opPlus},
+	{"-", opMinus},
+	{"/", opDiv},
+	{"*", opMul},
+	{"<", opLt},
+	{">", opGt},
+	{"<=", opLe},
+	{">=", opGe},
+	{"&&", opAnd},
+	{"||", opOr},
+	{"==", opEq},
+	{"!=", opNeq},
+	{"!", opNot},
+	{"len", opLen},
+	{"itob", opItob},
+	{"btoi", opBtoi},
+	{"%", opModulo},
+	{"|", opBitOr},
+	{"&", opBitAnd},
+	{"^", opBitXor},
+	{"~", opBitNot},
+	{"mulw", opMulw},
+	{"addw", opAddw},
+	{"divmodw", opDivModw},
+	{"intcblock", opIntConstBlock},
+	{"intc", opIntConstLoad},
+	{"intc_0", opIntConst0},
+	{"intc_1", opIntConst1},
+	{"intc_2", opIntConst2},
+	{"intc_3", opIntConst3},
+	{"bytecblock", opByteConstBlock},
+	{"bytec", opByteConstLoad},
+	{"bytec_0", opByteConst0},
+	{"bytec_1", opByteConst1},
+	{"bytec_2", opByteConst2},
+	{"bytec_3", opByteConst3},
+	{"arg", opArg},
+	{"arg_0", opArg0},
+	{"arg_1", opArg1},
+	{"arg_2", opArg2},
+	{"arg_3", opArg3},
+	{"txn", opTxn},
+	{"global", opGlobal},
+	{"gtxn", opGtxn},
+	{"load", opLoad},
+	{"store", opStore},
+	{"txna", opTxna},
+	{"gtxna", opGtxna},
+	{"gtxns", opGtxns},
+	{"gtxnsa", opGtxnsa},
+	{"gload", opGload},
+	{"gloads", opGloads},
+	{"gaid", opGaid},
+	{"gaids", opGaids},
+	{"loads", opLoads},
+	{"stores", opStores},
+	{"bnz", opBnz},
+	{"bz", opBz},
+	{"b", opB},
+	{"return", opReturn},
+	{"assert", opAssert},
+	{"bury", opBury},
+	{"popn", opPopN},
+	{"dupn", opDupN},
+	{"pop", opPop},
+	{"dup", opDup},
+	{"dup2", opDup2},
+	{"dig", opDig},
+	{"swap", opSwap},
+	{"select", opSelect},
+	{"cover", opCover},
+	{"uncover", opUncover},
+	{"concat", opConcat},
+	{"substring", opSubstring},
+	{"substring3", opSubstring3},
+	{"getbit", opGetBit},
+	{"setbit", opSetBit},
+	{"getbyte", opGetByte},
+	{"setbyte", opSetByte},
+	{"extract", opExtract},
+	{"extract3", opExtract3},
+	{"extract_uint16", opExtract16Bits},
+	{"extract_uint32", opExtract32Bits},
+	{"extract_uint64", opExtract64Bits},
+	{"replace2", opReplace2},
+	{"replace3", opReplace3},
+	{"base64_decode", opBase64Decode},
+	{"json_ref", opJSONRef},
+	{"balance", opBalance},
+	{"balance", opBalance},
+	{"app_opted_in", opAppOptedIn},
+	{"app_opted_in", opAppOptedIn},
+	{"app_local_get", opAppLocalGet},
+	{"app_local_get", opAppLocalGet},
+	{"app_local_get_ex", opAppLocalGetEx},
+	{"app_local_get_ex", opAppLocalGetEx},
+	{"app_global_get", opAppGlobalGet},
+	{"app_global_get_ex", opAppGlobalGetEx},
+	{"app_local_put", opAppLocalPut},
+	{"app_local_put", opAppLocalPut},
+	{"app_global_put", opAppGlobalPut},
+	{"app_local_del", opAppLocalDel},
+	{"app_local_del", opAppLocalDel},
+	{"app_global_del", opAppGlobalDel},
+	{"asset_holding_get", opAssetHoldingGet},
+	{"asset_holding_get", opAssetHoldingGet},
+	{"asset_params_get", opAssetParamsGet},
+	{"app_params_get", opAppParamsGet},
+	{"acct_params_get", opAcctParamsGet},
+	{"min_balance", opMinBalance},
+	{"min_balance", opMinBalance},
+	{"pushbytes", opPushBytes},
+	{"pushint", opPushInt},
+	{"pushbytess", opPushBytess},
+	{"pushints", opPushInts},
+	{"ed25519verify_bare", opEd25519VerifyBare},
+	{"callsub", opCallSub},
+	{"retsub", opRetSub},
+	{"proto", opProto},
+	{"frame_dig", opFrameDig},
+	{"frame_bury", opFrameBury},
+	{"switch", opSwitch},
+	{"match", opMatch},
+	{"shl", opShiftLeft},
+	{"shr", opShiftRight},
+	{"sqrt", opSqrt},
+	{"bitlen", opBitLen},
+	{"exp", opExp},
+	{"expw", opExpw},
+	{"bsqrt", opBytesSqrt},
+	{"divw", opDivw},
+	{"sha3_256", opSHA3_256},
+	{"bn256_add", opBn256Add},
+	{"bn256_scalar_mul", opBn256ScalarMul},
+	{"bn256_pairing", opBn256Pairing},
+	{"b+", opBytesPlus},
+	{"b-", opBytesMinus},
+	{"b/", opBytesDiv},
+	{"b*", opBytesMul},
+	{"b<", opBytesLt},
+	{"b>", opBytesGt},
+	{"b<=", opBytesLe},
+	{"b>=", opBytesGe},
+	{"b==", opBytesEq},
+	{"b!=", opBytesNeq},
+	{"b%", opBytesModulo},
+	{"b|", opBytesBitOr},
+	{"b&", opBytesBitAnd},
+	{"b^", opBytesBitXor},
+	{"b~", opBytesBitNot},
+	{"bzero", opBytesZero},
+	{"log", opLog},
+	{"itxn_begin", opTxBegin},
+	{"itxn_field", opItxnField},
+	{"itxn_submit", opItxnSubmit},
+	{"itxn", opItxn},
+	{"itxna", opItxna},
+	{"itxn_next", opItxnNext},
+	{"gitxn", opGitxn},
+	{"gitxna", opGitxna},
+	{"box_create", opBoxCreate},
+	{"box_extract", opBoxExtract},
+	{"box_replace", opBoxReplace},
+	{"box_del", opBoxDel},
+	{"box_len", opBoxLen},
+	{"box_get", opBoxGet},
+	{"box_put", opBoxPut},
+	{"txnas", opTxnas},
+	{"gtxnas", opGtxnas},
+	{"gtxnsas", opGtxnsas},
+	{"args", opArgs},
+	{"gloadss", opGloadss},
+	{"itxnas", opItxnas},
+	{"gitxnas", opGitxnas},
+	{"vrf_verify", opVrfVerify},
+	{"block", opBlock},
+}
 
 type recoverable struct{}
+
+type OpContext interface {
+	emit(op Op)
+
+	minVersion(v uint8)
+
+	mustReadPragma(name string) uint8
+	mustReadAddr(name string) string
+	mustReadSignature(name string) string
+	mustReadTxnField(name string) TxnField
+	mustReadJsonRef(name string) JSONRefType
+	maybeReadUint8(name string) (uint8, bool)
+	mustReadEcdsaCurveIndex(name string) EcdsaCurve
+	readUint64Array(name string) []uint64
+	mustReadUint8(name string) uint8
+	mustReadInt8(name string) int8
+	readBytesArray(name string) [][]byte
+	mustReadGlobalField(name string) GlobalField
+	mustReadInt(name string) uint64
+	mustReadLabel(name string) string
+	readLabelsArray(name string) []string
+	mustReadAssetHoldingField(name string) AssetHoldingField
+	mustReadAssetParamsField(name string) AssetParamsField
+	mustReadAppParamsField(name string) AppParamsField
+	mustReadAcctParamsField(name string) AcctParamsField
+	mustReadBytes(name string) []byte
+	mustReadVrfVerifyField(name string) VrfStandard
+	mustReadBlockField(name string) BlockField
+}
+
+type docContext struct {
+	args    []opItemArg
+	version uint8
+}
+
+func (c *docContext) emit(op Op) {
+
+}
+
+func (c *docContext) minVersion(v uint8) {
+	c.version = v
+}
+
+func (c *docContext) mustReadPragma(name string) (v uint8) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypePragmaName,
+	})
+
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypePragmaVersion,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadAddr(name string) (v string) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeAddr,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadSignature(name string) (v string) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeSignature,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadJsonRef(name string) (v JSONRefType) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeTxnField,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadTxnField(name string) (f TxnField) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeTxnField,
+	})
+
+	return
+}
+
+func (c *docContext) maybeReadUint8(name string) (v uint8, ok bool) {
+	c.args = append(c.args, opItemArg{
+		Name:     name,
+		Type:     opArgTypeUint8,
+		Optional: true,
+	})
+
+	ok = true
+
+	return
+}
+
+func (c *docContext) mustReadEcdsaCurveIndex(name string) (v EcdsaCurve) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeTxnField,
+	})
+
+	return
+}
+func (c *docContext) readUint64Array(name string) (v []uint64) {
+	c.args = append(c.args, opItemArg{
+		Name:  name,
+		Type:  opArgTypeUint64,
+		Array: true,
+	})
+
+	return
+}
+func (c *docContext) mustReadUint8(name string) (v uint8) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeUint8,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadInt8(name string) (v int8) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeInt8,
+	})
+
+	return
+}
+func (c *docContext) readBytesArray(name string) (v [][]byte) {
+	c.args = append(c.args, opItemArg{
+		Name:  name,
+		Type:  opArgTypeBytes,
+		Array: true,
+	})
+
+	return
+}
+func (c *docContext) mustReadGlobalField(name string) (v GlobalField) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeGlobalField,
+	})
+
+	return
+}
+func (c *docContext) mustReadInt(name string) (v uint64) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeUint64,
+	})
+
+	return
+}
+func (c *docContext) mustReadLabel(name string) (v string) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeLabel,
+	})
+
+	return
+}
+func (c *docContext) readLabelsArray(name string) (v []string) {
+	c.args = append(c.args, opItemArg{
+		Name:  name,
+		Type:  opArgTypeLabel,
+		Array: true,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadAssetHoldingField(name string) (v AssetHoldingField) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeAssetHoldingField,
+	})
+
+	return
+}
+func (c *docContext) mustReadAssetParamsField(name string) (v AssetParamsField) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeAssetParamsField,
+	})
+
+	return
+}
+func (c *docContext) mustReadAppParamsField(name string) (v AppParamsField) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeAppParamsField,
+	})
+
+	return
+}
+func (c *docContext) mustReadAcctParamsField(name string) (v AcctParamsField) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeAcctParamsField,
+	})
+
+	return
+}
+func (c *docContext) mustReadBytes(name string) (v []byte) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeBytes,
+	})
+
+	return
+}
+func (c *docContext) mustReadVrfVerifyField(name string) (v VrfStandard) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeVrfStandard,
+	})
+
+	return
+}
+func (c *docContext) mustReadBlockField(name string) (v BlockField) {
+	c.args = append(c.args, opItemArg{
+		Name: name,
+		Type: opArgTypeTxnField,
+	})
+
+	return
+}
 
 type parserContext struct {
 	ops  []Op
@@ -77,8 +513,12 @@ type parserContext struct {
 	refs []Token
 }
 
-func (c *parserContext) emit(e Op) {
-	c.ops = append(c.ops, e)
+func (c *parserContext) emit(op Op) {
+	c.ops = append(c.ops, op)
+}
+
+func (c *parserContext) minVersion(v uint8) {
+
 }
 
 func (c *parserContext) failAt(l int, b int, e int, err error) {
@@ -104,6 +544,177 @@ func (c *parserContext) mustReadArg(name string) {
 	}
 }
 
+func (c *parserContext) mustReadPragma(argName string) uint8 {
+	var version uint8
+	c.mcrs = append(c.mcrs, c.args.Curr())
+
+	name := c.mustRead("name")
+	switch name {
+	case "version":
+		c.mcrs = append(c.mcrs, c.args.Curr())
+		v := c.mustReadUint8("version value")
+		if v < 1 {
+			c.failCurr(errors.New("version must be at least 1"))
+		}
+		version = v
+		c.mcrs = append(c.mcrs, c.args.Curr())
+	default:
+		c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
+	}
+
+	return version
+}
+
+func (c *parserContext) mustReadAddr(name string) string {
+	value := c.mustRead("address")
+
+	_, err := types.DecodeAddress(value)
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	c.strs = append(c.strs, c.args.Curr())
+
+	return value
+}
+
+func (c *parserContext) mustReadSignature(name string) string {
+	c.mustReadArg(name)
+
+	value := c.args.Text()
+
+	b := 0
+	e := len(value) - 1
+	if value[b] != '"' || value[e] != '"' {
+		c.failCurr(errors.New("missing quotes"))
+	}
+
+	// TODO: validate method sig
+	c.strs = append(c.strs, c.args.Curr())
+
+	return c.args.Text()
+}
+
+func (c *parserContext) maybeReadArg() bool {
+	return c.args.Scan()
+}
+
+func (c *parserContext) mustReadAcctParamsField(name string) AcctParamsField {
+	c.mustReadArg(name)
+
+	f, err := readAcctParams(c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	return f
+}
+
+func (c *parserContext) mustReadAssetHoldingField(name string) AssetHoldingField {
+	c.mustReadArg(name)
+
+	f, err := readAssetHoldingField(c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	return f
+}
+
+func (c *parserContext) mustReadAssetParamsField(name string) AssetParamsField {
+	c.mustReadArg(name)
+
+	f, err := readAssetParamsField(c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	return f
+}
+
+func (c *parserContext) mustReadBlockField(name string) BlockField {
+	c.mustReadArg(name)
+
+	f, err := readBlockField(c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	return f
+}
+
+func (c *parserContext) mustReadGlobalField(name string) GlobalField {
+	c.mustReadArg(name)
+
+	f, err := readGlobalField(c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	return f
+}
+
+func (c *parserContext) mustReadLabel(name string) string {
+	c.mustReadArg(name)
+	c.refs = append(c.refs, c.args.Curr())
+	return c.args.Text()
+}
+
+func (c *parserContext) mustReadVrfVerifyField(name string) VrfStandard {
+	c.mustReadArg(name)
+
+	f, err := readVrfVerifyField(c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	return f
+}
+
+func (c *parserContext) readBytesArray(name string) [][]byte {
+	res := [][]byte{}
+
+	for c.args.Scan() {
+		bs := c.parseBytes(name)
+		res = append(res, bs)
+	}
+
+	return res
+}
+
+func (c *parserContext) readLabelsArray(name string) []string {
+	res := []string{}
+
+	for c.args.Scan() {
+		res = append(res, c.args.Text())
+		c.refs = append(c.refs, c.args.Curr())
+	}
+
+	return res
+}
+
+func (c *parserContext) readUint64Array(name string) []uint64 {
+	res := []uint64{}
+
+	for c.args.Scan() {
+		i := c.parseUint64(name)
+		res = append(res, i)
+		c.nums = append(c.nums, c.args.Curr())
+	}
+
+	return res
+}
+
+func (c *parserContext) mustReadAppParamsField(name string) AppParamsField {
+	c.mustReadArg(name)
+
+	f, err := readAppParamsField(c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	return f
+}
 func (c *parserContext) parseUint64(name string) uint64 {
 	v, err := readInt(c.args)
 	if err != nil {
@@ -137,12 +748,35 @@ func (c *parserContext) parseInt8(name string) int8 {
 	return v
 }
 
+func (c *parserContext) parseJsonRef(name string) JSONRefType {
+	v, isconst, err := readJsonRefField(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse JSON ref field: %s", name))
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
+	}
+
+	return v
+}
+
 func (c *parserContext) parseTxnField(name string) TxnField {
 	// TODO report semantics
-	v, err := readTxnField(c.args.Text())
+	v, isconst, err := readTxnField(c.args.Text())
+
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse txn field: %s", name))
 	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
+	}
+
 	return v
 }
 
@@ -255,6 +889,15 @@ func (c *parserContext) mustReadUint8(name string) uint8 {
 	return c.parseUint8(name)
 }
 
+func (c *parserContext) maybeReadUint8(name string) (uint8, bool) {
+	ok := c.maybeReadArg()
+	if !ok {
+		return 0, false
+	}
+
+	return c.parseUint8(name), true
+}
+
 func (c *parserContext) mustReadInt8(name string) int8 {
 	c.mustReadArg(name)
 	return c.parseInt8(name)
@@ -270,87 +913,94 @@ func (c *parserContext) mustReadTxnField(name string) TxnField {
 	return c.parseTxnField(name)
 }
 
+func (c *parserContext) mustReadJsonRef(name string) JSONRefType {
+	c.mustReadArg(name)
+	return c.parseJsonRef(name)
+}
+
 func (c *parserContext) mustReadEcdsaCurveIndex(name string) EcdsaCurve {
 	c.mustReadArg(name)
 	return c.parseEcdsaCurveIndex(name)
 }
 
-type parserFunc func(c *parserContext)
-
-type OpSpecProto struct{}
-type OpSpecDetails struct {
-	NamesMap map[string]bool
-	Groups   map[string]*FieldGroup
-	Names    []string
-	Cost     int
+type opDocs struct {
+	Items map[string]opItem
 }
 
-type OpSpec struct {
-	Code      byte
-	Name      string
-	Parse     parserFunc
-	Proto     OpSpecProto
-	Version   uint8
-	OpDetails OpSpecDetails
+type OpDocContext struct {
+	Name    string
+	Version uint8
 }
 
-func assembler(t asmType) OpSpecDetails {
-	var name string
-	switch t {
-	case asmAddr:
-		name = "a"
-	case asmByte:
-		name = "b"
-	case asmArg:
-		name = "a"
-	case asmInt:
-		name = "i"
-	case asmIntC:
-		name = "i"
-	case asmMethod:
-		name = "m"
-	default:
-		return OpSpecDetails{}
+func (d opDocs) GetDoc(c OpDocContext) (opItem, bool) {
+	item, ok := d.Items[c.Name]
+	return item, ok
+}
+
+var OpDocs = func() *opDocs {
+	d := &opDocs{
+		Items: map[string]opItem{},
 	}
 
-	return OpSpecDetails{
-		NamesMap: map[string]bool{name: true},
-		Names:    []string{name},
-		Groups:   map[string]*FieldGroup{},
+	for _, info := range opsList {
+		c := &docContext{
+			version: 1,
+			args:    []opItemArg{},
+		}
+
+		info.Parse(c)
+
+		doc := opDocByName[info.Name]
+		extra := opDocExtras[info.Name]
+
+		full := doc
+		if extra != "" {
+			if full != "" {
+				full += "\n"
+			}
+
+			full += extra
+		}
+
+		var names []string
+		for _, arg := range c.args {
+			name := arg.Name
+			if arg.Array {
+				name += ", ..."
+			}
+
+			if arg.Optional {
+				name = "[" + name + "]"
+			}
+
+			names = append(names, name)
+		}
+
+		sigargs := strings.Join(names, " ")
+		sigfull := fmt.Sprintf("%s %s", info.Name, sigargs)
+
+		d.Items[info.Name] = opItem{
+			Name: info.Name,
+
+			ArgsSig: sigargs,
+			FullSig: sigfull,
+
+			Args: c.args,
+
+			Version: c.version,
+
+			// TODO: Version:
+			Parse: info.Parse,
+
+			Doc:     doc,
+			FullDoc: full,
+		}
 	}
-}
 
-func costly(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
-}
-
-func detDefault() OpSpecDetails {
-	return OpSpecDetails{}
-}
-
-func detSwitch() OpSpecDetails {
-	return OpSpecDetails{}
-}
-
-func costByField(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
-}
-
-func typed(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
-}
-
-func (d OpSpecDetails) only(vs ...interface{}) OpSpecDetails {
 	return d
-}
+}()
 
-func (d OpSpecDetails) assembler(vs ...interface{}) OpSpecDetails {
-	return d
-}
-
-func only(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
-}
+type parserFunc func(c OpContext)
 
 type asmType int
 
@@ -372,730 +1022,778 @@ var checkByteImmArgs = []interface{}{}
 var immBytess = []interface{}{}
 var typeTxField = []interface{}{}
 
-func immediates(names ...string) OpSpecDetails {
-	m := map[string]bool{}
-	r := []string{}
+func opPragma(c OpContext) uint8 {
+	version := c.mustReadPragma("version")
+	c.emit(&PragmaExpr{Version: uint8(version)})
 
-	for _, name := range names {
-		if !m[name] {
-			m[name] = true
-			r = append(r, name)
-		}
-	}
-	return OpSpecDetails{
-		NamesMap: m,
-		Names:    r,
-		Groups:   map[string]*FieldGroup{},
-	}
+	return version
 }
 
-func field(name string, g *FieldGroup) OpSpecDetails {
-	return OpSpecDetails{
-		NamesMap: map[string]bool{name: true},
-		Names:    []string{name},
-		Groups:   map[string]*FieldGroup{name: g},
-	}
+func opAddr(c OpContext) {
+	value := c.mustReadAddr("address")
+	c.emit(&AddrExpr{Address: value})
 }
 
-func detBranch() OpSpecDetails {
-	return OpSpecDetails{
-		NamesMap: map[string]bool{"label": true},
-		Names:    []string{"label"},
-		Groups:   map[string]*FieldGroup{},
-	}
+func opByte(c OpContext) {
+	value := c.mustReadBytes("value")
+	c.emit(&ByteExpr{Value: value})
 }
 
-var typeBury = []interface{}{}
-
-func (d OpSpecDetails) costs(vs ...interface{}) OpSpecDetails {
-	return d
+func opInt(c OpContext) {
+	value := c.mustReadInt("value")
+	c.emit(&IntExpr{Value: value})
 }
 
-func (d OpSpecDetails) field(name string, g *FieldGroup) OpSpecDetails {
-	if !d.NamesMap[name] {
-		d.NamesMap[name] = true
-		d.Names = append(d.Names, name)
-	}
-
-	d.Groups[name] = g
-
-	return d
+func opMethod(c OpContext) {
+	value := c.mustReadSignature("signature")
+	c.emit(&MethodExpr{Signature: value})
 }
 
-func (d OpSpecDetails) typed(vs ...interface{}) OpSpecDetails {
-	return d
-}
-
-func (d OpSpecDetails) trust(vs ...interface{}) OpSpecDetails {
-	return d
-}
-
-func (d OpSpecDetails) costByLength(vs ...interface{}) OpSpecDetails {
-	return d
-}
-
-var typeLoad = []interface{}{}
-var typeStore = []interface{}{}
-
-var asmByteC = []interface{}{}
-var asmItxn = []interface{}{}
-var asmGitxn = []interface{}{}
-
-var asmPushBytes = []interface{}{}
-var immBytes = []interface{}{}
-var asmPushInt = []interface{}{}
-var immInt = []interface{}{}
-var asmPushBytess = []interface{}{}
-var asmPushInts = []interface{}{}
-
-func proto(vs ...interface{}) OpSpecProto {
-	return OpSpecProto{}
-}
-
-func opErr(c *parserContext) {
+func opErr(c OpContext) {
 	c.emit(Err)
 }
 
-func opSHA256(c *parserContext) {
+func opSHA256(c OpContext) {
+	c.minVersion(2)
 	c.emit(Sha256)
 }
 
-func opKeccak256(c *parserContext) {
+func opKeccak256(c OpContext) {
+	c.minVersion(2)
 	c.emit(Keccak256)
 }
 
-func opSHA512_256(c *parserContext) {
+func opSHA512_256(c OpContext) {
+	c.minVersion(2)
 	c.emit(Sha512256)
 }
-func opEd25519Verify(c *parserContext) {
+func opEd25519Verify(c OpContext) {
+	// TODO: 1 for sig, 5 for app - needs mode support
 	c.emit(ED25519Verify)
 }
 
-func opEcdsaVerify(c *parserContext) {
+func opEcdsaVerify(c OpContext) {
+	c.minVersion(5)
 	curve := c.mustReadEcdsaCurveIndex("curve index")
 	c.emit(&EcdsaVerifyExpr{Index: curve})
 }
-func opEcdsaPkDecompress(c *parserContext) {
+func opEcdsaPkDecompress(c OpContext) {
+	c.minVersion(5)
 	curve := c.mustReadEcdsaCurveIndex("curve index")
 	c.emit(&EcdsaPkDecompressExpr{Index: curve})
 }
 
-func opEcdsaPkRecover(c *parserContext) {
+func opEcdsaPkRecover(c OpContext) {
+	c.minVersion(5)
 	curve := c.mustReadEcdsaCurveIndex("curve index")
 	c.emit(&EcdsaPkRecoverExpr{Index: curve})
 }
 
-func opPlus(c *parserContext) {
+func opPlus(c OpContext) {
 	c.emit(PlusOp)
 }
-func opMinus(c *parserContext) {
+func opMinus(c OpContext) {
 	c.emit(MinusOp)
 }
-func opDiv(c *parserContext) {
+func opDiv(c OpContext) {
 	c.emit(Div)
 }
-func opMul(c *parserContext) {
+func opMul(c OpContext) {
 	c.emit(Mul)
 }
-func opLt(c *parserContext) {
+func opLt(c OpContext) {
 	c.emit(Lt)
 }
-func opGt(c *parserContext) {
+func opGt(c OpContext) {
 	c.emit(Gt)
 }
-func opLe(c *parserContext) {
+func opLe(c OpContext) {
 	c.emit(Le)
 }
-func opGe(c *parserContext) {
+func opGe(c OpContext) {
 	c.emit(Ge)
 }
-func opAnd(c *parserContext) {
+func opAnd(c OpContext) {
 	c.emit(And)
 }
-func opOr(c *parserContext) {
+func opOr(c OpContext) {
 	c.emit(Or)
 }
-func opEq(c *parserContext) {
+func opEq(c OpContext) {
 	c.emit(Eq)
 }
-func opNeq(c *parserContext) {
+func opNeq(c OpContext) {
 	c.emit(Neq)
 }
-func opNot(c *parserContext) {
+func opNot(c OpContext) {
 	c.emit(Not)
 }
-func opLen(c *parserContext) {
+func opLen(c OpContext) {
 	c.emit(Len)
 }
-func opItob(c *parserContext) {
+func opItob(c OpContext) {
 	c.emit(Itob)
 }
-func opBtoi(c *parserContext) {
+func opBtoi(c OpContext) {
 	c.emit(Btoi)
 }
-func opModulo(c *parserContext) {
+func opModulo(c OpContext) {
 	c.emit(Modulo)
 }
-func opBitOr(c *parserContext) {
+func opBitOr(c OpContext) {
 	c.emit(Bitr)
 }
-func opBitAnd(c *parserContext) {
+func opBitAnd(c OpContext) {
 	c.emit(BitAnd)
 }
-func opBitXor(c *parserContext) {
+func opBitXor(c OpContext) {
 	c.emit(BitXor)
 }
-func opBitNot(c *parserContext) {
+func opBitNot(c OpContext) {
 	c.emit(BitNot)
 }
-func opMulw(c *parserContext) {
+func opMulw(c OpContext) {
 	c.emit(Mulw)
 }
-func opAddw(c *parserContext) {
+func opAddw(c OpContext) {
+	c.minVersion(2)
 	c.emit(Addw)
 }
-func opDivModw(c *parserContext) {
+func opDivModw(c OpContext) {
+	c.minVersion(4)
 	c.emit(DivModw)
 }
-func opIntConstBlock(c *parserContext) {
-	var values []uint64
-
-	for c.args.Scan() {
-		value := c.parseUint64("value")
-		values = append(values, value)
-	}
+func opIntConstBlock(c OpContext) {
+	values := c.readUint64Array("value")
 
 	c.emit(&IntcBlockExpr{Values: values})
 }
 
-func opIntConstLoad(c *parserContext) {
+func opIntConstLoad(c OpContext) {
 	value := c.mustReadUint8("value")
 	c.emit(&IntcExpr{Index: uint8(value)})
 }
 
-func opIntConst0(c *parserContext) {
+func opIntConst0(c OpContext) {
 	c.emit(Intc0)
 }
-func opIntConst1(c *parserContext) {
+func opIntConst1(c OpContext) {
 	c.emit(Intc1)
 }
-func opIntConst2(c *parserContext) {
+func opIntConst2(c OpContext) {
 	c.emit(Intc2)
 }
-func opIntConst3(c *parserContext) {
+func opIntConst3(c OpContext) {
 	c.emit(Intc3)
 }
-func opByteConstBlock(c *parserContext) {
-	var values [][]byte
-
-	for c.args.Scan() {
-		b := c.parseBytes("value")
-		values = append(values, b)
-	}
+func opByteConstBlock(c OpContext) {
+	values := c.readBytesArray("bytes")
 
 	c.emit(&BytecBlockExpr{Values: values})
 }
 
-func opByteConstLoad(c *parserContext) {
+func opByteConstLoad(c OpContext) {
 	value := c.mustReadUint8("index")
 	c.emit(&BytecExpr{Index: uint8(value)})
 }
 
-func opByteConst0(c *parserContext) {
+func opByteConst0(c OpContext) {
 	c.emit(Bytec0)
 }
-func opByteConst1(c *parserContext) {
+func opByteConst1(c OpContext) {
 	c.emit(Bytec1)
 }
-func opByteConst2(c *parserContext) {
+func opByteConst2(c OpContext) {
 	c.emit(Bytec2)
 }
-func opByteConst3(c *parserContext) {
+func opByteConst3(c OpContext) {
 	c.emit(Bytec3)
 }
-func opArg(c *parserContext) {
+func opArg(c OpContext) {
 	value := c.mustReadUint8("index")
 	c.emit(&ArgExpr{Index: uint8(value)})
 }
-func opArg0(c *parserContext) {
+func opArg0(c OpContext) {
 	c.emit(Arg0)
 }
-func opArg1(c *parserContext) {
+func opArg1(c OpContext) {
 	c.emit(Arg1)
 }
-func opArg2(c *parserContext) {
+func opArg2(c OpContext) {
 	c.emit(Arg2)
 }
-func opArg3(c *parserContext) {
+func opArg3(c OpContext) {
 	c.emit(Arg3)
 }
-func opTxn(c *parserContext) {
+func opTxn(c OpContext) {
 	f := c.mustReadTxnField("f")
-	c.emit(&TxnExpr{Field: f})
-}
-func opGlobal(c *parserContext) {
-	c.mustReadArg("field")
 
-	field, err := readGlobalField(c.args.Text())
-	if err != nil {
-		c.failCurr(errors.Wrapf(err, "failed to parse global field: %s", c.args.Text()))
-		return
+	i, ok := c.maybeReadUint8("i")
+	if ok {
+		c.emit(&TxnaExpr{Field: f, Index: i})
+	} else {
+		c.emit(&TxnExpr{Field: f})
 	}
-
-	// TODO report semantics
+}
+func opGlobal(c OpContext) {
+	field := c.mustReadGlobalField("field")
 
 	c.emit(&GlobalExpr{Index: field})
 }
 
-func opGtxn(c *parserContext) {
-	t := c.mustReadInt("t")
+func opGtxn(c OpContext) {
+	t := c.mustReadUint8("t")
 	f := c.mustReadTxnField("f")
-	c.emit(&GtxnExpr{Index: uint8(t), Field: f})
+	i, ok := c.maybeReadUint8("i")
+	if ok {
+		c.emit(&GtxnaExpr{Group: uint8(t), Field: f, Index: i})
+	} else {
+		c.emit(&GtxnExpr{Group: uint8(t), Field: f})
+	}
 }
 
-func opLoad(c *parserContext) {
+func opLoad(c OpContext) {
 	value := c.mustReadUint8("i")
 	c.emit(&LoadExpr{Index: uint8(value)})
 }
-func opStore(c *parserContext) {
+func opStore(c OpContext) {
 	value := c.mustReadUint8("i")
 	c.emit(&StoreExpr{Index: uint8(value)})
 }
 
-func opTxna(c *parserContext) {
+func opTxna(c OpContext) {
+	c.minVersion(2)
+
 	f := c.mustReadTxnField("f")
 	i := c.mustReadUint8("i")
+
 	c.emit(&TxnaExpr{Field: f, Index: i})
 }
 
-func opGtxna(c *parserContext) {
+func opGtxna(c OpContext) {
+	c.minVersion(2)
+
 	t := c.mustReadUint8("t")
 	f := c.mustReadTxnField("f")
 	i := c.mustReadUint8("i")
+
 	c.emit(&GtxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
 }
-func opGtxns(c *parserContext) {
+func opGtxns(c OpContext) {
+	c.minVersion(3)
+
 	f := c.mustReadTxnField("f")
-	c.emit(&GtxnsExpr{Field: f})
+	i, ok := c.maybeReadUint8("i")
+
+	if ok {
+		c.emit(&GtxnsaExpr{Field: f, Index: i})
+	} else {
+		c.emit(&GtxnsExpr{Field: f})
+	}
 }
 
-func opGtxnsa(c *parserContext) {
+func opGtxnsa(c OpContext) {
+	c.minVersion(3)
+
 	f := c.mustReadTxnField("f")
 	i := c.mustReadUint8("i")
+
 	c.emit(&GtxnsaExpr{Field: f, Index: uint8(i)})
 }
-func opGload(c *parserContext) {
+
+func opGload(c OpContext) {
+	c.minVersion(4)
+
 	t := c.mustReadUint8("t")
 	value := c.mustReadUint8("i")
 
 	c.emit(&GloadExpr{Group: uint8(t), Index: uint8(value)})
 }
 
-func opGloads(c *parserContext) {
+func opGloads(c OpContext) {
+	c.minVersion(4)
+
 	value := c.mustReadUint8("i")
 	c.emit(&GloadsExpr{Index: uint8(value)})
 }
 
-func opGaid(c *parserContext) {
+func opGaid(c OpContext) {
+	c.minVersion(4)
+
 	t := c.mustReadUint8("t")
 	c.emit(&GaidExpr{Group: uint8(t)})
 }
-func opGaids(c *parserContext) {
+func opGaids(c OpContext) {
+	c.minVersion(4)
+
 	c.emit(Gaids)
 }
-func opLoads(c *parserContext) {
+func opLoads(c OpContext) {
+	c.minVersion(5)
+
 	c.emit(Loads)
 }
-func opStores(c *parserContext) {
+func opStores(c OpContext) {
+	c.minVersion(5)
 	c.emit(Stores)
 }
-func opBnz(c *parserContext) {
-	name := c.mustRead("label name")
-	c.refs = append(c.refs, c.args.Curr())
+func opBnz(c OpContext) {
+	name := c.mustReadLabel("label")
 	c.emit(&BnzExpr{Label: &LabelExpr{Name: name}})
 }
-func opBz(c *parserContext) {
-	name := c.mustRead("label name")
-	c.refs = append(c.refs, c.args.Curr())
+func opBz(c OpContext) {
+	c.minVersion(2)
+	name := c.mustReadLabel("label")
 	c.emit(&BzExpr{Label: &LabelExpr{Name: name}})
 }
-func opB(c *parserContext) {
-	name := c.mustRead("label name")
-	c.refs = append(c.refs, c.args.Curr())
+func opB(c OpContext) {
+	c.minVersion(2)
+	name := c.mustReadLabel("label")
 	c.emit(&BExpr{Label: &LabelExpr{Name: name}})
 }
-func opReturn(c *parserContext) {
+func opReturn(c OpContext) {
+	c.minVersion(2)
 	c.emit(Return)
 }
-func opAssert(c *parserContext) {
+func opAssert(c OpContext) {
+	c.minVersion(3)
 	c.emit(Assert)
 }
-func opBury(c *parserContext) {
+
+func opBury(c OpContext) {
+	c.minVersion(8)
+
 	n := c.mustReadUint8("n")
 	c.emit(&BuryExpr{Index: n})
 }
-func opPopN(c *parserContext) {
+
+func opPopN(c OpContext) {
+	c.minVersion(8)
+
 	n := c.mustReadUint8("n")
 	c.emit(&PopNExpr{Index: n})
 }
-func opDupN(c *parserContext) {
+func opDupN(c OpContext) {
+	c.minVersion(8)
+
 	n := c.mustReadUint8("n")
 	c.emit(&DupNExpr{Index: n})
 }
 
-func opPop(c *parserContext) {
+func opPop(c OpContext) {
 	c.emit(Pop)
 }
-func opDup(c *parserContext) {
+func opDup(c OpContext) {
 	c.emit(Dup)
 }
-func opDup2(c *parserContext) {
+func opDup2(c OpContext) {
+	c.minVersion(2)
 	c.emit(Dup2)
 }
-func opDig(c *parserContext) {
+func opDig(c OpContext) {
+	c.minVersion(3)
 	value := c.mustReadUint8("n")
 	c.emit(&DigExpr{Index: uint8(value)})
 }
-func opSwap(c *parserContext) {
+func opSwap(c OpContext) {
+	c.minVersion(3)
 	c.emit(Swap)
 }
-func opSelect(c *parserContext) {
+func opSelect(c OpContext) {
+	c.minVersion(3)
 	c.emit(Select)
 }
-func opCover(c *parserContext) {
+func opCover(c OpContext) {
+	c.minVersion(5)
 	value := c.mustReadUint8("n")
 	c.emit(&CoverExpr{Index: uint8(value)})
 }
-func opUncover(c *parserContext) {
+func opUncover(c OpContext) {
+	c.minVersion(5)
 	value := c.mustReadUint8("index")
 	c.emit(&UncoverExpr{Index: uint8(value)})
 }
-func opConcat(c *parserContext) {
+func opConcat(c OpContext) {
+	c.minVersion(2)
 	c.emit(Concat)
 }
-func opSubstring(c *parserContext) {
+func opSubstring(c OpContext) {
+	c.minVersion(2)
 	start := c.mustReadUint8("s")
 	end := c.mustReadUint8("e")
 	c.emit(&SubstringExpr{Start: uint8(start), End: uint8(end)})
 }
-func opSubstring3(c *parserContext) {
+func opSubstring3(c OpContext) {
+	c.minVersion(2)
 	c.emit(Substring3)
 }
-func opGetBit(c *parserContext) {
+func opGetBit(c OpContext) {
+	c.minVersion(3)
 	c.emit(GetBit)
 }
-func opSetBit(c *parserContext) {
+func opSetBit(c OpContext) {
+	c.minVersion(3)
 	c.emit(SetBit)
 }
-func opGetByte(c *parserContext) {
+func opGetByte(c OpContext) {
+	c.minVersion(3)
 	c.emit(GetByte)
 }
-func opSetByte(c *parserContext) {
+func opSetByte(c OpContext) {
+	c.minVersion(3)
 	c.emit(SetByte)
 }
-func opExtract(c *parserContext) {
-	start := c.mustReadUint8("s")
-	length := c.mustReadUint8("l")
 
-	c.emit(&ExtractExpr{Start: uint8(start), Length: uint8(length)})
+func opReplace(c OpContext) {
+	c.minVersion(7)
+	s, ok := c.maybeReadUint8("s")
+	if !ok {
+		c.emit(&Replace3Expr{})
+	} else {
+		c.emit(&Replace2Expr{Start: s})
+	}
 }
 
-func opExtract3(c *parserContext) {
+func opExtract(c OpContext) {
+	c.minVersion(5)
+	s, ok := c.maybeReadUint8("s")
+	if !ok {
+		c.emit(&Extract3Expr{})
+	} else {
+		l := c.mustReadUint8("l")
+		c.emit(&ExtractExpr{Start: uint8(s), Length: uint8(l)})
+	}
+}
+
+func opExtract3(c OpContext) {
+	c.minVersion(5)
 	c.emit(Extract3)
 }
-func opExtract16Bits(c *parserContext) {
+func opExtract16Bits(c OpContext) {
+	c.minVersion(5)
 	c.emit(Extract16Bits)
 }
-func opExtract32Bits(c *parserContext) {
+func opExtract32Bits(c OpContext) {
+	c.minVersion(5)
 	c.emit(Extract32Bits)
 }
-func opExtract64Bits(c *parserContext) {
+func opExtract64Bits(c OpContext) {
+	c.minVersion(5)
 	c.emit(Extract64Bits)
 }
-func opReplace2(c *parserContext) {
+func opReplace2(c OpContext) {
+	c.minVersion(7)
 	value := c.mustReadUint8("s")
-	c.emit(&Replace2Expr{Index: uint8(value)})
+	c.emit(&Replace2Expr{Start: uint8(value)})
 }
-func opReplace3(c *parserContext) {
+func opReplace3(c OpContext) {
+	c.minVersion(7)
 	c.emit(Replace3)
 }
-func opBase64Decode(c *parserContext) {
+func opBase64Decode(c OpContext) {
+	c.minVersion(7)
 	value := c.mustReadUint8("e")
 	c.emit(&Base64DecodeExpr{Index: uint8(value)})
 }
-func opJSONRef(c *parserContext) {
-	value := c.mustReadUint8("r")
+func opJSONRef(c OpContext) {
+	c.minVersion(7)
+	value := c.mustReadJsonRef("r")
 	c.emit(&JsonRefExpr{Index: uint8(value)})
 }
-func opBalance(c *parserContext) {
+func opBalance(c OpContext) {
+	c.minVersion(2)
 	c.emit(Balance)
 }
-func opAppOptedIn(c *parserContext) {
+func opAppOptedIn(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppOptedIn)
 }
-func opAppLocalGet(c *parserContext) {
+func opAppLocalGet(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppLocalGet)
 }
-func opAppLocalGetEx(c *parserContext) {
+func opAppLocalGetEx(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppLocalGetEx)
 }
-func opAppGlobalGet(c *parserContext) {
+func opAppGlobalGet(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppGlobalGet)
 }
-func opAppGlobalGetEx(c *parserContext) {
+func opAppGlobalGetEx(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppGlobalGetEx)
 }
-func opAppLocalPut(c *parserContext) {
+func opAppLocalPut(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppLocalPut)
 }
-func opAppGlobalPut(c *parserContext) {
+func opAppGlobalPut(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppGlobalPut)
 }
-func opAppLocalDel(c *parserContext) {
+func opAppLocalDel(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppLocalDel)
 }
-func opAppGlobalDel(c *parserContext) {
+func opAppGlobalDel(c OpContext) {
+	c.minVersion(2)
 	c.emit(AppGlobalDel)
 }
-func opAssetHoldingGet(c *parserContext) {
-	c.mustReadArg("f")
-
-	f, err := readAssetHoldingField(c.args.Text())
-	if err != nil {
-		c.failCurr(errors.Wrapf(err, "failed to read asset_holding_get f: %s", c.args.Text()))
-		return
-	}
-
+func opAssetHoldingGet(c OpContext) {
+	c.minVersion(2)
+	f := c.mustReadAssetHoldingField("f")
 	// TODO report semantics
 
 	c.emit(&AssetHoldingGetExpr{Field: f})
 }
-func opAssetParamsGet(c *parserContext) {
-	c.mustReadArg("f")
-
-	field, err := readAssetField(c.args.Text())
-	if err != nil {
-		c.failCurr(errors.Wrapf(err, "failed to parse asset_params_get f: %s", c.args.Text()))
-		return
-	}
-
-	// TODO report semantics
-
+func opAssetParamsGet(c OpContext) {
+	c.minVersion(2)
+	field := c.mustReadAssetParamsField("f")
 	c.emit(&AssetParamsGetExpr{Field: field})
 }
-func opAppParamsGet(c *parserContext) {
-	c.mustReadArg("f")
-
-	f, err := readAppField(c.args.Text())
-	if err != nil {
-		c.failCurr(errors.Wrapf(err, "failed to parse app_params_get f: %s", c.args.Text()))
-		return
-	}
-
-	// TODO report semantics
-
+func opAppParamsGet(c OpContext) {
+	c.minVersion(5)
+	f := c.mustReadAppParamsField("f")
 	c.emit(&AppParamsGetExpr{Field: f})
 }
-func opAcctParamsGet(c *parserContext) {
-	c.mustReadArg("f")
-
-	f, err := readAcctParams(c.args.Text())
-	if err != nil {
-		c.failCurr(errors.Wrapf(err, "failed to parse acct_params_get f: %s", c.args.Text()))
-		return
-	}
-
-	// TODO report semantics
-
+func opAcctParamsGet(c OpContext) {
+	c.minVersion(6)
+	f := c.mustReadAcctParamsField("f")
 	c.emit(&AcctParamsGetExpr{Field: f})
 }
-func opMinBalance(c *parserContext) {
+func opMinBalance(c OpContext) {
+	c.minVersion(3)
 	c.emit(MinBalanceOp)
 }
-func opPushBytes(c *parserContext) {
+func opPushBytes(c OpContext) {
+	c.minVersion(3)
 	value := c.mustReadBytes("value")
 	c.emit(&PushBytesExpr{Value: value})
 }
-func opPushInt(c *parserContext) {
+func opPushInt(c OpContext) {
+	c.minVersion(3)
 	value := c.mustReadInt("value")
 	c.emit(&PushIntExpr{Value: value})
 }
-func opPushBytess(c *parserContext) {
-	bs := [][]byte{}
-	for c.args.Scan() {
-		b := c.parseBytes("value")
-		bs = append(bs, b)
-	}
+func opPushBytess(c OpContext) {
+	c.minVersion(8)
+	bss := c.readBytesArray("bytes")
 	c.emit(&PushBytessExpr{
-		Bytess: bs,
+		Bytess: bss,
 	})
 }
-func opEd25519VerifyBare(c *parserContext) {
+func opPushInts(c OpContext) {
+	c.minVersion(8)
+	iss := c.readUint64Array("bytes")
+	c.emit(&PushIntsExpr{
+		Ints: iss,
+	})
+}
+func opEd25519VerifyBare(c OpContext) {
+	c.minVersion(7)
 	c.emit(Ed25519VerifyBare)
 }
-func opPushInts(c *parserContext) {
-	is := []uint64{}
-	for c.args.Scan() {
-		i := c.parseUint64("value")
-		is = append(is, i)
-	}
-	c.emit(&PushIntsExpr{
-		Ints: is,
-	})
-}
-func opCallSub(c *parserContext) {
-	name := c.mustRead("label name")
-	c.refs = append(c.refs, c.args.Curr())
+func opCallSub(c OpContext) {
+	c.minVersion(4)
+	name := c.mustReadLabel("label")
 	c.emit(&CallSubExpr{Label: &LabelExpr{Name: name}})
 }
-func opRetSub(c *parserContext) {
+func opRetSub(c OpContext) {
+	c.minVersion(4)
 	c.emit(RetSub)
 }
-func opProto(c *parserContext) {
+func opProto(c OpContext) {
+	c.minVersion(8)
 	a := c.mustReadUint8("a")
 	r := c.mustReadUint8("r")
 
 	c.emit(&ProtoExpr{Args: uint8(a), Results: uint8(r)})
 }
-func opFrameDig(c *parserContext) {
+func opFrameDig(c OpContext) {
+	c.minVersion(8)
 	value := c.mustReadInt8("index")
 	c.emit(&FrameDigExpr{Index: value})
 }
-func opFrameBury(c *parserContext) {
+func opFrameBury(c OpContext) {
+	c.minVersion(8)
 	value := c.mustReadInt8("index")
 	c.emit(&FrameBuryExpr{Index: value})
 }
-func opSwitch(c *parserContext) {
+func opSwitch(c OpContext) {
+	c.minVersion(8)
+	names := c.readLabelsArray("label")
+
 	var labels []*LabelExpr
-	for c.args.Scan() {
-		c.refs = append(c.refs, c.args.Curr())
-		labels = append(labels, &LabelExpr{Name: c.args.Text()})
+	for _, name := range names {
+		labels = append(labels, &LabelExpr{Name: name})
 	}
+
 	c.emit(&SwitchExpr{Targets: labels})
 }
-func opMatch(c *parserContext) {
+func opMatch(c OpContext) {
+	c.minVersion(8)
+	names := c.readLabelsArray("label")
+
 	var labels []*LabelExpr
-	for c.args.Scan() {
-		c.refs = append(c.refs, c.args.Curr())
-		labels = append(labels, &LabelExpr{Name: c.args.Text()})
+	for _, name := range names {
+		labels = append(labels, &LabelExpr{Name: name})
 	}
+
 	c.emit(&MatchExpr{Targets: labels})
 }
-func opShiftLeft(c *parserContext) {
+func opShiftLeft(c OpContext) {
+	c.minVersion(4)
 	c.emit(ShiftLeft)
 }
-func opShiftRight(c *parserContext) {
+func opShiftRight(c OpContext) {
+	c.minVersion(4)
 	c.emit(ShiftRight)
 }
-func opSqrt(c *parserContext) {
+func opSqrt(c OpContext) {
+	c.minVersion(4)
 	c.emit(Sqrt)
 }
-func opBitLen(c *parserContext) {
+func opBitLen(c OpContext) {
+	c.minVersion(4)
 	c.emit(BitLen)
 }
-func opExp(c *parserContext) {
+func opExp(c OpContext) {
+	c.minVersion(4)
 	c.emit(Exp)
 }
-func opExpw(c *parserContext) {
+func opExpw(c OpContext) {
+	c.minVersion(4)
 	c.emit(Expw)
 }
-func opBytesSqrt(c *parserContext) {
+func opBytesSqrt(c OpContext) {
+	c.minVersion(6)
 	c.emit(Bsqrt)
 }
-func opDivw(c *parserContext) {
+func opDivw(c OpContext) {
+	c.minVersion(6)
 	c.emit(Divw)
 }
-func opSHA3_256(c *parserContext) {
+func opSHA3_256(c OpContext) {
+	c.minVersion(7)
 	c.emit(Sha3256)
 }
-func opBn256Add(c *parserContext) {
+func opBn256Add(c OpContext) {
+	c.minVersion(9)
 	c.emit(Bn256Add)
 }
-func opBn256ScalarMul(c *parserContext) {
+func opBn256ScalarMul(c OpContext) {
+	c.minVersion(9)
 	c.emit(Bn256ScalarMul)
 }
-func opBn256Pairing(c *parserContext) {
+func opBn256Pairing(c OpContext) {
+	c.minVersion(9)
 	c.emit(Bn256Pairing)
 }
-func opBytesPlus(c *parserContext) {
+func opBytesPlus(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesPlus)
 }
-func opBytesMinus(c *parserContext) {
+func opBytesMinus(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesMinus)
 }
-func opBytesDiv(c *parserContext) {
+func opBytesDiv(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesDiv)
 }
-func opBytesMul(c *parserContext) {
+func opBytesMul(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesMul)
 }
-func opBytesLt(c *parserContext) {
+func opBytesLt(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesLt)
 }
-func opBytesGt(c *parserContext) {
+func opBytesGt(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesGt)
 }
-func opBytesLe(c *parserContext) {
+func opBytesLe(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesLe)
 }
-func opBytesGe(c *parserContext) {
+func opBytesGe(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesGe)
 }
-func opBytesEq(c *parserContext) {
+func opBytesEq(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesEq)
 }
-func opBytesNeq(c *parserContext) {
+func opBytesNeq(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesNeq)
 }
-func opBytesModulo(c *parserContext) {
+func opBytesModulo(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesModulo)
 }
-func opBytesBitOr(c *parserContext) {
+func opBytesBitOr(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesBitOr)
 }
-func opBytesBitAnd(c *parserContext) {
+func opBytesBitAnd(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesBitAnd)
 }
-func opBytesBitXor(c *parserContext) {
+func opBytesBitXor(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesBitXor)
 }
-func opBytesBitNot(c *parserContext) {
+func opBytesBitNot(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesBitNot)
 }
-func opBytesZero(c *parserContext) {
+func opBytesZero(c OpContext) {
+	c.minVersion(4)
 	c.emit(BytesZero)
 }
-func opLog(c *parserContext) {
+func opLog(c OpContext) {
+	c.minVersion(5)
 	c.emit(Log)
 }
-func opTxBegin(c *parserContext) {
+func opTxBegin(c OpContext) {
+	c.minVersion(5)
 	c.emit(ItxnBegin)
 }
-func opItxnField(c *parserContext) {
+func opItxnField(c OpContext) {
+	c.minVersion(5)
 	f := c.mustReadTxnField("f")
 	c.emit(&ItxnFieldExpr{Field: f})
 }
-func opItxnSubmit(c *parserContext) {
+func opItxnSubmit(c OpContext) {
+	c.minVersion(5)
 	c.emit(ItxnSubmit)
 }
-func opItxn(c *parserContext) {
+func opItxn(c OpContext) {
+	c.minVersion(5)
 	f := c.mustReadTxnField("f")
 	c.emit(&ItxnExpr{Field: f})
 }
-func opItxna(c *parserContext) {
+func opItxna(c OpContext) {
+	c.minVersion(5)
 	f := c.mustReadUint8("f")
 	i := c.mustReadUint8("i")
 	c.emit(&ItxnaExpr{Field: f, Index: i})
 }
-func opItxnNext(c *parserContext) {
+func opItxnNext(c OpContext) {
+	c.minVersion(6)
 	c.emit(ItxnNext)
 }
-func opGitxn(c *parserContext) {
+func opGitxn(c OpContext) {
+	c.minVersion(6)
 	t := c.mustReadUint8("t")
 	f := c.mustReadTxnField("f")
 	c.emit(&GitxnExpr{Index: uint8(t), Field: f})
 }
-func opGitxna(c *parserContext) {
+func opGitxna(c OpContext) {
+	c.minVersion(6)
 	t := c.mustReadInt("t")
 	f := c.mustReadTxnField("f")
 	i := c.mustReadUint8("i")
@@ -1103,114 +1801,79 @@ func opGitxna(c *parserContext) {
 	c.emit(&GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
 
 }
-func opBoxCreate(c *parserContext) {
+func opBoxCreate(c OpContext) {
+	c.minVersion(8)
 	c.emit(BoxCreate)
 }
-func opBoxExtract(c *parserContext) {
+func opBoxExtract(c OpContext) {
+	c.minVersion(8)
 	c.emit(BoxExtract)
 }
-func opBoxReplace(c *parserContext) {
+func opBoxReplace(c OpContext) {
+	c.minVersion(8)
 	c.emit(BoxReplace)
 }
-func opBoxDel(c *parserContext) {
+func opBoxDel(c OpContext) {
+	c.minVersion(8)
 	c.emit(BoxDel)
 }
-func opBoxLen(c *parserContext) {
+func opBoxLen(c OpContext) {
+	c.minVersion(8)
 	c.emit(BoxLen)
 }
-func opBoxGet(c *parserContext) {
+func opBoxGet(c OpContext) {
+	c.minVersion(8)
 	c.emit(BoxGet)
 }
-func opBoxPut(c *parserContext) {
+func opBoxPut(c OpContext) {
+	c.minVersion(8)
 	c.emit(BoxPut)
 }
-func opTxnas(c *parserContext) {
+func opTxnas(c OpContext) {
+	c.minVersion(5)
 	f := c.mustReadTxnField("f")
 	c.emit(&TxnasExpr{Field: f})
 }
-func opGtxnas(c *parserContext) {
+func opGtxnas(c OpContext) {
+	c.minVersion(5)
 	t := c.mustReadUint8("t")
 	f := c.mustReadUint8("f")
 	c.emit(&GtxnasExpr{Index: t, Field: f})
 }
-func opGtxnsas(c *parserContext) {
+func opGtxnsas(c OpContext) {
+	c.minVersion(5)
 	f := c.mustReadTxnField("f")
 	c.emit(&GtxnsasExpr{Field: f})
 }
-func opArgs(c *parserContext) {
+func opArgs(c OpContext) {
+	c.minVersion(5)
 	c.emit(Args)
 }
-func opGloadss(c *parserContext) {
+func opGloadss(c OpContext) {
+	c.minVersion(6)
 	c.emit(Gloadss)
 }
-func opItxnas(c *parserContext) {
+func opItxnas(c OpContext) {
+	c.minVersion(6)
 	f := c.mustReadTxnField("f")
 	c.emit(&ItxnasExpr{Field: f})
 }
-func opGitxnas(c *parserContext) {
+func opGitxnas(c OpContext) {
+	c.minVersion(6)
 	t := c.mustReadUint8("t")
 	f := c.mustReadTxnField("f")
 	c.emit(&GitxnasExpr{Index: t, Field: f})
 }
-func opVrfVerify(c *parserContext) {
-	c.mustReadArg("f")
-	f, err := readVrfVerifyField(c.args.Text())
-	if err != nil {
-		c.failCurr(errors.Wrapf(err, "failed to parse vrf_verify f: %s", c.args.Text()))
-		return
-	}
-
-	// TODO report semantics
-
+func opVrfVerify(c OpContext) {
+	c.minVersion(7)
+	f := c.mustReadVrfVerifyField("f")
 	c.emit(&VrfVerifyExpr{Field: f})
 }
-func opBlock(c *parserContext) {
-	c.mustReadArg("f")
-
-	f, err := readBlockField(c.args.Text())
-	if err != nil {
-		c.failCurr(errors.Wrapf(err, "failed to parse block f: %s", c.args.Text()))
-		return
-	}
-
-	// TODO report semantics
-
+func opBlock(c OpContext) {
+	c.minVersion(7)
+	f := c.mustReadBlockField("f")
 	c.emit(&BlockExpr{Field: f})
 }
-
-var ecdsaVerifyCosts = []interface{}{}
-var ecdsaDecompressCosts = []interface{}{}
-var typeEquals = []interface{}{}
-var typePopN = []interface{}{}
-var typeDupN = []interface{}{}
-var typeDup = []interface{}{}
-var typeDupTwo = []interface{}{}
-var typeDig = []interface{}{}
-var typeSwap = []interface{}{}
-var typeSelect = []interface{}{}
-var typeCover = []interface{}{}
-var typeUncover = []interface{}{}
-var asmSubstring = []interface{}{}
-var typeSetBit = []interface{}{}
-var typeProto = []interface{}{}
-var immInt8 = []interface{}{}
-var typePushBytess = []interface{}{}
-var typePushInts = []interface{}{}
-var typeFrameDig = []interface{}{}
-var typeFrameBury = []interface{}{}
-var asmItxnField = []interface{}{}
-
-func constants(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
-}
-
-func immKinded(vs ...interface{}) OpSpecDetails {
-	return OpSpecDetails{}
-}
-
-var asmIntCBlock = []interface{}{}
-var checkIntImmArgs = []interface{}{}
-var immInts = []interface{}{}
 
 type ProcessResult struct {
 	Version     uint8
@@ -1332,66 +1995,26 @@ func Process(source string) *ProcessResult {
 			case "":
 				c.emit(Empty)
 			case "#pragma":
-				c.mcrs = append(c.mcrs, c.args.Curr())
-				name := c.mustRead("name")
-				switch name {
-				case "version":
-					c.mcrs = append(c.mcrs, c.args.Curr())
-					v := c.mustReadUint8("version value")
-					if v < 1 {
-						c.failCurr(errors.New("version must be at least 1"))
-					}
-					version = v
-					c.mcrs = append(c.mcrs, c.args.Curr())
-					c.emit(&PragmaExpr{Version: uint8(version)})
-				default:
-					c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
-					return
-				}
-			case "byte":
-				ops = append(ops, c.args.Curr())
-				value := c.mustReadBytes("value")
-				c.emit(&ByteExpr{Value: value})
-			case "int":
-				ops = append(ops, c.args.Curr())
-				value := c.mustReadInt("value")
-				c.emit(&IntExpr{Value: value})
-			case "method":
-				ops = append(ops, c.args.Curr())
-				value := c.mustRead("signature")
-
-				b := 0
-				e := len(value) - 1
-				if value[b] != '"' || value[e] != '"' {
-					c.failCurr(errors.New("missing quotes"))
-				}
-				// TODO: validate method sig
-				c.strs = append(c.strs, c.args.Curr())
-				c.emit(&MethodExpr{Signature: value[b+1 : e-1]})
-			case "addr":
-				ops = append(ops, c.args.Curr())
-				value := c.mustRead("address")
-				_, err := types.DecodeAddress(value)
-				if err != nil {
-					c.failCurr(err)
-				}
-				c.strs = append(c.strs, c.args.Curr())
-				c.emit(&AddrExpr{Address: value})
+				version = opPragma(c)
 			default:
-				info, ok := OpInfoByName[name]
+				info, ok := OpDocs.GetDoc(OpDocContext{
+					Name:    name,
+					Version: version,
+				})
 				if ok {
 					curr := c.args.Curr()
 					ops = append(ops, curr)
-					if info.Spec.Version > version {
+					if info.Version > version {
 						c.diag = append(c.diag, lintError{
-							error: errors.Errorf("opcode requires version >= %d (current: %d)", info.Spec.Version, version),
+							error: errors.Errorf("opcode requires version >= %d (current: %d)", info.Version, version),
 							l:     curr.l,
 							b:     curr.b,
 							e:     curr.e,
 							s:     DiagErr,
 						})
 					}
-					info.Spec.Parse(c)
+
+					info.Parse(c)
 				} else {
 					c.failCurr(errors.Errorf("unexpected opcode: %s", c.args.Text()))
 				}

@@ -138,7 +138,7 @@ func readAcctParams(s string) (AcctParamsField, error) {
 	return AcctParamsField(value), nil
 }
 
-func readAppField(s string) (AppParamsField, error) {
+func readAppParamsField(s string) (AppParamsField, error) {
 	spec, ok := appParamsFieldSpecByName[s]
 	if ok {
 		return spec.field, nil
@@ -152,7 +152,7 @@ func readAppField(s string) (AppParamsField, error) {
 	return AppParamsField(value), nil
 }
 
-func readAssetField(s string) (AssetParamsField, error) {
+func readAssetParamsField(s string) (AssetParamsField, error) {
 	spec, ok := assetParamsFieldSpecByName[s]
 	if ok {
 		return spec.field, nil
@@ -180,18 +180,32 @@ func readGlobalField(s string) (GlobalField, error) {
 	return GlobalField(value), nil
 }
 
-func readTxnField(s string) (TxnField, error) {
-	spec, ok := txnFieldSpecByName[s]
+func readJsonRefField(s string) (JSONRefType, bool, error) {
+	spec, ok := jsonRefSpecByName[s]
 	if ok {
-		return spec.field, nil
+		return spec.field, true, nil
 	}
 
 	value, err := readUint8(s)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse txn field")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	return TxnField(value), nil
+	return JSONRefType(value), false, nil
+}
+
+func readTxnField(s string) (TxnField, bool, error) {
+	spec, ok := txnFieldSpecByName[s]
+	if ok {
+		return spec.field, true, nil
+	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return TxnField(value), false, nil
 }
 
 func readInt(a *arguments) (uint64, error) {

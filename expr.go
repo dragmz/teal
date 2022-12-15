@@ -614,12 +614,12 @@ func (e *TxnaExpr) String() string {
 }
 
 type GtxnExpr struct {
-	Index uint8
+	Group uint8
 	Field TxnField
 }
 
 func (e *GtxnExpr) String() string {
-	return fmt.Sprintf("gtxn %d %s", e.Index, e.Field)
+	return fmt.Sprintf("gtxn %d %s", e.Group, e.Field)
 }
 
 // gtxna t f i TODO
@@ -1101,11 +1101,11 @@ func (e *Extract64BitsExpr) String() string {
 var Extract64Bits = &Extract64BitsExpr{}
 
 type Replace2Expr struct {
-	Index uint8
+	Start uint8
 }
 
 func (e *Replace2Expr) String() string {
-	return fmt.Sprintf("repace2 %d", e.Index)
+	return fmt.Sprintf("repace2 %d", e.Start)
 }
 
 type Replace3Expr struct{}
