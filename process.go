@@ -35,8 +35,48 @@ const (
 	opArgTypeSignature
 	opArgTypeAddr
 	opArgTypePragmaName
-	opArgTypePragmaVersion
 )
+
+func (t NewOpArgType) String() string {
+	switch t {
+	default:
+		return "(none)"
+	case opArgTypeUint64:
+		return "uint64"
+	case opArgTypeUint8:
+		return "uint8"
+	case opArgTypeInt8:
+		return "int8"
+	case opArgTypeBytes:
+		return "bytes"
+	case opArgTypeTxnField:
+		return "transaction field index"
+	case opArgTypeJSONRefField:
+		return "json_Ref"
+	case opArgTypeEcdsaCurve:
+		return "ECDSA Curve"
+	case opArgTypeGlobalField:
+		return "global field index"
+	case opArgTypeLabel:
+		return "label name"
+	case opArgTypeAssetHoldingField:
+		return "asset holding field index"
+	case opArgTypeAssetParamsField:
+		return "asset params field index"
+	case opArgTypeAppParamsField:
+		return "app params field index"
+	case opArgTypeAcctParamsField:
+		return "account params field index"
+	case opArgTypeVrfStandard:
+		return "parameters index"
+	case opArgTypeSignature:
+		return "signature"
+	case opArgTypeAddr:
+		return "address"
+	case opArgTypePragmaName:
+		return "pragma name"
+	}
+}
 
 type opItemArg struct {
 	Name     string
@@ -293,8 +333,19 @@ type OpContext interface {
 }
 
 type docContext struct {
-	args    []opItemArg
-	version uint8
+	args     []opItemArg
+	version  uint8
+	optional bool
+}
+
+func (c *docContext) arg(a opItemArg) {
+	if c.optional {
+		a.Optional = true
+	} else if a.Optional {
+		c.optional = true
+	}
+
+	c.args = append(c.args, a)
 }
 
 func (c *docContext) emit(op Op) {
@@ -306,21 +357,21 @@ func (c *docContext) minVersion(v uint8) {
 }
 
 func (c *docContext) mustReadPragma(name string) (v uint8) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypePragmaName,
 	})
 
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
-		Type: opArgTypePragmaVersion,
+		Type: opArgTypeUint8,
 	})
 
 	return
 }
 
 func (c *docContext) mustReadAddr(name string) (v string) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeAddr,
 	})
@@ -329,7 +380,7 @@ func (c *docContext) mustReadAddr(name string) (v string) {
 }
 
 func (c *docContext) mustReadSignature(name string) (v string) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeSignature,
 	})
@@ -338,7 +389,7 @@ func (c *docContext) mustReadSignature(name string) (v string) {
 }
 
 func (c *docContext) mustReadJsonRef(name string) (v JSONRefType) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeTxnField,
 	})
@@ -347,7 +398,7 @@ func (c *docContext) mustReadJsonRef(name string) (v JSONRefType) {
 }
 
 func (c *docContext) mustReadTxnField(name string) (f TxnField) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeTxnField,
 	})
@@ -356,7 +407,7 @@ func (c *docContext) mustReadTxnField(name string) (f TxnField) {
 }
 
 func (c *docContext) maybeReadUint8(name string) (v uint8, ok bool) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name:     name,
 		Type:     opArgTypeUint8,
 		Optional: true,
@@ -368,7 +419,7 @@ func (c *docContext) maybeReadUint8(name string) (v uint8, ok bool) {
 }
 
 func (c *docContext) mustReadEcdsaCurveIndex(name string) (v EcdsaCurve) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeTxnField,
 	})
@@ -376,7 +427,7 @@ func (c *docContext) mustReadEcdsaCurveIndex(name string) (v EcdsaCurve) {
 	return
 }
 func (c *docContext) readUint64Array(name string) (v []uint64) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name:  name,
 		Type:  opArgTypeUint64,
 		Array: true,
@@ -385,7 +436,7 @@ func (c *docContext) readUint64Array(name string) (v []uint64) {
 	return
 }
 func (c *docContext) mustReadUint8(name string) (v uint8) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeUint8,
 	})
@@ -394,7 +445,7 @@ func (c *docContext) mustReadUint8(name string) (v uint8) {
 }
 
 func (c *docContext) mustReadInt8(name string) (v int8) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeInt8,
 	})
@@ -402,7 +453,7 @@ func (c *docContext) mustReadInt8(name string) (v int8) {
 	return
 }
 func (c *docContext) readBytesArray(name string) (v [][]byte) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name:  name,
 		Type:  opArgTypeBytes,
 		Array: true,
@@ -411,7 +462,7 @@ func (c *docContext) readBytesArray(name string) (v [][]byte) {
 	return
 }
 func (c *docContext) mustReadGlobalField(name string) (v GlobalField) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeGlobalField,
 	})
@@ -419,7 +470,7 @@ func (c *docContext) mustReadGlobalField(name string) (v GlobalField) {
 	return
 }
 func (c *docContext) mustReadInt(name string) (v uint64) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeUint64,
 	})
@@ -427,7 +478,7 @@ func (c *docContext) mustReadInt(name string) (v uint64) {
 	return
 }
 func (c *docContext) mustReadLabel(name string) (v string) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeLabel,
 	})
@@ -435,7 +486,7 @@ func (c *docContext) mustReadLabel(name string) (v string) {
 	return
 }
 func (c *docContext) readLabelsArray(name string) (v []string) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name:  name,
 		Type:  opArgTypeLabel,
 		Array: true,
@@ -445,7 +496,7 @@ func (c *docContext) readLabelsArray(name string) (v []string) {
 }
 
 func (c *docContext) mustReadAssetHoldingField(name string) (v AssetHoldingField) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeAssetHoldingField,
 	})
@@ -453,7 +504,7 @@ func (c *docContext) mustReadAssetHoldingField(name string) (v AssetHoldingField
 	return
 }
 func (c *docContext) mustReadAssetParamsField(name string) (v AssetParamsField) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeAssetParamsField,
 	})
@@ -461,7 +512,7 @@ func (c *docContext) mustReadAssetParamsField(name string) (v AssetParamsField) 
 	return
 }
 func (c *docContext) mustReadAppParamsField(name string) (v AppParamsField) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeAppParamsField,
 	})
@@ -469,7 +520,7 @@ func (c *docContext) mustReadAppParamsField(name string) (v AppParamsField) {
 	return
 }
 func (c *docContext) mustReadAcctParamsField(name string) (v AcctParamsField) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeAcctParamsField,
 	})
@@ -477,7 +528,7 @@ func (c *docContext) mustReadAcctParamsField(name string) (v AcctParamsField) {
 	return
 }
 func (c *docContext) mustReadBytes(name string) (v []byte) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeBytes,
 	})
@@ -485,7 +536,7 @@ func (c *docContext) mustReadBytes(name string) (v []byte) {
 	return
 }
 func (c *docContext) mustReadVrfVerifyField(name string) (v VrfStandard) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeVrfStandard,
 	})
@@ -493,7 +544,7 @@ func (c *docContext) mustReadVrfVerifyField(name string) (v VrfStandard) {
 	return
 }
 func (c *docContext) mustReadBlockField(name string) (v BlockField) {
-	c.args = append(c.args, opItemArg{
+	c.arg(opItemArg{
 		Name: name,
 		Type: opArgTypeTxnField,
 	})
@@ -961,34 +1012,68 @@ var OpDocs = func() *opDocs {
 			full += extra
 		}
 
-		var names []string
-		for _, arg := range c.args {
-			name := arg.Name
-			if arg.Array {
-				name += ", ..."
+		var fullnames []string
+		{
+			var optional bool
+			for _, arg := range c.args {
+				name := fmt.Sprintf("%s : %s", arg.Type.String(), arg.Name)
+				if arg.Array {
+					name += ", ..."
+				}
+
+				name = "{" + name + "}"
+
+				if arg.Optional {
+					if !optional {
+						name = "[" + name
+					}
+				}
+
+				fullnames = append(fullnames, name)
 			}
 
-			if arg.Optional {
-				name = "[" + name + "]"
+			if len(fullnames) > 0 {
+				fullnames[len(fullnames)-1] += "]"
 			}
-
-			names = append(names, name)
 		}
 
-		sigargs := strings.Join(names, " ")
-		sigfull := fmt.Sprintf("%s %s", info.Name, sigargs)
+		var shortnames []string
+		{
+			var optional bool
+			for _, arg := range c.args {
+				name := arg.Name
+				if arg.Array {
+					name += ", ..."
+				}
+
+				if arg.Optional {
+					if !optional {
+						optional = true
+						name = "[" + name
+					}
+				}
+
+				shortnames = append(shortnames, name)
+			}
+
+			if len(shortnames) > 0 && optional {
+				shortnames[len(shortnames)-1] += "]"
+			}
+		}
+
+		sigargs := strings.Join(shortnames, " ")
+		sigfull := fmt.Sprintf("%s %s", info.Name, strings.Join(fullnames, " "))
 
 		d.Items[info.Name] = opItem{
 			Name: info.Name,
+
+			Version: c.version,
 
 			ArgsSig: sigargs,
 			FullSig: sigfull,
 
 			Args: c.args,
 
-			Version: c.version,
-
-			// TODO: Version:
 			Parse: info.Parse,
 
 			Doc:     doc,
