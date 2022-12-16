@@ -1,7 +1,7 @@
 #pragma version 8
 
 txn OnCompletion
-match noop optin closeout update delete
+switch noop optin closeout update delete
 b end
 
 noop:

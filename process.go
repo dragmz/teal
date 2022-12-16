@@ -1319,7 +1319,7 @@ func opModulo(c OpContext) {
 	c.emit(Modulo)
 }
 func opBitOr(c OpContext) {
-	c.emit(Bitr)
+	c.emit(BitOr)
 }
 func opBitAnd(c OpContext) {
 	c.emit(BitAnd)
@@ -1416,7 +1416,7 @@ func opTxn(c OpContext) {
 func opGlobal(c OpContext) {
 	field := c.mustReadGlobalField("field")
 
-	c.emit(&GlobalExpr{Index: field})
+	c.emit(&GlobalExpr{Field: field})
 }
 
 func opGtxn(c OpContext) {
@@ -1542,20 +1542,20 @@ func opBury(c OpContext) {
 	c.minVersion(8)
 
 	n := c.mustReadUint8("n")
-	c.emit(&BuryExpr{Index: n})
+	c.emit(&BuryExpr{Depth: n})
 }
 
 func opPopN(c OpContext) {
 	c.minVersion(8)
 
 	n := c.mustReadUint8("n")
-	c.emit(&PopNExpr{Index: n})
+	c.emit(&PopNExpr{Depth: n})
 }
 func opDupN(c OpContext) {
 	c.minVersion(8)
 
 	n := c.mustReadUint8("n")
-	c.emit(&DupNExpr{Index: n})
+	c.emit(&DupNExpr{Count: n})
 }
 
 func opPop(c OpContext) {
@@ -1584,12 +1584,12 @@ func opSelect(c OpContext) {
 func opCover(c OpContext) {
 	c.minVersion(5)
 	value := c.mustReadUint8("n")
-	c.emit(&CoverExpr{Index: uint8(value)})
+	c.emit(&CoverExpr{Depth: uint8(value)})
 }
 func opUncover(c OpContext) {
 	c.minVersion(5)
 	value := c.mustReadUint8("index")
-	c.emit(&UncoverExpr{Index: uint8(value)})
+	c.emit(&UncoverExpr{Depth: uint8(value)})
 }
 func opConcat(c OpContext) {
 	c.minVersion(2)

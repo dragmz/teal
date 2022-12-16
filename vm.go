@@ -9,40 +9,29 @@ type VM struct {
 	l Listing
 }
 
-type vmValue struct {
-	t  vmValueType
-	dt vmDataType
+type vmFrame struct {
+	a uint8
+	r uint8
+	p uint8
+}
 
-	i uint64
-	b []byte
+type vmValue struct {
+	t vmDataType
 
 	ref string
 }
 
 func (v vmValue) String() string {
-	var s string
-
-	switch v.dt {
-	case vmTypeUint64:
-		s = fmt.Sprintf("%d", v.i)
-	case vmTypeBytes:
-		s = fmt.Sprintf("\"%s\"", v.b)
-	}
-
-	return fmt.Sprintf("{%s: %s}", v.dt, s)
+	return v.t.String()
 }
 
 type vmValueType int
 
-const (
-	vmValueConst = iota
-	vmValueSymbolic
-)
-
 type vmDataType int
 
 const (
-	vmTypeAny = iota
+	vmTypeNone = iota
+	vmTypeAny
 	vmTypeUint64
 	vmTypeBytes
 )
@@ -68,8 +57,35 @@ func (b *vmBranch) push(t vmValue) {
 	b.s.items = append(b.s.items, t)
 }
 
-func (b *vmBranch) pop() vmValue {
+func (b *vmBranch) prepare(a uint8, r uint8) {
+	b.fs = append(b.fs, vmFrame{a: a, r: r, p: uint8(len(b.s.items))})
+}
+
+func (b *vmBranch) replace(n uint8, v vmValue) {
+	b.s.items[n] = v
+}
+
+func (b *vmBranch) at(n uint8) vmValue {
+	return b.s.items[uint8(len(b.s.items))-1-n]
+}
+
+func (b *vmBranch) pop(t vmDataType) vmValue {
+	if len(b.s.items) == 0 {
+		panic("empty stack")
+	}
+
 	v := b.s.items[len(b.s.items)-1]
+	switch t {
+	case vmTypeAny:
+	default:
+		switch v.t {
+		case vmTypeAny:
+		default:
+			if v.t != t {
+				panic("unexpected data type on stack")
+			}
+		}
+	}
 	b.s.items = b.s.items[:len(b.s.items)-1]
 	return v
 }
@@ -90,10 +106,12 @@ type vmBranch struct {
 
 	s *vmStack
 
+	fs []vmFrame
+
 	budget int
 }
 
-func (b *vmBranch) ret() {
+func (b *vmBranch) retsub() {
 	b.ln = b.cs[len(b.cs)-1]
 	b.cs = b.cs[:len(b.cs)-1]
 }
