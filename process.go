@@ -35,6 +35,8 @@ const (
 	OpArgTypeSignature
 	OpArgTypeAddr
 	OpArgTypePragmaName
+	OpArgTypeBase64EncodingField
+	OpArgTypeBlockField
 )
 
 func (t NewOpArgType) String() string {
@@ -75,6 +77,10 @@ func (t NewOpArgType) String() string {
 		return "address"
 	case OpArgTypePragmaName:
 		return "pragma name"
+	case OpArgTypeBase64EncodingField:
+		return "base64 encoding"
+	case OpArgTypeBlockField:
+		return "block field"
 	}
 }
 
@@ -88,7 +94,7 @@ type opItemArg struct {
 type opItem struct {
 	Name string
 
-	Version uint8
+	Version uint64
 
 	Args []opItemArg
 
@@ -306,12 +312,13 @@ type recoverable struct{}
 type OpContext interface {
 	emit(op Op)
 
-	minVersion(v uint8)
+	minVersion(v uint64)
 
-	mustReadPragma(name string) uint8
+	mustReadBase64Encoding(name string) Base64Encoding
+	mustReadPragma(name string) uint64
 	mustReadAddr(name string) string
 	mustReadSignature(name string) string
-	mustReadTxnField(name string) TxnField
+	mustReadTxnField(tc fieldContext, name string) TxnField
 	mustReadJsonRef(name string) JSONRefType
 	maybeReadUint8(name string) (uint8, bool)
 	mustReadEcdsaCurveIndex(name string) EcdsaCurve
@@ -334,7 +341,7 @@ type OpContext interface {
 
 type docContext struct {
 	args     []opItemArg
-	version  uint8
+	version  uint64
 	optional bool
 }
 
@@ -352,11 +359,11 @@ func (c *docContext) emit(op Op) {
 
 }
 
-func (c *docContext) minVersion(v uint8) {
+func (c *docContext) minVersion(v uint64) {
 	c.version = v
 }
 
-func (c *docContext) mustReadPragma(name string) (v uint8) {
+func (c *docContext) mustReadPragma(name string) (v uint64) {
 	c.arg(opItemArg{
 		Name: name,
 		Type: OpArgTypePragmaName,
@@ -388,16 +395,33 @@ func (c *docContext) mustReadSignature(name string) (v string) {
 	return
 }
 
-func (c *docContext) mustReadJsonRef(name string) (v JSONRefType) {
+func (c *docContext) mustReadBase64Encoding(name string) (v Base64Encoding) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: OpArgTypeTxnField,
+		Type: OpArgTypeBase64EncodingField,
 	})
 
 	return
 }
 
-func (c *docContext) mustReadTxnField(name string) (f TxnField) {
+func (c *docContext) mustReadJsonRef(name string) (v JSONRefType) {
+	c.arg(opItemArg{
+		Name: name,
+		Type: OpArgTypeJSONRefField,
+	})
+
+	return
+}
+
+type fieldContext int
+
+const (
+	txnFieldContext = iota
+	txnaFieldContext
+	itxnFieldContext
+)
+
+func (c *docContext) mustReadTxnField(tc fieldContext, name string) (f TxnField) {
 	c.arg(opItemArg{
 		Name: name,
 		Type: OpArgTypeTxnField,
@@ -421,7 +445,7 @@ func (c *docContext) maybeReadUint8(name string) (v uint8, ok bool) {
 func (c *docContext) mustReadEcdsaCurveIndex(name string) (v EcdsaCurve) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: OpArgTypeTxnField,
+		Type: OpArgTypeEcdsaCurve,
 	})
 
 	return
@@ -546,13 +570,15 @@ func (c *docContext) mustReadVrfVerifyField(name string) (v VrfStandard) {
 func (c *docContext) mustReadBlockField(name string) (v BlockField) {
 	c.arg(opItemArg{
 		Name: name,
-		Type: OpArgTypeTxnField,
+		Type: OpArgTypeBlockField,
 	})
 
 	return
 }
 
 type parserContext struct {
+	version uint64
+
 	ops  []Op
 	args *arguments
 	diag []Diagnostic
@@ -568,7 +594,7 @@ func (c *parserContext) emit(op Op) {
 	c.ops = append(c.ops, op)
 }
 
-func (c *parserContext) minVersion(v uint8) {
+func (c *parserContext) minVersion(v uint64) {
 
 }
 
@@ -595,15 +621,15 @@ func (c *parserContext) mustReadArg(name string) {
 	}
 }
 
-func (c *parserContext) mustReadPragma(argName string) uint8 {
-	var version uint8
+func (c *parserContext) mustReadPragma(argName string) uint64 {
+	var version uint64
 	c.mcrs = append(c.mcrs, c.args.Curr())
 
 	name := c.mustRead("name")
 	switch name {
 	case "version":
 		c.mcrs = append(c.mcrs, c.args.Curr())
-		v := c.mustReadUint8("version value")
+		v := c.mustReadInt("version value")
 		if v < 1 {
 			c.failCurr(errors.New("version must be at least 1"))
 		}
@@ -611,6 +637,8 @@ func (c *parserContext) mustReadPragma(argName string) uint8 {
 	default:
 		c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
 	}
+
+	c.version = version
 
 	return version
 }
@@ -652,9 +680,16 @@ func (c *parserContext) maybeReadArg() bool {
 func (c *parserContext) mustReadAcctParamsField(name string) AcctParamsField {
 	c.mustReadArg(name)
 
-	f, err := readAcctParams(c.args.Text())
+	f, isconst, err := readAcctParams(c.version, c.args.Text())
+
 	if err != nil {
 		c.failCurr(err)
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
 	}
 
 	return f
@@ -663,9 +698,15 @@ func (c *parserContext) mustReadAcctParamsField(name string) AcctParamsField {
 func (c *parserContext) mustReadAssetHoldingField(name string) AssetHoldingField {
 	c.mustReadArg(name)
 
-	f, err := readAssetHoldingField(c.args.Text())
+	f, isconst, err := readAssetHoldingField(c.version, c.args.Text())
 	if err != nil {
 		c.failCurr(err)
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
 	}
 
 	return f
@@ -674,9 +715,15 @@ func (c *parserContext) mustReadAssetHoldingField(name string) AssetHoldingField
 func (c *parserContext) mustReadAssetParamsField(name string) AssetParamsField {
 	c.mustReadArg(name)
 
-	f, err := readAssetParamsField(c.args.Text())
+	f, isconst, err := readAssetParamsField(c.version, c.args.Text())
 	if err != nil {
 		c.failCurr(err)
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
 	}
 
 	return f
@@ -685,20 +732,31 @@ func (c *parserContext) mustReadAssetParamsField(name string) AssetParamsField {
 func (c *parserContext) mustReadBlockField(name string) BlockField {
 	c.mustReadArg(name)
 
-	f, err := readBlockField(c.args.Text())
+	f, isconst, err := readBlockField(c.version, c.args.Text())
 	if err != nil {
 		c.failCurr(err)
 	}
 
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
+	}
 	return f
 }
 
 func (c *parserContext) mustReadGlobalField(name string) GlobalField {
 	c.mustReadArg(name)
 
-	f, err := readGlobalField(c.args.Text())
+	f, isconst, err := readGlobalField(c.version, c.args.Text())
 	if err != nil {
 		c.failCurr(err)
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
 	}
 
 	return f
@@ -713,9 +771,15 @@ func (c *parserContext) mustReadLabel(name string) string {
 func (c *parserContext) mustReadVrfVerifyField(name string) VrfStandard {
 	c.mustReadArg(name)
 
-	f, err := readVrfVerifyField(c.args.Text())
+	f, isconst, err := readVrfVerifyField(c.version, c.args.Text())
 	if err != nil {
 		c.failCurr(err)
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
 	}
 
 	return f
@@ -758,9 +822,15 @@ func (c *parserContext) readUint64Array(name string) []uint64 {
 func (c *parserContext) mustReadAppParamsField(name string) AppParamsField {
 	c.mustReadArg(name)
 
-	f, err := readAppParamsField(c.args.Text())
+	f, isconst, err := readAppParamsField(c.version, c.args.Text())
 	if err != nil {
 		c.failCurr(err)
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
 	}
 
 	return f
@@ -798,8 +868,23 @@ func (c *parserContext) parseInt8(name string) int8 {
 	return v
 }
 
+func (c *parserContext) parseBase64Encoding(name string) Base64Encoding {
+	v, isconst, err := readBase64EncodingField(c.version, c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse base64 encoding field: %s", name))
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
+	}
+
+	return v
+}
+
 func (c *parserContext) parseJsonRef(name string) JSONRefType {
-	v, isconst, err := readJsonRefField(c.args.Text())
+	v, isconst, err := readJsonRefField(c.version, c.args.Text())
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse JSON ref field: %s", name))
 	}
@@ -813,9 +898,8 @@ func (c *parserContext) parseJsonRef(name string) JSONRefType {
 	return v
 }
 
-func (c *parserContext) parseTxnField(name string) TxnField {
-	// TODO report semantics
-	v, isconst, err := readTxnField(c.args.Text())
+func (c *parserContext) parseTxnField(tc fieldContext, name string) TxnField {
+	v, isconst, err := readTxnField(tc, c.version, c.args.Text())
 
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse txn field: %s", name))
@@ -916,11 +1000,18 @@ func (c *parserContext) parseBytes(name string) []byte {
 }
 
 func (c *parserContext) parseEcdsaCurveIndex(name string) EcdsaCurve {
-	// TODO report semantics
-	v, err := readEcdsaCurveIndex(c.args.Text())
+	v, isconst, err := readEcdsaCurveIndex(c.version, c.args.Text())
+
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse ESCDS curve index: %s", name))
 	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
+	}
+
 	return v
 }
 
@@ -958,9 +1049,14 @@ func (c *parserContext) mustRead(name string) string {
 	return c.args.Text()
 }
 
-func (c *parserContext) mustReadTxnField(name string) TxnField {
+func (c *parserContext) mustReadTxnField(tc fieldContext, name string) TxnField {
 	c.mustReadArg(name)
-	return c.parseTxnField(name)
+	return c.parseTxnField(tc, name)
+}
+
+func (c *parserContext) mustReadBase64Encoding(name string) Base64Encoding {
+	c.mustReadArg(name)
+	return c.parseBase64Encoding(name)
 }
 
 func (c *parserContext) mustReadJsonRef(name string) JSONRefType {
@@ -979,7 +1075,7 @@ type opDocs struct {
 
 type OpDocContext struct {
 	Name    string
-	Version uint8
+	Version uint64
 }
 
 func (d opDocs) GetDoc(c OpDocContext) (opItem, bool) {
@@ -1032,7 +1128,7 @@ var OpDocs = func() *opDocs {
 				fullnames = append(fullnames, name)
 			}
 
-			if len(fullnames) > 0 {
+			if optional && len(fullnames) > 0 {
 				fullnames[len(fullnames)-1] += "]"
 			}
 		}
@@ -1056,7 +1152,7 @@ var OpDocs = func() *opDocs {
 				shortnames = append(shortnames, name)
 			}
 
-			if len(shortnames) > 0 && optional {
+			if optional && len(shortnames) > 0 {
 				shortnames[len(shortnames)-1] += "]"
 			}
 		}
@@ -1106,11 +1202,9 @@ var checkByteImmArgs = []interface{}{}
 var immBytess = []interface{}{}
 var typeTxField = []interface{}{}
 
-func opPragma(c OpContext) uint8 {
+func opPragma(c OpContext) {
 	version := c.mustReadPragma("version")
 	c.emit(&PragmaExpr{Version: uint8(version)})
-
-	return version
 }
 
 func opAddr(c OpContext) {
@@ -1310,7 +1404,7 @@ func opArg3(c OpContext) {
 	c.emit(Arg3)
 }
 func opTxn(c OpContext) {
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnFieldContext, "f")
 
 	i, ok := c.maybeReadUint8("i")
 	if ok {
@@ -1327,7 +1421,7 @@ func opGlobal(c OpContext) {
 
 func opGtxn(c OpContext) {
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnFieldContext, "f")
 	i, ok := c.maybeReadUint8("i")
 	if ok {
 		c.emit(&GtxnaExpr{Group: uint8(t), Field: f, Index: i})
@@ -1348,7 +1442,7 @@ func opStore(c OpContext) {
 func opTxna(c OpContext) {
 	c.minVersion(2)
 
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	i := c.mustReadUint8("i")
 
 	c.emit(&TxnaExpr{Field: f, Index: i})
@@ -1358,7 +1452,7 @@ func opGtxna(c OpContext) {
 	c.minVersion(2)
 
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	i := c.mustReadUint8("i")
 
 	c.emit(&GtxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
@@ -1366,7 +1460,7 @@ func opGtxna(c OpContext) {
 func opGtxns(c OpContext) {
 	c.minVersion(3)
 
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnFieldContext, "f")
 	i, ok := c.maybeReadUint8("i")
 
 	if ok {
@@ -1379,7 +1473,7 @@ func opGtxns(c OpContext) {
 func opGtxnsa(c OpContext) {
 	c.minVersion(3)
 
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	i := c.mustReadUint8("i")
 
 	c.emit(&GtxnsaExpr{Field: f, Index: uint8(i)})
@@ -1576,7 +1670,7 @@ func opReplace3(c OpContext) {
 }
 func opBase64Decode(c OpContext) {
 	c.minVersion(7)
-	value := c.mustReadUint8("e")
+	value := c.mustReadBase64Encoding("e")
 	c.emit(&Base64DecodeExpr{Index: uint8(value)})
 }
 func opJSONRef(c OpContext) {
@@ -1848,7 +1942,7 @@ func opTxBegin(c OpContext) {
 }
 func opItxnField(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(itxnFieldContext, "f")
 	c.emit(&ItxnFieldExpr{Field: f})
 }
 func opItxnSubmit(c OpContext) {
@@ -1857,12 +1951,12 @@ func opItxnSubmit(c OpContext) {
 }
 func opItxn(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnFieldContext, "f")
 	c.emit(&ItxnExpr{Field: f})
 }
 func opItxna(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadUint8("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	i := c.mustReadUint8("i")
 	c.emit(&ItxnaExpr{Field: f, Index: i})
 }
@@ -1873,13 +1967,13 @@ func opItxnNext(c OpContext) {
 func opGitxn(c OpContext) {
 	c.minVersion(6)
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnFieldContext, "f")
 	c.emit(&GitxnExpr{Index: uint8(t), Field: f})
 }
 func opGitxna(c OpContext) {
 	c.minVersion(6)
 	t := c.mustReadInt("t")
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	i := c.mustReadUint8("i")
 
 	c.emit(&GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
@@ -1915,18 +2009,18 @@ func opBoxPut(c OpContext) {
 }
 func opTxnas(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	c.emit(&TxnasExpr{Field: f})
 }
 func opGtxnas(c OpContext) {
 	c.minVersion(5)
 	t := c.mustReadUint8("t")
-	f := c.mustReadUint8("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	c.emit(&GtxnasExpr{Index: t, Field: f})
 }
 func opGtxnsas(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	c.emit(&GtxnsasExpr{Field: f})
 }
 func opArgs(c OpContext) {
@@ -1939,13 +2033,13 @@ func opGloadss(c OpContext) {
 }
 func opItxnas(c OpContext) {
 	c.minVersion(6)
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	c.emit(&ItxnasExpr{Field: f})
 }
 func opGitxnas(c OpContext) {
 	c.minVersion(6)
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField("f")
+	f := c.mustReadTxnField(txnaFieldContext, "f")
 	c.emit(&GitxnasExpr{Index: t, Field: f})
 }
 func opVrfVerify(c OpContext) {
@@ -1965,7 +2059,7 @@ func (ln Line) ImmAt(pos int) (Token, int, bool) {
 	for idx, tok := range ln {
 		if idx > 0 {
 			if pos >= tok.Begin() && pos <= tok.End() {
-				return tok, idx, true
+				return tok, idx - 1, true
 			}
 		}
 	}
@@ -1974,7 +2068,7 @@ func (ln Line) ImmAt(pos int) (Token, int, bool) {
 }
 
 type ProcessResult struct {
-	Version     uint8
+	Version     uint64
 	Diagnostics []Diagnostic
 	Symbols     []Symbol
 	SymbolRefs  []Token
@@ -2008,7 +2102,8 @@ func readTokens(source string) ([]Token, []Diagnostic) {
 
 func Process(source string) *ProcessResult {
 	c := &parserContext{
-		ops: []Op{},
+		version: 1,
+		ops:     []Op{},
 	}
 
 	var ts []Token
@@ -2046,8 +2141,6 @@ func Process(source string) *ProcessResult {
 	var lts []Line
 	var ops []Token
 	var syms []Symbol
-
-	version := uint8(1)
 
 	for _, l := range lines {
 		c.args = &arguments{ts: l}
@@ -2093,18 +2186,18 @@ func Process(source string) *ProcessResult {
 			case "":
 				c.emit(Empty)
 			case "#pragma":
-				version = opPragma(c)
+				opPragma(c)
 			default:
 				info, ok := OpDocs.GetDoc(OpDocContext{
 					Name:    name,
-					Version: version,
+					Version: c.version,
 				})
 				if ok {
 					curr := c.args.Curr()
 					ops = append(ops, curr)
-					if info.Version > version {
+					if info.Version > c.version {
 						c.diag = append(c.diag, lintError{
-							error: errors.Errorf("opcode requires version >= %d (current: %d)", info.Version, version),
+							error: errors.Errorf("opcode requires version >= %d (current: %d)", info.Version, c.version),
 							l:     curr.l,
 							b:     curr.b,
 							e:     curr.e,
@@ -2151,7 +2244,7 @@ func Process(source string) *ProcessResult {
 	}
 
 	result := &ProcessResult{
-		Version:     version,
+		Version:     c.version,
 		Diagnostics: c.diag,
 		Symbols:     syms,
 		SymbolRefs:  c.refs,

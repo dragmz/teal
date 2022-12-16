@@ -1,0 +1,28 @@
+#pragma version 8
+
+txn OnCompletion
+match noop optin closeout update delete
+b end
+
+noop:
+int 0
+return
+
+optin:
+int 1
+return
+
+closeout:
+int 2
+return
+
+update:
+int 3
+return
+
+delete:
+int 4
+return
+
+end:
+byte "end"

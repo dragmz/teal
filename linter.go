@@ -205,11 +205,11 @@ func (l *Linter) checkOpsAfterUnconditionalBranch() {
 			for i = i + 1; i < len(l.l); i++ {
 				o2 := l.l[i]
 				switch o2 := o2.(type) {
-				case Nop:
 				case *LabelExpr:
 					if len(used[o2.Name]) > 0 {
 						break loop
 					}
+				case Nop:
 				default:
 					l.res = append(l.res, UnreachableCodeError{i})
 				}
@@ -240,13 +240,13 @@ func (l *Linter) checkBranchJustBeforeLabel() {
 						j += 1
 
 						switch n := n.(type) {
-						case Nop:
 						case *LabelExpr:
 							if n.Name == o.Label.Name {
 								l.res = append(l.res, BJustBeforeLabelError{l: i})
 								return
 							}
 							break loop
+						case Nop:
 						default:
 							break loop
 						}
@@ -348,7 +348,6 @@ func (l *Linter) checkPragma() {
 	var prev Op
 	for i, op := range l.l {
 		switch op := op.(type) {
-		case Nop:
 		case *PragmaExpr:
 			if prev != nil {
 				l.res = append(l.res, PragmaVersionAfterInstrError{
@@ -356,6 +355,7 @@ func (l *Linter) checkPragma() {
 				})
 			}
 			prev = op
+		case Nop:
 		default:
 			prev = op
 		}

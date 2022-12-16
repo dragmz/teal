@@ -8,9 +8,26 @@ import (
 	"strings"
 )
 
+type vmOp interface {
+	Execute(b *vmBranch) error
+}
+
+type Branch interface {
+	IsBranch()
+}
+
+type Nop interface {
+	IsNop()
+}
+
 // err
 
 type ErrExpr struct{}
+
+func (e *ErrExpr) Execute(b *vmBranch) error {
+	b.exit()
+	return nil
+}
 
 func (e *ErrExpr) String() string {
 	return "err"
@@ -36,6 +53,14 @@ type Sha256Expr struct{}
 
 func (e *Sha256Expr) String() string {
 	return "sha256"
+}
+
+func (e *Sha256Expr) Execute(b *vmBranch) error {
+	b.pop()
+	b.push(vmValue{dt: vmTypeBytes})
+
+	b.ln++
+	return nil
 }
 
 var Sha256 = &Sha256Expr{}
@@ -647,6 +672,8 @@ type LabelExpr struct {
 	Name string
 }
 
+func (e *LabelExpr) IsNop() {}
+
 func (e *LabelExpr) String() string {
 	return fmt.Sprintf("%s:", e.Name)
 }
@@ -706,8 +733,21 @@ func (e *PushIntExpr) String() string {
 	return fmt.Sprintf("pushint %d", e.Value)
 }
 
+func (e *PushIntExpr) Execute(b *vmBranch) error {
+	b.push(vmValue{t: vmTypeUint64, i: e.Value})
+	b.ln++
+	return nil
+}
+
 type IntExpr struct {
 	Value uint64
+}
+
+func (e *IntExpr) Execute(b *vmBranch) error {
+	b.push(vmValue{t: vmTypeUint64, i: e.Value})
+	b.ln++
+
+	return nil
 }
 
 func (e *IntExpr) String() string {
@@ -745,6 +785,12 @@ func (e Bytes) String() string {
 
 func (e *ByteExpr) String() string {
 	return fmt.Sprintf("byte %s", Bytes{Value: e.Value, Format: e.Format})
+}
+
+func (e *ByteExpr) Execute(b *vmBranch) error {
+	b.push(vmValue{t: vmTypeBytes, b: e.Value})
+	b.ln++
+	return nil
 }
 
 type BoxGetExpr struct {
@@ -814,6 +860,8 @@ type PragmaExpr struct {
 	Version uint8
 }
 
+func (e *PragmaExpr) IsNop() {}
+
 func (e *PragmaExpr) String() string {
 	return fmt.Sprintf("#pragma version %d", e.Version)
 }
@@ -823,6 +871,11 @@ type BnzExpr struct {
 }
 
 func (e *BnzExpr) IsBranch() {}
+
+func (e *BnzExpr) Execute(b *vmBranch) error {
+	b.jump(e.Label.Name)
+	return nil
+}
 
 func (e *BnzExpr) Labels() []*LabelExpr {
 	return []*LabelExpr{e.Label}
@@ -838,6 +891,11 @@ type BzExpr struct {
 
 func (e *BzExpr) IsBranch() {}
 
+func (e *BzExpr) Execute(b *vmBranch) error {
+	b.jump(e.Label.Name)
+	return nil
+}
+
 func (e *BzExpr) Labels() []*LabelExpr {
 	return []*LabelExpr{e.Label}
 }
@@ -852,20 +910,17 @@ type BExpr struct {
 
 func (e *BExpr) IsBranch() {}
 
+func (e *BExpr) Execute(b *vmBranch) error {
+	b.jump(e.Label.Name)
+	return nil
+}
+
 func (e *BExpr) Labels() []*LabelExpr {
 	return []*LabelExpr{e.Label}
 }
 
 func (e *BExpr) String() string {
 	return fmt.Sprintf("b %s", e.Label.Name)
-}
-
-type Branch interface {
-	IsBranch()
-}
-
-type Nop interface {
-	IsNop()
 }
 
 type EmptyExpr struct {
@@ -939,6 +994,11 @@ type RetSubExpr struct{}
 
 var RetSub = &RetSubExpr{}
 
+func (e *RetSubExpr) Execute(b *vmBranch) error {
+	b.ret()
+	return nil
+}
+
 func (e *RetSubExpr) String() string {
 	return "retsub"
 }
@@ -946,6 +1006,12 @@ func (e *RetSubExpr) String() string {
 func (e *RetSubExpr) IsTerminator() {}
 
 type ReturnExpr struct {
+}
+
+func (e *ReturnExpr) Execute(b *vmBranch) error {
+	b.pop()
+	b.exit()
+	return nil
 }
 
 func (e *ReturnExpr) String() string {
@@ -959,6 +1025,14 @@ type SwitchExpr struct {
 }
 
 func (e *SwitchExpr) IsBranch() {}
+
+func (e *SwitchExpr) Execute(b *vmBranch) error {
+	for _, t := range e.Targets {
+		b.fork(t.Name)
+	}
+
+	return nil
+}
 
 func (e *SwitchExpr) Labels() []*LabelExpr {
 	return e.Targets
@@ -991,6 +1065,14 @@ type MatchExpr struct {
 
 func (e *MatchExpr) IsBranch() {}
 
+func (e *MatchExpr) Execute(b *vmBranch) error {
+	for _, t := range e.Targets {
+		b.fork(t.Name)
+	}
+
+	return nil
+}
+
 func (e *MatchExpr) Labels() []*LabelExpr {
 	return e.Targets
 }
@@ -1021,6 +1103,11 @@ type CallSubExpr struct {
 }
 
 func (e *CallSubExpr) IsBranch() {}
+
+func (e *CallSubExpr) Execute(b *vmBranch) error {
+	b.call(e.Label.Name)
+	return nil
+}
 
 func (e *CallSubExpr) Labels() []*LabelExpr {
 	return []*LabelExpr{e.Label}
@@ -1157,7 +1244,7 @@ func (e *ExpwExpr) String() string {
 var Expw = &ExpwExpr{}
 
 type ItxnaExpr struct {
-	Field uint8
+	Field TxnField
 	Index uint8
 }
 
@@ -1166,7 +1253,7 @@ func (e *ItxnaExpr) String() string {
 }
 
 type GtxnasExpr struct {
-	Field uint8
+	Field TxnField
 	Index uint8
 }
 

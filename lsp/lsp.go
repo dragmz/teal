@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"bufio"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/dragmz/teal"
 	"github.com/joe-p/tealfmt"
@@ -244,6 +246,7 @@ type lspServerCapabilities struct {
 	DefinitionProvider         *bool                      `json:"definitionProvider,omitempty"`
 	HoverProvider              *bool                      `json:"hoverProvider,omitempty"`
 	SignatureHelpProvider      *lspSignatureHelpOptions   `json:"signatureHelpProvider,omitempty"`
+	InlayHintProvieder         *bool                      `json:"inlayHintProvider,omitempty"`
 }
 
 type lspInitializeResult struct {
@@ -567,6 +570,19 @@ type lspSignatureHelpRequestParams struct {
 	Position     lspPosition               `json:"position"`
 }
 
+type lspInlayHintRequestParams struct {
+	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
+	Range        lspRange                  `json:"range,omitempty"`
+}
+
+type lspInlayHint struct {
+	Position    lspPosition `json:"position"`
+	Label       string      `json:"label"`
+	Kind        *int        `json:"kind,omitempty"`
+	Tooltip     string      `json:"tooltip,omitempty"`
+	PaddingLeft *bool       `json:"paddingLeft,omitempty"`
+}
+
 // notifications
 type lspDidChange lspRequest[*lspDidChangeParams]
 type lspDidOpen lspRequest[*lspDidOpenParams]
@@ -588,6 +604,7 @@ type lspDocumentFormattingRequest lspRequest[*lspDocumentFormattingRequestParams
 type lspDefinitionRequest lspRequest[*lspDefinitionRequestParams]
 type lspHoverRequest lspRequest[*lspHoverRequestParams]
 type lspSignatureHelpRequest lspRequest[*lspSignatureHelpRequestParams]
+type lspInlayHintRequest lspRequest[*lspInlayHintRequestParams]
 
 func readInto(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, &v)
@@ -1027,6 +1044,79 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				},
 			})
 
+		case "textDocument/inlayHint":
+			req, err := read[lspInlayHintRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			res := doc.Results()
+
+			ihs := []lspInlayHint{}
+			parameter := new(int)
+			*parameter = 2
+
+			padding := new(bool)
+			*padding = true
+
+			for li := req.Params.Range.Start.Line; li <= req.Params.Range.End.Line; li++ {
+				if li >= len(res.Lines) {
+					continue
+				}
+
+				ln := res.Lines[li]
+
+				for _, tok := range ln {
+					if !req.Params.Range.Overlaps(tok.Line(), tok.Begin(), tok.End()) {
+						continue
+					}
+
+					if tok.Type() != teal.TokenValue {
+						continue
+					}
+
+					s := tok.String()
+					if !strings.HasPrefix(s, "0x") {
+						continue
+					}
+
+					bs, err := hex.DecodeString(s[2:])
+					if err != nil {
+						continue
+					}
+
+					ds := string(bs)
+
+					if !func() bool {
+						for _, r := range ds {
+							if r > unicode.MaxASCII || !unicode.IsPrint(r) {
+								return false
+							}
+						}
+						return true
+					}() {
+						continue
+					}
+
+					ihs = append(ihs, lspInlayHint{
+						Position: lspPosition{
+							Line:      tok.Line(),
+							Character: tok.End(),
+						},
+						Label:       fmt.Sprintf("= \"%s\" ", ds),
+						Kind:        parameter,
+						PaddingLeft: padding,
+					})
+
+				}
+			}
+			return l.success(h.Id, ihs)
+
 		case "textDocument/completion":
 			req, err := read[lspCompletionRequest](b)
 			if err != nil {
@@ -1151,6 +1241,19 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 					case teal.OpArgTypeVrfStandard:
 						for _, f := range teal.VrfStandards.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+
+					case teal.OpArgTypeBase64EncodingField:
+						for _, f := range teal.Base64Encodings.Names {
+							ccs = append(ccs, lspCompletionItem{
+								Label: f,
+							})
+						}
+					case teal.OpArgTypeBlockField:
+						for _, f := range teal.BlockFields.Names {
 							ccs = append(ccs, lspCompletionItem{
 								Label: f,
 							})
@@ -1735,6 +1838,9 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			hover := new(bool)
 			*hover = true
 
+			inlay := new(bool)
+			*inlay = true
+
 			return l.success(h.Id, lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
 					TextDocumentSync:          sync,
@@ -1763,6 +1869,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					DefinitionProvider:         definition,
 					HoverProvider:              hover,
 					SignatureHelpProvider:      &lspSignatureHelpOptions{},
+					InlayHintProvieder:         inlay,
 				},
 			})
 		default:

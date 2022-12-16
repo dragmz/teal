@@ -60,11 +60,11 @@ func removeOpsAfterUnconditionalBranch(l Listing) Listing {
 			for i = i + 1; i < len(l); i++ {
 				o2 := l[i]
 				switch o2.(type) {
-				case Nop:
-					res = append(res, o2)
 				case *LabelExpr:
 					res = append(res, o2)
 					break loop
+				case Nop:
+					res = append(res, o2)
 				}
 			}
 		}
@@ -97,12 +97,12 @@ func removeBJustBeforeItsTargetLabel(l Listing) Listing {
 						j += 1
 
 						switch n := n.(type) {
-						case Nop:
 						case *LabelExpr:
 							if n.Name == o.Label.Name {
 								return
 							}
 							break loop
+						case Nop:
 						default:
 							break loop
 						}

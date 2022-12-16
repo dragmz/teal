@@ -82,107 +82,165 @@ func readUint8(s string) (uint8, error) {
 	return uint8(v), nil
 }
 
-func readAssetHoldingField(s string) (AssetHoldingField, error) {
+func readAssetHoldingField(v uint64, s string) (AssetHoldingField, bool, error) {
 	spec, ok := assetHoldingFieldSpecByName[s]
 	if ok {
-		return spec.field, nil
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
 	}
 
 	value, err := readUint8(s)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse txn field")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	return AssetHoldingField(value), nil
+	return AssetHoldingField(value), false, nil
 }
 
-func readVrfVerifyField(s string) (VrfStandard, error) {
+func readVrfVerifyField(v uint64, s string) (VrfStandard, bool, error) {
 	spec, ok := vrfStandardSpecByName[s]
 	if ok {
-		return spec.field, nil
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
 	}
 
 	value, err := readUint8(s)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse txn field")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	return VrfStandard(value), nil
+	return VrfStandard(value), false, nil
 }
 
-func readBlockField(s string) (BlockField, error) {
+func readBlockField(v uint64, s string) (BlockField, bool, error) {
 	spec, ok := blockFieldSpecByName[s]
 	if ok {
-		return spec.field, nil
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
 	}
 
 	value, err := readUint8(s)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse txn field")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	return BlockField(value), nil
+	return BlockField(value), false, nil
 }
 
-func readAcctParams(s string) (AcctParamsField, error) {
+func readAcctParams(v uint64, s string) (AcctParamsField, bool, error) {
 	spec, ok := acctParamsFieldSpecByName[s]
 	if ok {
-		return spec.field, nil
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
 	}
 
 	value, err := readUint8(s)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse txn field")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	return AcctParamsField(value), nil
+	return AcctParamsField(value), false, nil
 }
 
-func readAppParamsField(s string) (AppParamsField, error) {
+func readAppParamsField(v uint64, s string) (AppParamsField, bool, error) {
 	spec, ok := appParamsFieldSpecByName[s]
 	if ok {
-		return spec.field, nil
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
 	}
 
 	value, err := readUint8(s)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse txn field")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	return AppParamsField(value), nil
+	return AppParamsField(value), false, nil
 }
 
-func readAssetParamsField(s string) (AssetParamsField, error) {
+func readAssetParamsField(v uint64, s string) (AssetParamsField, bool, error) {
 	spec, ok := assetParamsFieldSpecByName[s]
 	if ok {
-		return spec.field, nil
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
 	}
 
 	value, err := readUint8(s)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse txn field")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	return AssetParamsField(value), nil
+	return AssetParamsField(value), false, nil
 }
 
-func readGlobalField(s string) (GlobalField, error) {
+func readGlobalField(v uint64, s string) (GlobalField, bool, error) {
 	spec, ok := globalFieldSpecByName[s]
 	if ok {
-		return spec.field, nil
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+		return spec.field, true, nil
 	}
 
 	value, err := readUint8(s)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to parse txn field")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	return GlobalField(value), nil
+	return GlobalField(value), false, nil
 }
 
-func readJsonRefField(s string) (JSONRefType, bool, error) {
+func readBase64EncodingField(v uint64, s string) (Base64Encoding, bool, error) {
+	spec, ok := base64EncodingSpecByName[s]
+	if ok {
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
+	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return Base64Encoding(value), false, nil
+}
+
+func readJsonRefField(v uint64, s string) (JSONRefType, bool, error) {
 	spec, ok := jsonRefSpecByName[s]
 	if ok {
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
 		return spec.field, true, nil
 	}
 
@@ -194,9 +252,31 @@ func readJsonRefField(s string) (JSONRefType, bool, error) {
 	return JSONRefType(value), false, nil
 }
 
-func readTxnField(s string) (TxnField, bool, error) {
+func readTxnField(c fieldContext, v uint64, s string) (TxnField, bool, error) {
 	spec, ok := txnFieldSpecByName[s]
 	if ok {
+		switch c {
+		case txnaFieldContext:
+			if !spec.array {
+				return 0, true, errors.New("not available in array context")
+			}
+		}
+		var needed uint64
+
+		switch c {
+		case txnFieldContext:
+			needed = spec.version
+		case itxnFieldContext:
+			if spec.itxVersion == 0 {
+				return 0, true, errors.New("not available for internal transactions")
+			}
+			needed = spec.itxVersion
+		}
+
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
 		return spec.field, true, nil
 	}
 
@@ -227,23 +307,23 @@ func readInt(a *arguments) (uint64, error) {
 	return val, nil
 }
 
-func readEcdsaCurveIndex(s string) (EcdsaCurve, error) {
-	var curve EcdsaCurve
+func readEcdsaCurveIndex(v uint64, s string) (EcdsaCurve, bool, error) {
+	spec, ok := ecdsaCurveSpecByName[s]
+	if ok {
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
 
-	value, err := strconv.Atoi(s)
+		return spec.field, true, nil
+	}
+
+	value, err := readUint8(s)
 	if err != nil {
-		return curve, errors.Wrap(err, "failed to read ecdsa_verify curve index")
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
 	}
 
-	curve = EcdsaCurve(value)
-	switch curve {
-	case Secp256k1:
-	case Secp256r1:
-	default:
-		return curve, errors.Errorf("unexpected ecdsa_verify curve index: %d", value)
-	}
-
-	return curve, nil
+	return EcdsaCurve(value), false, nil
 }
 
 type arguments struct {

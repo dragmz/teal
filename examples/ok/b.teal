@@ -1,0 +1,9 @@
+b app
+
+end:
+int 1
+retsub
+
+app:
+
+callsub end
