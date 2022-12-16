@@ -8,25 +8,6 @@ import (
 	"strings"
 )
 
-type vmOp interface {
-	Execute(b *vmBranch) error
-}
-
-func (t StackType) Vm() vmDataType {
-	switch t {
-	case StackAny:
-		return vmTypeAny
-	case StackBytes:
-		return vmTypeBytes
-	case StackUint64:
-		return vmTypeUint64
-	case StackNone:
-		return vmTypeNone
-	default:
-		panic("unknown stack type")
-	}
-}
-
 type Branch interface {
 	IsBranch()
 }
