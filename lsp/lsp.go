@@ -438,6 +438,11 @@ type lspWorkspaceApplyEditRequestParams struct {
 	Edit  lspWorkspaceEdit `json:"edit"`
 }
 
+type lspShowMessageParams struct {
+	Type    int    `json:"type"`
+	Message string `json:"message"`
+}
+
 type lspCodeAction struct {
 	Title       string            `json:"title"`
 	Kind        *string           `json:"kind,omitempty"`
@@ -643,10 +648,11 @@ func read[T any](b []byte) (T, error) {
 	return v, nil
 }
 
-func (l *lsp) request(id string, method string, params interface{}) error {
+func (l *lsp) request(method string, params interface{}) error {
+	l.id++
 	return l.write(jsonRpcRequest{
 		JsonRpc: "2.0",
-		Id:      id,
+		Id:      strconv.Itoa(l.id),
 		Method:  method,
 		Params:  params,
 	})
@@ -819,9 +825,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					}
 				}
 
-				l.id++
-
-				return l.request(strconv.Itoa(l.id), "workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
+				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
 					Label: fmt.Sprintf("Remove label: %s", name),
 					Edit: lspWorkspaceEdit{
 						DocumentChanges: []lspTextDocumentEdit{
@@ -857,8 +861,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				name := args[0].Name
 				s := fmt.Sprintf("\r\n%s:\r\n", name)
 
-				l.id++
-				return l.request(strconv.Itoa(l.id), "workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
+				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
 					Label: fmt.Sprintf("Create label: %s", name),
 					Edit: lspWorkspaceEdit{
 						DocumentChanges: []lspTextDocumentEdit{
