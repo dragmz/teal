@@ -17,8 +17,6 @@ type vmFrame struct {
 
 type vmValue struct {
 	t vmDataType
-
-	ref string
 }
 
 func (v vmValue) String() string {
