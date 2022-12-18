@@ -24,6 +24,8 @@ const (
 	OpArgTypeInt8
 	OpArgTypeBytes
 	OpArgTypeTxnField
+	OpArgTypeItxnField
+	OpArgTypeTxnaField
 	OpArgTypeJSONRefField
 	OpArgTypeEcdsaCurve
 	OpArgTypeGlobalField
@@ -40,6 +42,156 @@ const (
 	OpArgTypeBlockField
 )
 
+var OpArgTypes = []NewOpArgType{
+	OpArgTypeTxnField,
+	OpArgTypeItxnField,
+	OpArgTypeTxnaField,
+	OpArgTypeJSONRefField,
+	OpArgTypeEcdsaCurve,
+	OpArgTypeGlobalField,
+	OpArgTypeAssetHoldingField,
+	OpArgTypeAssetParamsField,
+	OpArgTypeAppParamsField,
+	OpArgTypeAcctParamsField,
+	OpArgTypeVrfStandard,
+	OpArgTypeBase64EncodingField,
+	OpArgTypeBlockField,
+}
+
+var OpArgVals map[NewOpArgType][]opItemArgVal
+
+func init() {
+	res := map[NewOpArgType][]opItemArgVal{}
+
+	for _, t := range OpArgTypes {
+		vals := []opItemArgVal{}
+		switch t {
+		case OpArgTypeTxnaField:
+			for name, spec := range txnFieldSpecByName {
+				if spec.array {
+					vals = append(vals, opItemArgVal{
+						Name:    name,
+						Doc:     spec.Note(),
+						Version: spec.version,
+					})
+				}
+			}
+		case OpArgTypeItxnField:
+			for name, spec := range txnFieldSpecByName {
+				if spec.itxVersion > 0 {
+					vals = append(vals, opItemArgVal{
+						Name:    name,
+						Doc:     spec.Note(),
+						Version: spec.itxVersion,
+					})
+				}
+			}
+		case OpArgTypeTxnField:
+			for name, spec := range txnFieldSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+		case OpArgTypeAcctParamsField:
+			for name, spec := range acctParamsFieldSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+
+		case OpArgTypeAppParamsField:
+			for name, spec := range appParamsFieldSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+
+		case OpArgTypeAssetHoldingField:
+			for name, spec := range assetHoldingFieldSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+
+		case OpArgTypeAssetParamsField:
+			for name, spec := range assetParamsFieldSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+
+		case OpArgTypeEcdsaCurve:
+			for name, spec := range ecdsaCurveSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+
+			}
+
+		case OpArgTypeGlobalField:
+			for name, spec := range globalFieldSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+
+		case OpArgTypeJSONRefField:
+			for name, spec := range jsonRefSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+
+		case OpArgTypeVrfStandard:
+			for name, spec := range vrfStandardSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+
+		case OpArgTypeBase64EncodingField:
+			for name, spec := range base64EncodingSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+
+			}
+		case OpArgTypeBlockField:
+			for name, spec := range blockFieldSpecByName {
+				vals = append(vals, opItemArgVal{
+					Name:    name,
+					Doc:     spec.Note(),
+					Version: spec.version,
+				})
+			}
+		}
+
+		res[t] = vals
+	}
+
+	OpArgVals = res
+}
+
 func (t NewOpArgType) String() string {
 	switch t {
 	default:
@@ -52,8 +204,12 @@ func (t NewOpArgType) String() string {
 		return "int8"
 	case OpArgTypeBytes:
 		return "bytes"
+	case OpArgTypeTxnaField:
+		return "transaction array field index"
 	case OpArgTypeTxnField:
 		return "transaction field index"
+	case OpArgTypeItxnField:
+		return "internal transaction field index"
 	case OpArgTypeJSONRefField:
 		return "json_Ref"
 	case OpArgTypeEcdsaCurve:
@@ -319,7 +475,9 @@ type OpContext interface {
 	mustReadPragma(name string) uint64
 	mustReadAddr(name string) string
 	mustReadSignature(name string) string
-	mustReadTxnField(tc fieldContext, name string) TxnField
+	mustReadTxnField(name string) TxnField
+	mustReadItxnField(name string) TxnField
+	mustReadTxnaField(name string) TxnField
 	mustReadJsonRef(name string) JSONRefType
 	maybeReadUint8(name string) (uint8, bool)
 	mustReadEcdsaCurveIndex(name string) EcdsaCurve
@@ -422,7 +580,25 @@ const (
 	itxnFieldContext
 )
 
-func (c *docContext) mustReadTxnField(tc fieldContext, name string) (f TxnField) {
+func (c *docContext) mustReadItxnField(name string) (f TxnField) {
+	c.arg(opItemArg{
+		Name: name,
+		Type: OpArgTypeItxnField,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadTxnaField(name string) (f TxnField) {
+	c.arg(opItemArg{
+		Name: name,
+		Type: OpArgTypeTxnaField,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadTxnField(name string) (f TxnField) {
 	c.arg(opItemArg{
 		Name: name,
 		Type: OpArgTypeTxnField,
@@ -1050,9 +1226,19 @@ func (c *parserContext) mustRead(name string) string {
 	return c.args.Text()
 }
 
-func (c *parserContext) mustReadTxnField(tc fieldContext, name string) TxnField {
+func (c *parserContext) mustReadTxnField(name string) TxnField {
 	c.mustReadArg(name)
-	return c.parseTxnField(tc, name)
+	return c.parseTxnField(txnFieldContext, name)
+}
+
+func (c *parserContext) mustReadItxnField(name string) TxnField {
+	c.mustReadArg(name)
+	return c.parseTxnField(itxnFieldContext, name)
+}
+
+func (c *parserContext) mustReadTxnaField(name string) TxnField {
+	c.mustReadArg(name)
+	return c.parseTxnField(txnaFieldContext, name)
 }
 
 func (c *parserContext) mustReadBase64Encoding(name string) Base64Encoding {
@@ -1405,7 +1591,7 @@ func opArg3(c OpContext) {
 	c.emit(Arg3)
 }
 func opTxn(c OpContext) {
-	f := c.mustReadTxnField(txnFieldContext, "f")
+	f := c.mustReadTxnField("f")
 
 	i, ok := c.maybeReadUint8("i")
 	if ok {
@@ -1422,7 +1608,7 @@ func opGlobal(c OpContext) {
 
 func opGtxn(c OpContext) {
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField(txnFieldContext, "f")
+	f := c.mustReadTxnField("f")
 	i, ok := c.maybeReadUint8("i")
 	if ok {
 		c.emit(&GtxnaExpr{Group: uint8(t), Field: f, Index: i})
@@ -1443,7 +1629,7 @@ func opStore(c OpContext) {
 func opTxna(c OpContext) {
 	c.minVersion(2)
 
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	i := c.mustReadUint8("i")
 
 	c.emit(&TxnaExpr{Field: f, Index: i})
@@ -1453,7 +1639,7 @@ func opGtxna(c OpContext) {
 	c.minVersion(2)
 
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	i := c.mustReadUint8("i")
 
 	c.emit(&GtxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
@@ -1461,7 +1647,7 @@ func opGtxna(c OpContext) {
 func opGtxns(c OpContext) {
 	c.minVersion(3)
 
-	f := c.mustReadTxnField(txnFieldContext, "f")
+	f := c.mustReadTxnField("f")
 	i, ok := c.maybeReadUint8("i")
 
 	if ok {
@@ -1474,7 +1660,7 @@ func opGtxns(c OpContext) {
 func opGtxnsa(c OpContext) {
 	c.minVersion(3)
 
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	i := c.mustReadUint8("i")
 
 	c.emit(&GtxnsaExpr{Field: f, Index: uint8(i)})
@@ -1943,7 +2129,7 @@ func opTxBegin(c OpContext) {
 }
 func opItxnField(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField(itxnFieldContext, "f")
+	f := c.mustReadItxnField("f")
 	c.emit(&ItxnFieldExpr{Field: f})
 }
 func opItxnSubmit(c OpContext) {
@@ -1952,12 +2138,12 @@ func opItxnSubmit(c OpContext) {
 }
 func opItxn(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField(txnFieldContext, "f")
+	f := c.mustReadTxnField("f")
 	c.emit(&ItxnExpr{Field: f})
 }
 func opItxna(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	i := c.mustReadUint8("i")
 	c.emit(&ItxnaExpr{Field: f, Index: i})
 }
@@ -1968,13 +2154,13 @@ func opItxnNext(c OpContext) {
 func opGitxn(c OpContext) {
 	c.minVersion(6)
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField(txnFieldContext, "f")
+	f := c.mustReadTxnField("f")
 	c.emit(&GitxnExpr{Index: uint8(t), Field: f})
 }
 func opGitxna(c OpContext) {
 	c.minVersion(6)
 	t := c.mustReadInt("t")
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	i := c.mustReadUint8("i")
 
 	c.emit(&GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
@@ -2010,18 +2196,18 @@ func opBoxPut(c OpContext) {
 }
 func opTxnas(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	c.emit(&TxnasExpr{Field: f})
 }
 func opGtxnas(c OpContext) {
 	c.minVersion(5)
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	c.emit(&GtxnasExpr{Index: t, Field: f})
 }
 func opGtxnsas(c OpContext) {
 	c.minVersion(5)
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	c.emit(&GtxnsasExpr{Field: f})
 }
 func opArgs(c OpContext) {
@@ -2034,13 +2220,13 @@ func opGloadss(c OpContext) {
 }
 func opItxnas(c OpContext) {
 	c.minVersion(6)
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	c.emit(&ItxnasExpr{Field: f})
 }
 func opGitxnas(c OpContext) {
 	c.minVersion(6)
 	t := c.mustReadUint8("t")
-	f := c.mustReadTxnField(txnaFieldContext, "f")
+	f := c.mustReadTxnaField("f")
 	c.emit(&GitxnasExpr{Index: t, Field: f})
 }
 func opVrfVerify(c OpContext) {
@@ -2088,6 +2274,77 @@ func (r ProcessResult) getOp(name string) (opItem, bool) {
 		Name:    name,
 		Version: r.Version,
 	})
+}
+
+type opItemArgVal struct {
+	Name    string
+	Doc     string
+	Version uint64
+}
+
+func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
+	var res []opItemArgVal
+
+	switch arg.Type {
+	case OpArgTypeLabel:
+		for _, sym := range r.Symbols {
+			res = append(res, opItemArgVal{
+				Name: sym.Name(),
+			})
+		}
+	default:
+		for _, v := range OpArgVals[arg.Type] {
+			if r.Version >= v.Version {
+				res = append(res, v)
+			}
+		}
+	}
+
+	return res
+}
+
+func (r ProcessResult) ArgValsAt(l int, ch int) []opItemArgVal {
+	var res []opItemArgVal
+
+	if l >= len(r.Lines) {
+		return res
+	}
+
+	ln := r.Lines[l]
+
+	curr := len(ln) - 1
+
+	_, idx, ok := ln.ImmAt(ch)
+	if ok {
+		curr = idx
+	}
+
+	op := ln[0]
+	info, ok := OpDocs.GetDoc(OpDocContext{
+		Name:    op.String(),
+		Version: r.Version,
+	})
+
+	if !ok {
+		return res
+	}
+
+	if len(info.Args) > 0 {
+		if curr >= len(info.Args) {
+			if info.Args[len(info.Args)-1].Array {
+				curr = len(info.Args) - 1
+			}
+		}
+	}
+
+	if curr >= len(info.Args) {
+		return res
+	}
+
+	arg := info.Args[curr]
+	res = r.ArgVals(arg)
+
+	return res
 }
 
 func (r ProcessResult) DocAt(l int, ch int) string {

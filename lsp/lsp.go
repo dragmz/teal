@@ -1157,111 +1157,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			switch mode {
 			case tealCompletionArg:
-				curr := len(ln) - 1
-
-				_, idx, ok := ln.ImmAt(req.Params.Position.Character)
-				if ok {
-					curr = idx
-				}
-
-				op := ln[0]
-				info, ok := teal.OpDocs.GetDoc(teal.OpDocContext{
-					Name:    op.String(),
-					Version: res.Version,
-				})
-
-				if len(info.Args) > 0 {
-					if curr >= len(info.Args) {
-						if info.Args[len(info.Args)-1].Array {
-							curr = len(info.Args) - 1
-						}
-					}
-				}
-
-				if ok && curr < len(info.Args) {
-					arg := info.Args[curr]
-					switch arg.Type {
-					case teal.OpArgTypeLabel:
-						for _, sym := range res.Symbols {
-							ccs = append(ccs, lspCompletionItem{
-								Label: sym.Name(),
-							})
-						}
-					case teal.OpArgTypeTxnField:
-						for _, f := range teal.TxnFieldNames {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-					case teal.OpArgTypeAcctParamsField:
-						for _, f := range teal.AcctParamsFields.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-
-					case teal.OpArgTypeAppParamsField:
-						for _, f := range teal.AppParamsFields.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-
-					case teal.OpArgTypeAssetHoldingField:
-						for _, f := range teal.AssetHoldingFields.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-
-					case teal.OpArgTypeAssetParamsField:
-						for _, f := range teal.AssetParamsFields.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-
-					case teal.OpArgTypeEcdsaCurve:
-						for _, f := range teal.EcdsaCurves.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-
-					case teal.OpArgTypeGlobalField:
-						for _, f := range teal.GlobalFieldNames {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-
-					case teal.OpArgTypeJSONRefField:
-						for _, f := range teal.JSONRefTypes.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-
-					case teal.OpArgTypeVrfStandard:
-						for _, f := range teal.VrfStandards.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-
-					case teal.OpArgTypeBase64EncodingField:
-						for _, f := range teal.Base64Encodings.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-					case teal.OpArgTypeBlockField:
-						for _, f := range teal.BlockFields.Names {
-							ccs = append(ccs, lspCompletionItem{
-								Label: f,
-							})
-						}
-					}
+				for _, v := range res.ArgValsAt(req.Params.Position.Line, req.Params.Position.Character) {
+					ccs = append(ccs, lspCompletionItem{
+						Label:         v.Name,
+						Documentation: v.Doc,
+					})
 				}
 
 			case tealCompletionOp:
