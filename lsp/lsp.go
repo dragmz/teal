@@ -1327,24 +1327,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			res := doc.Results()
 			var c interface{} = struct{}{}
 
-			for _, op := range res.Ops {
-				if req.Params.Position.Overlaps(op.Line(), op.Begin(), op.End()) {
-					info, ok := teal.OpDocs.GetDoc(teal.OpDocContext{
-						Name:    op.String(),
-						Version: res.Version,
-					})
-
-					if ok {
-						s := info.FullDoc
-						if s != "" {
-							c = lspHover{
-								Contents: lspMarkupContent{
-									Kind:  "plaintext",
-									Value: s,
-								},
-							}
-						}
-					}
+			s := res.DocAt(req.Params.Position.Line, req.Params.Position.Character)
+			if s != "" {
+				c = lspHover{
+					Contents: lspMarkupContent{
+						Kind:  "plaintext",
+						Value: s,
+					},
 				}
 			}
 

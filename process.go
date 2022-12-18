@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/algorand/go-algorand-sdk/types"
@@ -2080,6 +2081,194 @@ type ProcessResult struct {
 	Strings     []Token
 	Keywords    []Token
 	Macros      []Token
+}
+
+func (r ProcessResult) getOp(name string) (opItem, bool) {
+	return OpDocs.GetDoc(OpDocContext{
+		Name:    name,
+		Version: r.Version,
+	})
+}
+
+func (r ProcessResult) DocAt(l int, ch int) string {
+	if l >= len(r.Lines) {
+		return ""
+	}
+
+	ln := r.Lines[l]
+
+	for i, t := range ln {
+		if t.b > ch || t.End() < ch {
+			continue
+		}
+
+		if i == 0 {
+			info, ok := r.getOp(t.String())
+			if ok {
+				return info.FullDoc
+			}
+		} else {
+			tok, idx, ok := ln.ImmAt(ch)
+			if ok {
+				info, ok := r.getOp(ln[0].String())
+				if ok {
+					if len(info.Args) > 0 && idx >= len(info.Args) && info.Args[len(info.Args)-1].Array {
+						idx = len(info.Args) - 1
+					}
+
+					if idx < len(info.Args) {
+						arg := info.Args[idx]
+						switch arg.Type {
+						case OpArgTypeTxnField:
+							spec, ok := txnFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = txnFieldSpecByField(TxnField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+						case OpArgTypeAcctParamsField:
+							spec, ok := acctParamsFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = acctParamsFieldSpecByField(AcctParamsField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+						case OpArgTypeAppParamsField:
+							spec, ok := appParamsFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = appParamsFieldSpecByField(AppParamsField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeAssetHoldingField:
+							spec, ok := assetHoldingFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = assetHoldingFieldSpecByField(AssetHoldingField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeAssetParamsField:
+							spec, ok := assetParamsFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = assetParamsFieldSpecByField(AssetParamsField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeBase64EncodingField:
+							spec, ok := base64EncodingSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = base64EncodingSpecByField(Base64Encoding(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeBlockField:
+							spec, ok := blockFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = blockFieldSpecByField(BlockField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeEcdsaCurve:
+							spec, ok := ecdsaCurveSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = ecdsaCurveSpecByField(EcdsaCurve(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeGlobalField:
+							spec, ok := globalFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = globalFieldSpecByField(GlobalField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeJSONRefField:
+							spec, ok := jsonRefSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = jsonRefSpecByField(JSONRefType(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeVrfStandard:
+							spec, ok := vrfStandardSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = vrfStandardSpecByField(VrfStandard(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		break
+	}
+
+	return ""
 }
 
 func readTokens(source string) ([]Token, []Diagnostic) {
