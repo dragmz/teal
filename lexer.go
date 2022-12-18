@@ -25,6 +25,25 @@ type Token struct {
 	t TokenType
 }
 
+func (t Token) Overlaps(sl, sch, el, ech int) bool {
+	if t.l < sl || t.l > el {
+		return false
+	}
+
+	switch t.l {
+	case sl:
+		if t.b < sch && t.e < sch {
+			return false
+		}
+	case el:
+		if t.b > ech && t.e > ech {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (t Token) String() string {
 	return t.v
 }

@@ -2,7 +2,6 @@ package lsp
 
 import (
 	"bufio"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +9,6 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/dragmz/teal"
 	"github.com/joe-p/tealfmt"
@@ -1067,56 +1065,17 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			padding := new(bool)
 			*padding = true
 
-			for li := req.Params.Range.Start.Line; li <= req.Params.Range.End.Line; li++ {
-				if li >= len(res.Lines) {
-					continue
-				}
+			for _, ih := range res.InlayHints(req.Params.Range.Start.Line, req.Params.Range.Start.Character, req.Params.Range.End.Line, req.Params.Range.End.Character) {
+				ihs = append(ihs, lspInlayHint{
+					Position: lspPosition{
+						Line:      ih.Line,
+						Character: ih.Character,
+					},
+					Label:       ih.Label,
+					Kind:        parameter,
+					PaddingLeft: padding,
+				})
 
-				ln := res.Lines[li]
-
-				for _, tok := range ln {
-					if !req.Params.Range.Overlaps(tok.Line(), tok.Begin(), tok.End()) {
-						continue
-					}
-
-					if tok.Type() != teal.TokenValue {
-						continue
-					}
-
-					s := tok.String()
-					if !strings.HasPrefix(s, "0x") {
-						continue
-					}
-
-					bs, err := hex.DecodeString(s[2:])
-					if err != nil {
-						continue
-					}
-
-					ds := string(bs)
-
-					if !func() bool {
-						for _, r := range ds {
-							if r > unicode.MaxASCII || !unicode.IsPrint(r) {
-								return false
-							}
-						}
-						return true
-					}() {
-						continue
-					}
-
-					ihs = append(ihs, lspInlayHint{
-						Position: lspPosition{
-							Line:      tok.Line(),
-							Character: tok.End(),
-						},
-						Label:       fmt.Sprintf("= \"%s\" ", ds),
-						Kind:        parameter,
-						PaddingLeft: padding,
-					})
-
-				}
 			}
 			return l.success(h.Id, ihs)
 

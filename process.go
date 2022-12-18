@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/algorand/go-algorand-sdk/types"
 	"github.com/pkg/errors"
@@ -59,12 +60,16 @@ var OpArgTypes = []NewOpArgType{
 }
 
 var OpArgVals map[NewOpArgType][]opItemArgVal
+var OpValFieldNames map[NewOpArgType]map[int]string
 
 func init() {
 	res := map[NewOpArgType][]opItemArgVal{}
+	res2 := map[NewOpArgType]map[int]string{}
 
 	for _, t := range OpArgTypes {
 		vals := []opItemArgVal{}
+		vals2 := map[int]string{}
+
 		switch t {
 		case OpArgTypeTxnaField:
 			for name, spec := range txnFieldSpecByName {
@@ -74,6 +79,7 @@ func init() {
 						Doc:     spec.Note(),
 						Version: spec.version,
 					})
+					vals2[int(spec.field)] = spec.field.String()
 				}
 			}
 		case OpArgTypeItxnField:
@@ -84,6 +90,7 @@ func init() {
 						Doc:     spec.Note(),
 						Version: spec.itxVersion,
 					})
+					vals2[int(spec.field)] = spec.field.String()
 				}
 			}
 		case OpArgTypeTxnField:
@@ -93,6 +100,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 		case OpArgTypeAcctParamsField:
 			for name, spec := range acctParamsFieldSpecByName {
@@ -101,6 +109,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 
 		case OpArgTypeAppParamsField:
@@ -110,6 +119,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 
 		case OpArgTypeAssetHoldingField:
@@ -119,6 +129,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 
 		case OpArgTypeAssetParamsField:
@@ -128,6 +139,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 
 		case OpArgTypeEcdsaCurve:
@@ -137,7 +149,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
-
+				vals2[int(spec.field)] = spec.field.String()
 			}
 
 		case OpArgTypeGlobalField:
@@ -147,6 +159,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 
 		case OpArgTypeJSONRefField:
@@ -156,6 +169,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 
 		case OpArgTypeVrfStandard:
@@ -165,6 +179,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 
 		case OpArgTypeBase64EncodingField:
@@ -174,7 +189,7 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
-
+				vals2[int(spec.field)] = spec.field.String()
 			}
 		case OpArgTypeBlockField:
 			for name, spec := range blockFieldSpecByName {
@@ -183,13 +198,16 @@ func init() {
 					Doc:     spec.Note(),
 					Version: spec.version,
 				})
+				vals2[int(spec.field)] = spec.field.String()
 			}
 		}
 
 		res[t] = vals
+		res2[t] = vals2
 	}
 
 	OpArgVals = res
+	OpValFieldNames = res2
 }
 
 func (t NewOpArgType) String() string {
@@ -2282,6 +2300,121 @@ type opItemArgVal struct {
 	Version uint64
 }
 
+type InlayHint struct {
+	Line      int
+	Character int
+	Label     string
+}
+
+func (r ProcessResult) ArgFieldName(t NewOpArgType, v int) string {
+	ns, ok := OpValFieldNames[t]
+	if !ok {
+		return ""
+	}
+
+	n, ok := ns[v]
+	if !ok {
+		return ""
+	}
+
+	return n
+}
+
+func (r ProcessResult) InlayHints(sl int, sch int, el int, ech int) []InlayHint {
+	var ihs []InlayHint
+
+	for li := sl; li <= el; li++ {
+		if li >= len(r.Lines) {
+			continue
+		}
+
+		ln := r.Lines[li]
+
+		var ok bool
+		var spec opItem
+
+		if len(ln) > 0 {
+			spec, ok = r.getOp(ln[0].String())
+		}
+
+		for i, tok := range ln {
+			if !tok.Overlaps(sl, sch, el, ech) {
+				continue
+			}
+
+			func() {
+				if !ok {
+					return
+				}
+
+				if i == 0 {
+					return
+				}
+
+				idx := i - 1
+
+				if idx >= len(spec.Args) {
+					return
+				}
+
+				iv, err := strconv.Atoi(tok.v)
+				if err != nil {
+					return
+				}
+
+				arg := spec.Args[idx]
+
+				name := r.ArgFieldName(arg.Type, iv)
+
+				if name == "" {
+					return
+				}
+
+				ihs = append(ihs, InlayHint{
+					Line:      tok.l,
+					Character: tok.e,
+					Label:     fmt.Sprintf("= %s", name),
+				})
+			}()
+
+			func() {
+				if tok.Type() != TokenValue {
+					return
+				}
+
+				s := tok.String()
+				if !strings.HasPrefix(s, "0x") {
+					return
+				}
+
+				bs, err := hex.DecodeString(s[2:])
+				if err != nil {
+					return
+				}
+
+				ds := string(bs)
+
+				if func() bool {
+					for _, r := range ds {
+						if r > unicode.MaxASCII || !unicode.IsPrint(r) {
+							return false
+						}
+					}
+					return true
+				}() {
+					ihs = append(ihs, InlayHint{
+						Line:      tok.l,
+						Character: tok.e,
+						Label:     fmt.Sprintf("= \"%s\" ", ds),
+					})
+				}
+			}()
+		}
+	}
+
+	return ihs
+}
+
 func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 	var res []opItemArgVal
 
@@ -2388,6 +2521,32 @@ func (r ProcessResult) DocAt(l int, ch int) string {
 					if idx < len(info.Args) {
 						arg := info.Args[idx]
 						switch arg.Type {
+						case OpArgTypeTxnaField:
+							spec, ok := txnFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = txnFieldSpecByField(TxnField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeItxnField:
+							spec, ok := txnFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = txnFieldSpecByField(TxnField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
 						case OpArgTypeTxnField:
 							spec, ok := txnFieldSpecByName[tok.String()]
 							if ok {
