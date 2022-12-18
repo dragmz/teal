@@ -2303,11 +2303,11 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 	return res
 }
 
-func (r ProcessResult) ArgValsAt(l int, ch int) []opItemArgVal {
-	var res []opItemArgVal
+func (r ProcessResult) ArgAt(l int, ch int) (opItemArg, int, bool) {
+	var res opItemArg
 
 	if l >= len(r.Lines) {
-		return res
+		return res, -1, false
 	}
 
 	ln := r.Lines[l]
@@ -2326,7 +2326,7 @@ func (r ProcessResult) ArgValsAt(l int, ch int) []opItemArgVal {
 	})
 
 	if !ok {
-		return res
+		return res, -1, false
 	}
 
 	if len(info.Args) > 0 {
@@ -2338,10 +2338,22 @@ func (r ProcessResult) ArgValsAt(l int, ch int) []opItemArgVal {
 	}
 
 	if curr >= len(info.Args) {
-		return res
+		return res, curr, false
 	}
 
 	arg := info.Args[curr]
+
+	return arg, curr, true
+}
+
+func (r ProcessResult) ArgValsAt(l int, ch int) []opItemArgVal {
+	var res []opItemArgVal
+
+	arg, _, ok := r.ArgAt(l, ch)
+	if !ok {
+		return res
+	}
+
 	res = r.ArgVals(arg)
 
 	return res

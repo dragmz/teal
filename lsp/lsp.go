@@ -1322,8 +1322,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			res := doc.Results()
-			var sh interface{} = struct{}{}
 
+			var sh interface{} = struct{}{}
 			for _, op := range res.Ops {
 				if op.Line() == req.Params.Position.Line {
 					info, ok := teal.OpDocs.GetDoc(teal.OpDocContext{
@@ -1331,31 +1331,17 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						Version: res.Version,
 					})
 					if ok {
-						ln := res.Lines[req.Params.Position.Line]
+						_, idx, _ := res.ArgAt(req.Params.Position.Line, req.Params.Position.Character)
 
 						active := new(int)
-						*active = len(ln) - 1
+						*active = idx
 
-						_, idx, ok := ln.ImmAt(req.Params.Position.Character)
-						if ok {
-							*active = idx
-						}
+						var doc interface{}
 
-						if len(info.Args) > 0 {
-							if *active >= len(info.Args) {
-								if info.Args[len(info.Args)-1].Array {
-									*active = len(info.Args) - 1
-								}
-							}
-						}
-
-						var d interface{}
-
-						s := info.FullDoc
-						if s != "" {
-							d = lspMarkupContent{
+						if info.FullDoc != "" {
+							doc = lspMarkupContent{
 								Kind:  "markdown",
-								Value: s,
+								Value: info.FullDoc,
 							}
 						}
 
@@ -1371,7 +1357,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							Signatures: []lspSignatureInformation{
 								{
 									Label:           info.FullSig,
-									Documentation:   d,
+									Documentation:   doc,
 									Parameters:      ps,
 									ActiveParameter: active,
 								},
