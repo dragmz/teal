@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/algorand/go-algorand-sdk v1.24.0
 	github.com/dragmz/abs v0.0.0-20221120174236-615259d8ebd1
-	github.com/joe-p/tealfmt v0.0.0-20221210124147-5d70303ebf1a
+	github.com/joe-p/tealfmt v0.0.0-20221219211223-cec2ea891d52
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.37.0
 	golang.org/x/tools v0.4.0
