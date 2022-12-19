@@ -244,7 +244,8 @@ type lspServerCapabilities struct {
 	DefinitionProvider         *bool                      `json:"definitionProvider,omitempty"`
 	HoverProvider              *bool                      `json:"hoverProvider,omitempty"`
 	SignatureHelpProvider      *lspSignatureHelpOptions   `json:"signatureHelpProvider,omitempty"`
-	InlayHintProvieder         *bool                      `json:"inlayHintProvider,omitempty"`
+	InlayHintProvider          *bool                      `json:"inlayHintProvider,omitempty"`
+	InlineValueProvider        *bool                      `json:"inlineValueProvider,omitempty"`
 }
 
 type lspInitializeResult struct {
@@ -586,6 +587,16 @@ type lspInlayHint struct {
 	PaddingLeft *bool       `json:"paddingLeft,omitempty"`
 }
 
+type lspInlineValueRequestParams struct {
+	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
+	Range        lspRange                  `json:"range,omitempty"`
+}
+
+type lspInlineValueText struct {
+	Range lspRange `json:"range"`
+	Text  string   `json:"text"`
+}
+
 // notifications
 type lspDidChange lspRequest[*lspDidChangeParams]
 type lspDidOpen lspRequest[*lspDidOpenParams]
@@ -608,6 +619,7 @@ type lspDefinitionRequest lspRequest[*lspDefinitionRequestParams]
 type lspHoverRequest lspRequest[*lspHoverRequestParams]
 type lspSignatureHelpRequest lspRequest[*lspSignatureHelpRequestParams]
 type lspInlayHintRequest lspRequest[*lspInlayHintRequestParams]
+type lspInlineValueRequest lspRequest[*lspInlineValueRequestParams]
 
 func readInto(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, &v)
@@ -1044,6 +1056,21 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					req.Params.TextDocument.Uri: chs,
 				},
 			})
+
+		case "textDocument/inlineValue":
+			req, err := read[lspInlineValueRequest](b)
+			if err != nil {
+				return err
+			}
+
+			doc := l.docs[req.Params.TextDocument.Uri]
+			if doc == nil {
+				return errors.New("doc not found")
+			}
+
+			doc.Results()
+
+			return l.success(h.Id, []lspInlineValueText{})
 
 		case "textDocument/inlayHint":
 			req, err := read[lspInlayHintRequest](b)
@@ -1675,8 +1702,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			hover := new(bool)
 			*hover = true
 
-			inlay := new(bool)
-			*inlay = true
+			inlayHint := new(bool)
+			*inlayHint = true
+
+			inlayValue := new(bool)
+			*inlayValue = true
 
 			return l.success(h.Id, lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
@@ -1706,7 +1736,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					DefinitionProvider:         definition,
 					HoverProvider:              hover,
 					SignatureHelpProvider:      &lspSignatureHelpOptions{},
-					InlayHintProvieder:         inlay,
+					InlayHintProvider:          inlayHint,
+					InlineValueProvider:        inlayValue,
 				},
 			})
 		default:
