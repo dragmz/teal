@@ -75,6 +75,7 @@ func init() {
 			for name, spec := range txnFieldSpecByName {
 				if spec.array {
 					vals = append(vals, opItemArgVal{
+						Value:   uint64(spec.field),
 						Name:    name,
 						Doc:     spec.Note(),
 						Version: spec.version,
@@ -86,6 +87,7 @@ func init() {
 			for name, spec := range txnFieldSpecByName {
 				if spec.itxVersion > 0 {
 					vals = append(vals, opItemArgVal{
+						Value:   uint64(spec.field),
 						Name:    name,
 						Doc:     spec.Note(),
 						Version: spec.itxVersion,
@@ -96,6 +98,7 @@ func init() {
 		case OpArgTypeTxnField:
 			for name, spec := range txnFieldSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -105,6 +108,7 @@ func init() {
 		case OpArgTypeAcctParamsField:
 			for name, spec := range acctParamsFieldSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -115,6 +119,7 @@ func init() {
 		case OpArgTypeAppParamsField:
 			for name, spec := range appParamsFieldSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -125,6 +130,7 @@ func init() {
 		case OpArgTypeAssetHoldingField:
 			for name, spec := range assetHoldingFieldSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -135,6 +141,7 @@ func init() {
 		case OpArgTypeAssetParamsField:
 			for name, spec := range assetParamsFieldSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -145,6 +152,7 @@ func init() {
 		case OpArgTypeEcdsaCurve:
 			for name, spec := range ecdsaCurveSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -155,6 +163,7 @@ func init() {
 		case OpArgTypeGlobalField:
 			for name, spec := range globalFieldSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -165,6 +174,7 @@ func init() {
 		case OpArgTypeJSONRefField:
 			for name, spec := range jsonRefSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -175,6 +185,7 @@ func init() {
 		case OpArgTypeVrfStandard:
 			for name, spec := range vrfStandardSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -185,6 +196,7 @@ func init() {
 		case OpArgTypeBase64EncodingField:
 			for name, spec := range base64EncodingSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -194,6 +206,7 @@ func init() {
 		case OpArgTypeBlockField:
 			for name, spec := range blockFieldSpecByName {
 				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
 					Name:    name,
 					Doc:     spec.Note(),
 					Version: spec.version,
@@ -2295,9 +2308,25 @@ func (r ProcessResult) getOp(name string) (opItem, bool) {
 }
 
 type opItemArgVal struct {
+	Value   uint64
 	Name    string
 	Doc     string
 	Version uint64
+}
+
+type NamedInlayHint struct {
+	T    Token
+	Name string
+}
+
+type DecodedInlayHint struct {
+	T     Token
+	Value string
+}
+
+type InlayHints struct {
+	Named   []NamedInlayHint
+	Decoded []DecodedInlayHint
 }
 
 type InlayHint struct {
@@ -2320,8 +2349,8 @@ func (r ProcessResult) ArgFieldName(t NewOpArgType, v int) string {
 	return n
 }
 
-func (r ProcessResult) InlayHints(sl int, sch int, el int, ech int) []InlayHint {
-	var ihs []InlayHint
+func (r ProcessResult) InlayHints(sl int, sch int, el int, ech int) InlayHints {
+	var ihs InlayHints
 
 	for li := sl; li <= el; li++ {
 		if li >= len(r.Lines) {
@@ -2370,10 +2399,9 @@ func (r ProcessResult) InlayHints(sl int, sch int, el int, ech int) []InlayHint 
 					return
 				}
 
-				ihs = append(ihs, InlayHint{
-					Line:      tok.l,
-					Character: tok.e,
-					Label:     fmt.Sprintf("= %s", name),
+				ihs.Named = append(ihs.Named, NamedInlayHint{
+					T:    tok,
+					Name: name,
 				})
 			}()
 
@@ -2402,10 +2430,9 @@ func (r ProcessResult) InlayHints(sl int, sch int, el int, ech int) []InlayHint 
 					}
 					return true
 				}() {
-					ihs = append(ihs, InlayHint{
-						Line:      tok.l,
-						Character: tok.e,
-						Label:     fmt.Sprintf("= \"%s\" ", ds),
+					ihs.Decoded = append(ihs.Decoded, DecodedInlayHint{
+						T:     tok,
+						Value: ds,
 					})
 				}
 			}()

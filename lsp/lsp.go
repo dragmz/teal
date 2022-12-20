@@ -316,6 +316,12 @@ type lspDocumentSymbolParams struct {
 	TextDocument *lspDocumentSymbolTextDocument `json:"textDocument"`
 }
 
+type tealReplaceValueCommandArgs struct {
+	Uri   string   `json:"uri"`
+	Range lspRange `json:"range"`
+	Name  string   `json:"name"`
+}
+
 type tealCreateLabelCommandArgs struct {
 	Uri  string `json:"uri"`
 	Name string `json:"name"`
@@ -721,6 +727,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 		return nil
 	}
 
+	if h.Method == "" {
+		// TODO: handle response
+		return nil
+	}
+
 	switch h.Method { // notifications
 	case "initialized":
 
@@ -795,6 +806,42 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			switch req.Params.Command {
+			case "teal.value.replace":
+				var body lspWorkspaceExecuteCommandBody[[]tealReplaceValueCommandArgs]
+				err := readInto(b, &body)
+				if err != nil {
+					return err
+				}
+
+				args := body.Params.Arguments
+				if len(args) != 1 {
+					return errors.New("unexpected number of args")
+				}
+				doc := l.docs[args[0].Uri]
+				if doc == nil {
+					return errors.New("doc not found")
+				}
+
+				edits := []lspTextEdit{
+					{
+						Range:   args[0].Range,
+						NewText: args[0].Name,
+					},
+				}
+
+				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
+					Label: "Replace with named value",
+					Edit: lspWorkspaceEdit{
+						DocumentChanges: []lspTextDocumentEdit{
+							{
+								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
+									Uri: args[0].Uri,
+								},
+								Edits: edits,
+							},
+						},
+					},
+				})
 			case "teal.label.remove":
 				var body lspWorkspaceExecuteCommandBody[[]tealRemoveLabelCommandArgs]
 				err := readInto(b, &body)
@@ -1070,7 +1117,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			doc.Results()
 
-			return l.success(h.Id, []lspInlineValueText{})
+			ls := []lspInlineValueText{}
+
+			ls = append(ls, lspInlineValueText{
+				Range: req.Params.Range,
+				Text:  "Debugger Test",
+			})
+
+			return l.success(h.Id, ls)
 
 		case "textDocument/inlayHint":
 			req, err := read[lspInlayHintRequest](b)
@@ -1092,13 +1146,27 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			padding := new(bool)
 			*padding = true
 
-			for _, ih := range res.InlayHints(req.Params.Range.Start.Line, req.Params.Range.Start.Character, req.Params.Range.End.Line, req.Params.Range.End.Character) {
+			hs := res.InlayHints(req.Params.Range.Start.Line, req.Params.Range.Start.Character, req.Params.Range.End.Line, req.Params.Range.End.Character)
+
+			for _, named := range hs.Named {
 				ihs = append(ihs, lspInlayHint{
 					Position: lspPosition{
-						Line:      ih.Line,
-						Character: ih.Character,
+						Line:      named.T.Line(),
+						Character: named.T.End(),
 					},
-					Label:       ih.Label,
+					Label:       named.Name,
+					Kind:        parameter,
+					PaddingLeft: padding,
+				})
+			}
+
+			for _, decoded := range hs.Decoded {
+				ihs = append(ihs, lspInlayHint{
+					Position: lspPosition{
+						Line:      decoded.T.Line(),
+						Character: decoded.T.End(),
+					},
+					Label:       decoded.Value,
 					Kind:        parameter,
 					PaddingLeft: padding,
 				})
@@ -1145,6 +1213,9 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			case tealCompletionArg:
 				for _, v := range res.ArgValsAt(req.Params.Position.Line, req.Params.Position.Character) {
 					ccs = append(ccs, lspCompletionItem{
+						LabelDetails: &lspCompletionItemLabelDetails{
+							Detail: fmt.Sprintf(" = %d", v.Value),
+						},
 						Label:         v.Name,
 						Documentation: v.Doc,
 					})
@@ -1441,6 +1512,36 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				})
 			}
 
+			hs := res.InlayHints(req.Params.Range.Start.Line, req.Params.Range.Start.Character, req.Params.Range.End.Line, req.Params.Range.End.Character)
+			for _, named := range hs.Named {
+				kind := "quickfix"
+				cas = append(cas, lspCodeAction{
+					Title: fmt.Sprintf("Replace with '%s'", named.Name),
+					Kind:  &kind,
+					Command: &lspCommand{
+						Title:   "Replace with named const",
+						Command: "teal.value.replace",
+						Arguments: []interface{}{
+							tealReplaceValueCommandArgs{
+								Uri: req.Params.TextDocument.Uri,
+								Range: lspRange{
+									Start: lspPosition{
+										Line:      named.T.Line(),
+										Character: named.T.Begin(),
+									},
+									End: lspPosition{
+										Line:      named.T.Line(),
+										Character: named.T.End(),
+									},
+								},
+								Name: named.Name,
+							},
+						},
+					},
+				})
+
+			}
+
 			return l.success(h.Id, cas)
 		case "textDocument/diagnostic":
 			req, err := read[lspDiagnosticRequest](b)
@@ -1705,8 +1806,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			inlayHint := new(bool)
 			*inlayHint = true
 
-			inlayValue := new(bool)
-			*inlayValue = true
+			inlineValue := new(bool)
+			*inlineValue = true
 
 			return l.success(h.Id, lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
@@ -1719,6 +1820,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						Commands: []string{
 							"teal.label.create",
 							"teal.label.remove",
+							"teal.value.replace",
 						},
 					},
 					RenameProvider: &lspRenameOptions{
@@ -1737,7 +1839,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					HoverProvider:              hover,
 					SignatureHelpProvider:      &lspSignatureHelpOptions{},
 					InlayHintProvider:          inlayHint,
-					InlineValueProvider:        inlayValue,
+					InlineValueProvider:        inlineValue,
 				},
 			})
 		default:
