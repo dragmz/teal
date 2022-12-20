@@ -20,7 +20,10 @@ func run(a args) error {
 
 	res := teal.Process(string(bs))
 
-	return teal.Interpret(res.Listing)
+	vm := teal.Interpret(res.Listing)
+
+	vm.Run()
+	return nil
 }
 
 func main() {

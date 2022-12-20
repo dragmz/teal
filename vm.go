@@ -5,22 +5,59 @@ import (
 	"strings"
 )
 
-type VM struct {
-	l Listing
-}
-
 type vmFrame struct {
 	a uint8
 	r uint8
 	p uint8
 }
 
+type vmSource interface {
+	String() string
+}
+
 type vmValue struct {
 	t vmDataType
+
+	src vmSource
+}
+
+type vmConst struct {
+	v string
+}
+
+type NamedExpr interface {
+	Name() string
+}
+
+type vmOpSource struct {
+	e    NamedExpr
+	args []vmSource
+	res  string
+}
+
+func (s vmOpSource) String() string {
+	res := s.e.Name()
+	if len(s.args) > 0 {
+		var argss []string
+		for _, arg := range s.args {
+			argss = append(argss, arg.String())
+		}
+
+		res += fmt.Sprintf("(%s)", strings.Join(argss, ", "))
+	}
+	return res
+}
+
+func (c vmConst) String() string {
+	return c.v
 }
 
 func (v vmValue) String() string {
-	return v.t.String()
+	res := v.t.String()
+	if v.src != nil {
+		res += ": " + v.src.String()
+	}
+	return res
 }
 
 type vmValueType int
@@ -48,7 +85,7 @@ func (t vmDataType) String() string {
 }
 
 type vmOp interface {
-	Execute(b *vmBranch) error
+	Execute(b *VmBranch) error
 }
 
 func (t StackType) Vm() vmDataType {
@@ -67,31 +104,30 @@ func (t StackType) Vm() vmDataType {
 }
 
 type vmStack struct {
-	items []vmValue
+	Items []vmValue
 }
 
-func (b *vmBranch) push(t vmValue) {
-	b.s.items = append(b.s.items, t)
+func (b *VmBranch) push(t vmValue) {
+	b.Stack.Items = append(b.Stack.Items, t)
 }
 
-func (b *vmBranch) prepare(a uint8, r uint8) {
-	b.fs = append(b.fs, vmFrame{a: a, r: r, p: uint8(len(b.s.items))})
+func (b *VmBranch) prepare(a uint8, r uint8) {
+	f := b.fs[len(b.fs)-1]
+	f.a = a
+	f.r = r
+	b.fs[len(b.fs)-1] = f
 }
 
-func (b *vmBranch) replace(n uint8, v vmValue) {
-	b.s.items[n] = v
+func (b *VmBranch) replace(n uint8, v vmValue) {
+	b.Stack.Items[n] = v
 }
 
-func (b *vmBranch) at(n uint8) vmValue {
-	return b.s.items[uint8(len(b.s.items))-1-n]
-}
-
-func (b *vmBranch) pop(t vmDataType) vmValue {
-	if len(b.s.items) == 0 {
+func (b *VmBranch) pop(t vmDataType) vmValue {
+	if len(b.Stack.Items) == 0 {
 		panic("empty stack")
 	}
 
-	v := b.s.items[len(b.s.items)-1]
+	v := b.Stack.Items[len(b.Stack.Items)-1]
 	switch t {
 	case vmTypeAny:
 	default:
@@ -99,78 +135,77 @@ func (b *vmBranch) pop(t vmDataType) vmValue {
 		case vmTypeAny:
 		default:
 			if v.t != t {
-				panic("unexpected data type on stack")
+				panic(fmt.Sprintf("unexpected data type on stack - expected: %s, got: %s", t, v.t))
 			}
 		}
 	}
-	b.s.items = b.s.items[:len(b.s.items)-1]
+	b.Stack.Items = b.Stack.Items[:len(b.Stack.Items)-1]
 	return v
 }
 
 func (s *vmStack) clone() *vmStack {
 	return &vmStack{
-		items: append([]vmValue{}, s.items...),
+		Items: append([]vmValue{}, s.Items...),
 	}
 }
 
-type vmBranch struct {
-	id int
+type VmBranch struct {
+	Id int
 
-	v *vm
+	vm *Vm
 
-	ln int
-	cs []int
+	Line int
+	cs   []int
 
-	s *vmStack
+	Stack *vmStack
 
 	fs []vmFrame
 
-	budget int
+	Budget int
 }
 
-func (b *vmBranch) retsub() {
-	b.ln = b.cs[len(b.cs)-1]
-	b.cs = b.cs[:len(b.cs)-1]
-}
-
-func (b *vmBranch) fork(target string) {
-	nb := &vmBranch{
-		id:     b.v.id,
-		v:      b.v,
-		ln:     b.v.find(target),
-		s:      b.s.clone(),
-		budget: b.budget,
+func (b *VmBranch) fork(target string) {
+	nb := &VmBranch{
+		Id:     b.vm.Id,
+		vm:     b.vm,
+		Line:   b.vm.find(target),
+		Stack:  b.Stack.clone(),
+		Budget: b.Budget,
 	}
 
-	b.v.id++
+	b.vm.Id++
 
-	b.v.br = append(b.v.br, nb)
-	b.ln = -1
+	b.vm.Branches = append(b.vm.Branches, nb)
 }
 
-func (b *vmBranch) jump(target string) {
-	b.ln = b.v.find(target)
+func (b *VmBranch) jump(target string) {
+	b.Line = b.vm.find(target)
 }
 
-func (b *vmBranch) call(target string) {
-	b.cs = append(b.cs, b.ln+1)
-	b.ln = b.v.find(target)
+func (b *VmBranch) call(target string) {
+	b.cs = append(b.cs, b.Line+1)
+	b.Line = b.vm.find(target)
+	b.fs = append(b.fs, vmFrame{a: 0, r: 0, p: uint8(len(b.Stack.Items))})
 }
 
-func (b *vmBranch) exit() {
-	b.ln = -1
+func (b *VmBranch) exit() {
+	b.Line = -1
 }
 
-type vm struct {
-	id int
+type Vm struct {
+	Id int
 
-	l    Listing
+	Line Listing
 	syms map[string]int
 
-	br []*vmBranch
+	Branches []*VmBranch
+	Branch   *VmBranch
+	Current  int
+
+	Trace string
 }
 
-func (v *vm) find(target string) int {
+func (v *Vm) find(target string) int {
 	ln, ok := v.syms[target]
 	if !ok {
 		return -1
@@ -179,7 +214,7 @@ func (v *vm) find(target string) int {
 	return ln
 }
 
-func Interpret(l Listing) error {
+func Interpret(l Listing) *Vm {
 	syms := map[string]int{}
 
 	for i, op := range l {
@@ -189,68 +224,84 @@ func Interpret(l Listing) error {
 		}
 	}
 
-	v := &vm{
-		l:    l,
+	v := &Vm{
+		Line: l,
 		syms: syms,
 	}
 
-	b := &vmBranch{
-		id:     v.id,
-		v:      v,
-		s:      &vmStack{},
-		budget: 700,
+	b := &VmBranch{
+		Id:     v.Id,
+		vm:     v,
+		Stack:  &vmStack{},
+		Budget: 700,
 	}
 
-	v.id++
+	v.Id++
 
-	v.br = append(v.br, b)
+	v.Branches = append(v.Branches, b)
 
-	for len(v.br) > 0 {
-		b := v.br[0]
+	v.skipNops()
 
-		var op Op
-		for b.ln < len(v.l) {
-			op = v.l[b.ln]
+	return v
+}
+
+func (v *Vm) skipNops() {
+	var op Op
+
+	for len(v.Branches) > v.Current {
+		b := v.Branches[v.Current]
+
+		if b.Line == -1 || b.Line == len(v.Line) {
+			v.Current++
+			continue
+		}
+
+		for b.Line < len(v.Line) {
+			op = v.Line[b.Line]
 
 			_, nop := op.(Nop)
 			if !nop {
-				break
+				v.Branch = b
+				return
 			}
 
-			b.ln++
+			b.Line++
 		}
-
-		if b.ln < len(v.l) {
-			if b.budget > 0 {
-				budget := b.budget
-				ln := b.ln
-
-				b.budget--
-
-				switch op := op.(type) {
-				case vmOp:
-					op.Execute(b)
-				default:
-					b.ln++
-				}
-
-				ss := []string{}
-				for i := len(b.s.items) - 1; i >= 0; i-- {
-					ss = append(ss, b.s.items[i].String())
-				}
-
-				fmt.Printf("[%d: %d, %d] %s | [%s]\n", b.id, ln, budget, op, strings.Join(ss, ", "))
-			} else {
-				fmt.Printf("[%d: %d, %d] out of budget\n", b.id, b.ln, b.budget)
-				b.ln = -1
-			}
-		}
-
-		if b.ln == -1 || b.ln == len(v.l) {
-			v.br = v.br[1:]
-		}
-
 	}
 
-	return nil
+	v.Branch = nil
+}
+
+func (v *Vm) Step() {
+	v.skipNops()
+
+	if v.Branch == nil {
+		return
+	}
+
+	b := v.Branch
+
+	if b.Line < len(v.Line) {
+		op := v.Line[b.Line]
+		if b.Budget > 0 {
+			b.Budget--
+
+			switch op := op.(type) {
+			case vmOp:
+				op.Execute(b)
+			default:
+				b.Line++
+			}
+
+			v.skipNops()
+		} else {
+			b.Line = -1
+		}
+	}
+}
+
+func (v *Vm) Run() {
+	for len(v.Branches) > 0 {
+		v.Step()
+	}
 }

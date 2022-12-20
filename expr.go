@@ -20,7 +20,7 @@ type Nop interface {
 
 type ErrExpr struct{}
 
-func (e *ErrExpr) Execute(b *vmBranch) error {
+func (e *ErrExpr) Execute(b *VmBranch) error {
 	b.exit()
 	return nil
 }
@@ -41,10 +41,10 @@ func (e *Sha3256Expr) String() string {
 	return "sha3_256"
 }
 
-func (e *Sha3256Expr) Execute(b *vmBranch) error {
+func (e *Sha3256Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -55,15 +55,19 @@ var Sha3256 = &Sha3256Expr{}
 type Sha256Expr struct{}
 
 func (e *Sha256Expr) String() string {
-	return "sha256"
+	return e.Name()
 }
 
-func (e *Sha256Expr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
-	b.push(vmValue{t: vmTypeBytes})
+func (e *Sha256Expr) Execute(b *VmBranch) error {
+	v := b.pop(vmTypeBytes)
+	b.push(vmValue{t: vmTypeBytes, src: vmOpSource{e: e, args: []vmSource{v}}})
 
-	b.ln++
+	b.Line++
 	return nil
+}
+
+func (e *Sha256Expr) Name() string {
+	return "sha256"
 }
 
 var Sha256 = &Sha256Expr{}
@@ -76,11 +80,11 @@ func (e *Keccak256Expr) String() string {
 	return "keccak256"
 }
 
-func (e *Keccak256Expr) Execute(b *vmBranch) error {
+func (e *Keccak256Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -94,11 +98,11 @@ func (e *Sha512256Expr) String() string {
 	return "sha512_256"
 }
 
-func (e *Sha512256Expr) Execute(b *vmBranch) error {
+func (e *Sha512256Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -109,17 +113,23 @@ var Sha512256 = &Sha512256Expr{}
 type ED25519VerifyExpr struct{}
 
 func (e *ED25519VerifyExpr) String() string {
-	return "ed25519verify"
+	return e.Name()
 }
 
-func (e *ED25519VerifyExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
-	b.push(vmValue{t: vmTypeUint64})
+func (e *ED25519VerifyExpr) Execute(b *VmBranch) error {
+	v1 := b.pop(vmTypeBytes)
+	v2 := b.pop(vmTypeBytes)
+	v3 := b.pop(vmTypeBytes)
+	b.push(vmValue{t: vmTypeUint64, src: vmOpSource{e: e, args: []vmSource{
+		v1, v2, v3,
+	}}})
 
-	b.ln++
+	b.Line++
 	return nil
+}
+
+func (e *ED25519VerifyExpr) Name() string {
+	return "ed25519verify"
 }
 
 var ED25519Verify = &ED25519VerifyExpr{}
@@ -131,18 +141,23 @@ type EcdsaVerifyExpr struct {
 }
 
 func (e *EcdsaVerifyExpr) String() string {
-	return fmt.Sprintf("ecdsa_verify %d", e.Index)
+	return fmt.Sprintf("%s %d", e.Name(), e.Index)
 }
 
-func (e *EcdsaVerifyExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
-	b.push(vmValue{t: vmTypeUint64})
+func (e *EcdsaVerifyExpr) Name() string {
+	return "ecdsa_verify"
+}
 
-	b.ln++
+func (e *EcdsaVerifyExpr) Execute(b *VmBranch) error {
+	v1 := b.pop(vmTypeBytes)
+	v2 := b.pop(vmTypeBytes)
+	v3 := b.pop(vmTypeBytes)
+	v4 := b.pop(vmTypeBytes)
+	v5 := b.pop(vmTypeBytes)
+
+	b.push(vmValue{t: vmTypeUint64, src: vmOpSource{e: e, args: []vmSource{v1, v2, v3, v4, v5}}})
+
+	b.Line++
 	return nil
 }
 
@@ -152,12 +167,12 @@ type EcdsaPkDecompressExpr struct {
 	Index EcdsaCurve
 }
 
-func (e *EcdsaPkDecompressExpr) Execute(b *vmBranch) error {
+func (e *EcdsaPkDecompressExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -171,15 +186,15 @@ type EcdsaPkRecoverExpr struct {
 	Index EcdsaCurve
 }
 
-func (e *EcdsaPkRecoverExpr) Execute(b *vmBranch) error {
+func (e *EcdsaPkRecoverExpr) Execute(b *VmBranch) error {
+	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeUint64)
-	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -196,12 +211,12 @@ func (e *PlusExpr) String() string {
 	return "+"
 }
 
-func (e *PlusExpr) Execute(b *vmBranch) error {
+func (e *PlusExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -212,12 +227,12 @@ var PlusOp = &PlusExpr{}
 type MinusExpr struct {
 }
 
-func (e *MinusExpr) Execute(b *vmBranch) error {
+func (e *MinusExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -235,12 +250,12 @@ func (e *DivExpr) String() string {
 	return "/"
 }
 
-func (e *DivExpr) Execute(b *vmBranch) error {
+func (e *DivExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -254,12 +269,12 @@ func (e *MulExpr) String() string {
 	return "*"
 }
 
-func (e *MulExpr) Execute(b *vmBranch) error {
+func (e *MulExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -274,12 +289,12 @@ func (e *LtExpr) String() string {
 	return "<"
 }
 
-func (e *LtExpr) Execute(b *vmBranch) error {
+func (e *LtExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -290,12 +305,12 @@ var Lt = &LtExpr{}
 type GtExpr struct {
 }
 
-func (e *GtExpr) Execute(b *vmBranch) error {
+func (e *GtExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -310,12 +325,12 @@ var Gt = &GtExpr{}
 type LtEqExpr struct {
 }
 
-func (e *LtEqExpr) Execute(b *vmBranch) error {
+func (e *LtEqExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -334,12 +349,12 @@ func (e *GtEqExpr) String() string {
 	return ">="
 }
 
-func (e *GtEqExpr) Execute(b *vmBranch) error {
+func (e *GtEqExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -350,12 +365,12 @@ var Ge = &GtEqExpr{}
 type AndExpr struct {
 }
 
-func (e *AndExpr) Execute(b *vmBranch) error {
+func (e *AndExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -374,12 +389,12 @@ func (e *OrExpr) String() string {
 	return "||"
 }
 
-func (e *OrExpr) Execute(b *vmBranch) error {
+func (e *OrExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -390,12 +405,12 @@ var Or = &OrExpr{}
 type EqExpr struct {
 }
 
-func (e *EqExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeUint64)
-	b.pop(vmTypeUint64)
+func (e *EqExpr) Execute(b *VmBranch) error {
+	b.pop(vmTypeAny)
+	b.pop(vmTypeAny)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -410,12 +425,12 @@ var Eq = &EqExpr{}
 type NeqExpr struct {
 }
 
-func (e *NeqExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeUint64)
-	b.pop(vmTypeUint64)
+func (e *NeqExpr) Execute(b *VmBranch) error {
+	b.pop(vmTypeAny)
+	b.pop(vmTypeAny)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -433,11 +448,11 @@ func (e *NotExpr) String() string {
 	return "!"
 }
 
-func (e *NotExpr) Execute(b *vmBranch) error {
+func (e *NotExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -451,11 +466,11 @@ func (e *LenExpr) String() string {
 	return "len"
 }
 
-func (e *LenExpr) Execute(b *vmBranch) error {
+func (e *LenExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -469,11 +484,11 @@ func (e *ItobExpr) String() string {
 	return "itob"
 }
 
-func (e *ItobExpr) Execute(b *vmBranch) error {
+func (e *ItobExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -487,11 +502,11 @@ func (e *BtoiExpr) String() string {
 	return "btoi"
 }
 
-func (e *BtoiExpr) Execute(b *vmBranch) error {
+func (e *BtoiExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -505,12 +520,12 @@ func (e *ModExpr) String() string {
 	return "%"
 }
 
-func (e *ModExpr) Execute(b *vmBranch) error {
+func (e *ModExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -520,12 +535,12 @@ var Modulo = &ModExpr{}
 
 type BitOrExpr struct{}
 
-func (e *BitOrExpr) Execute(b *vmBranch) error {
+func (e *BitOrExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -543,12 +558,12 @@ func (e *BitAndExpr) String() string {
 	return "&"
 }
 
-func (e *BitAndExpr) Execute(b *vmBranch) error {
+func (e *BitAndExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -558,12 +573,12 @@ var BitAnd = &BitAndExpr{}
 
 type BitXorExpr struct{}
 
-func (e *BitXorExpr) Execute(b *vmBranch) error {
+func (e *BitXorExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -581,11 +596,11 @@ func (e *BitNotExpr) String() string {
 	return "~"
 }
 
-func (e *BitNotExpr) Execute(b *vmBranch) error {
+func (e *BitNotExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -595,13 +610,13 @@ var BitNot = &BitNotExpr{}
 
 type MulwExpr struct{}
 
-func (e *MulwExpr) Execute(b *vmBranch) error {
+func (e *MulwExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -619,13 +634,13 @@ func (e *AddwExpr) String() string {
 	return "addw"
 }
 
-func (e *AddwExpr) Execute(b *vmBranch) error {
+func (e *AddwExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -641,7 +656,7 @@ func (e *DivModwExpr) String() string {
 
 var DivModw = &DivModwExpr{}
 
-func (e *DivModwExpr) Execute(b *vmBranch) error {
+func (e *DivModwExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
@@ -651,7 +666,7 @@ func (e *DivModwExpr) Execute(b *vmBranch) error {
 	b.push(vmValue{t: vmTypeUint64})
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -687,10 +702,10 @@ func (e *IntcExpr) String() string {
 	return fmt.Sprintf("intc %d", e.Index)
 }
 
-func (e *IntcExpr) Execute(b *vmBranch) error {
+func (e *IntcExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -702,10 +717,10 @@ func (e *Intc0Expr) String() string {
 	return "intc_0"
 }
 
-func (e *Intc0Expr) Execute(b *vmBranch) error {
+func (e *Intc0Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -718,10 +733,10 @@ type Intc1Expr struct{}
 func (e *Intc1Expr) String() string {
 	return "intc_1"
 }
-func (e *Intc1Expr) Execute(b *vmBranch) error {
+func (e *Intc1Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -734,10 +749,10 @@ type Intc2Expr struct{}
 func (e *Intc2Expr) String() string {
 	return "intc_2"
 }
-func (e *Intc2Expr) Execute(b *vmBranch) error {
+func (e *Intc2Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -750,10 +765,10 @@ type Intc3Expr struct{}
 func (e *Intc3Expr) String() string {
 	return "intc_3"
 }
-func (e *Intc3Expr) Execute(b *vmBranch) error {
+func (e *Intc3Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -787,10 +802,10 @@ type BytecExpr struct {
 	Index uint8
 }
 
-func (e *BytecExpr) Execute(b *vmBranch) error {
+func (e *BytecExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -806,10 +821,10 @@ func (e *Bytec0Expr) String() string {
 	return "bytec_0"
 }
 
-func (e *Bytec0Expr) Execute(b *vmBranch) error {
+func (e *Bytec0Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -823,10 +838,10 @@ func (e *Bytec1Expr) String() string {
 	return "bytec_1"
 }
 
-func (e *Bytec1Expr) Execute(b *vmBranch) error {
+func (e *Bytec1Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -839,10 +854,10 @@ type Bytec2Expr struct{}
 func (e *Bytec2Expr) String() string {
 	return "bytec_2"
 }
-func (e *Bytec2Expr) Execute(b *vmBranch) error {
+func (e *Bytec2Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -855,10 +870,10 @@ type Bytec3Expr struct{}
 func (e *Bytec3Expr) String() string {
 	return "bytec_3"
 }
-func (e *Bytec3Expr) Execute(b *vmBranch) error {
+func (e *Bytec3Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -874,10 +889,10 @@ func (e *ArgExpr) String() string {
 	return fmt.Sprintf("arg %d", e.Index)
 }
 
-func (e *ArgExpr) Execute(b *vmBranch) error {
+func (e *ArgExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -888,10 +903,10 @@ type Arg0Expr struct{}
 func (e *Arg0Expr) String() string {
 	return "arg_0"
 }
-func (e *Arg0Expr) Execute(b *vmBranch) error {
+func (e *Arg0Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -904,10 +919,10 @@ type Arg1Expr struct{}
 func (e *Arg1Expr) String() string {
 	return "arg_1"
 }
-func (e *Arg1Expr) Execute(b *vmBranch) error {
+func (e *Arg1Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -920,16 +935,16 @@ type Arg2Expr struct{}
 func (e *Arg2Expr) String() string {
 	return "arg_2"
 }
-func (e *Arg2Expr) Execute(b *vmBranch) error {
+func (e *Arg2Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
-func (e *Arg3Expr) Execute(b *vmBranch) error {
+func (e *Arg3Expr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -955,7 +970,7 @@ func (e *TxnExpr) String() string {
 	return fmt.Sprintf("txn %s", e.Field)
 }
 
-func (e *TxnExpr) Execute(b *vmBranch) error {
+func (e *TxnExpr) Execute(b *VmBranch) error {
 	spec, ok := txnFieldSpecByField(e.Field)
 	if !ok {
 		panic("unknown field")
@@ -963,7 +978,7 @@ func (e *TxnExpr) Execute(b *vmBranch) error {
 
 	b.push(vmValue{t: spec.Type().Vm()})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -995,7 +1010,7 @@ func (e *GlobalExpr) String() string {
 	return fmt.Sprintf("global %s", e.Field)
 }
 
-func (e *GlobalExpr) Execute(b *vmBranch) error {
+func (e *GlobalExpr) Execute(b *VmBranch) error {
 	spec, ok := globalFieldSpecByField(e.Field)
 	if !ok {
 		panic("unknown field")
@@ -1003,7 +1018,7 @@ func (e *GlobalExpr) Execute(b *vmBranch) error {
 
 	b.push(vmValue{t: spec.Type().Vm()})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1017,10 +1032,10 @@ func (e *LoadExpr) String() string {
 	return fmt.Sprintf("load %d", e.Index)
 }
 
-func (e *LoadExpr) Execute(b *vmBranch) error {
+func (e *LoadExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeAny})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1030,10 +1045,10 @@ type StoreExpr struct {
 	Index uint8
 }
 
-func (e *StoreExpr) Execute(b *vmBranch) error {
+func (e *StoreExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeAny)
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1052,7 +1067,7 @@ func (e *TxnaExpr) String() string {
 	return fmt.Sprintf("txna %s %d", e.Field, e.Index)
 }
 
-func (e *TxnaExpr) Execute(b *vmBranch) error {
+func (e *TxnaExpr) Execute(b *VmBranch) error {
 	spec, ok := txnFieldSpecByField(e.Field)
 	if !ok {
 		panic("unknown field")
@@ -1060,7 +1075,7 @@ func (e *TxnaExpr) Execute(b *vmBranch) error {
 
 	b.push(vmValue{t: spec.Type().Vm()})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1073,7 +1088,7 @@ func (e *GtxnExpr) String() string {
 	return fmt.Sprintf("gtxn %d %s", e.Group, e.Field)
 }
 
-func (e *GtxnExpr) Execute(b *vmBranch) error {
+func (e *GtxnExpr) Execute(b *VmBranch) error {
 	spec, ok := txnFieldSpecByField(e.Field)
 	if !ok {
 		panic("unknown field")
@@ -1081,7 +1096,7 @@ func (e *GtxnExpr) Execute(b *vmBranch) error {
 
 	b.push(vmValue{t: spec.Type().Vm()})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1095,7 +1110,7 @@ func (e *GtxnsExpr) String() string {
 	return fmt.Sprintf("gtxns %s", e.Field)
 }
 
-func (e *GtxnsExpr) Execute(b *vmBranch) error {
+func (e *GtxnsExpr) Execute(b *VmBranch) error {
 	spec, ok := txnFieldSpecByField(e.Field)
 	if !ok {
 		panic("unknown field")
@@ -1104,7 +1119,7 @@ func (e *GtxnsExpr) Execute(b *vmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: spec.Type().Vm()})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1113,9 +1128,9 @@ type ProtoExpr struct {
 	Results uint8
 }
 
-func (e *ProtoExpr) Execute(b *vmBranch) error {
+func (e *ProtoExpr) Execute(b *VmBranch) error {
 	b.prepare(e.Args, e.Results)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1180,9 +1195,9 @@ func (e *PushBytesExpr) String() string {
 	return fmt.Sprintf("pushbytes %s", Bytes{Value: e.Value, Format: e.Format})
 }
 
-func (e *PushBytesExpr) Execute(b *vmBranch) error {
+func (e *PushBytesExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1194,9 +1209,9 @@ func (e *PushIntExpr) String() string {
 	return fmt.Sprintf("pushint %d", e.Value)
 }
 
-func (e *PushIntExpr) Execute(b *vmBranch) error {
+func (e *PushIntExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1204,9 +1219,9 @@ type IntExpr struct {
 	Value uint64
 }
 
-func (e *IntExpr) Execute(b *vmBranch) error {
-	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+func (e *IntExpr) Execute(b *VmBranch) error {
+	b.push(vmValue{t: vmTypeUint64, src: vmConst{v: strconv.FormatUint(e.Value, 10)}})
+	b.Line++
 
 	return nil
 }
@@ -1248,9 +1263,13 @@ func (e *ByteExpr) String() string {
 	return fmt.Sprintf("byte %s", Bytes{Value: e.Value, Format: e.Format})
 }
 
-func (e *ByteExpr) Execute(b *vmBranch) error {
-	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+func (e *ByteExpr) Execute(b *VmBranch) error {
+	b.push(vmValue{
+		t: vmTypeBytes,
+		src: vmConst{
+			v: Bytes{Value: e.Value, Format: BytesStringLiteral}.String(),
+		}})
+	b.Line++
 	return nil
 }
 
@@ -1261,11 +1280,11 @@ func (e *BoxGetExpr) String() string {
 	return "box_get"
 }
 
-func (e *BoxGetExpr) Execute(b *vmBranch) error {
+func (e *BoxGetExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1278,10 +1297,10 @@ func (e *BoxPutExpr) String() string {
 	return "box_put"
 }
 
-func (e *BoxPutExpr) Execute(b *vmBranch) error {
+func (e *BoxPutExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1290,11 +1309,11 @@ var BoxPut = &BoxPutExpr{}
 type BoxCreateExpr struct {
 }
 
-func (e *BoxCreateExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
+func (e *BoxCreateExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
+	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1305,11 +1324,11 @@ func (e *BoxLenExpr) String() string {
 	return "box_len"
 }
 
-func (e *BoxLenExpr) Execute(b *vmBranch) error {
+func (e *BoxLenExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1322,10 +1341,10 @@ func (e *BoxDelExpr) String() string {
 	return "box_del"
 }
 
-func (e *BoxDelExpr) Execute(b *vmBranch) error {
+func (e *BoxDelExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1346,11 +1365,11 @@ func (e *BoxReplaceExpr) String() string {
 	return "box_replace"
 }
 
-func (e *BoxReplaceExpr) Execute(b *vmBranch) error {
+func (e *BoxReplaceExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeBytes)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1363,12 +1382,12 @@ func (e *BoxExtractExpr) String() string {
 	return "box_extract"
 }
 
-func (e *BoxExtractExpr) Execute(b *vmBranch) error {
+func (e *BoxExtractExpr) Execute(b *VmBranch) error {
+	b.pop(vmTypeUint64)
+	b.pop(vmTypeUint64)
 	b.pop(vmTypeBytes)
-	b.pop(vmTypeUint64)
-	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1388,9 +1407,10 @@ type BnzExpr struct {
 
 func (e *BnzExpr) IsBranch() {}
 
-func (e *BnzExpr) Execute(b *vmBranch) error {
+func (e *BnzExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
-	b.jump(e.Label.Name)
+	b.fork(e.Label.Name)
+	b.Line++
 	return nil
 }
 
@@ -1408,9 +1428,10 @@ type BzExpr struct {
 
 func (e *BzExpr) IsBranch() {}
 
-func (e *BzExpr) Execute(b *vmBranch) error {
+func (e *BzExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
-	b.jump(e.Label.Name)
+	b.fork(e.Label.Name)
+	b.Line++
 	return nil
 }
 
@@ -1428,7 +1449,7 @@ type BExpr struct {
 
 func (e *BExpr) IsBranch() {}
 
-func (e *BExpr) Execute(b *vmBranch) error {
+func (e *BExpr) Execute(b *VmBranch) error {
 	b.jump(e.Label.Name)
 	return nil
 }
@@ -1458,11 +1479,11 @@ func (e *AppLocalGetExpr) String() string {
 	return "app_local_get"
 }
 
-func (e *AppLocalGetExpr) Execute(b *vmBranch) error {
+func (e *AppLocalGetExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
+	b.pop(vmTypeAny)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1474,11 +1495,11 @@ func (e *AppLocalPutExpr) String() string {
 	return "app_local_put"
 }
 
-func (e *AppLocalPutExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
+func (e *AppLocalPutExpr) Execute(b *VmBranch) error {
+	b.pop(vmTypeAny)
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeAny)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1490,10 +1511,10 @@ func (e *AppGlobalPutExpr) String() string {
 	return "app_global_put"
 }
 
-func (e *AppGlobalPutExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
+func (e *AppGlobalPutExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeAny)
-	b.ln++
+	b.pop(vmTypeBytes)
+	b.Line++
 	return nil
 }
 
@@ -1505,10 +1526,10 @@ func (e *AppGlobalGetExpr) String() string {
 	return "app_global_get"
 }
 
-func (e *AppGlobalGetExpr) Execute(b *vmBranch) error {
+func (e *AppGlobalGetExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1520,12 +1541,12 @@ func (e *AppGlobalGetExExpr) String() string {
 	return "app_global_get_ex"
 }
 
-func (e *AppGlobalGetExExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeUint64)
+func (e *AppGlobalGetExExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
+	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1537,13 +1558,13 @@ func (e *AppLocalGetExExpr) String() string {
 	return "app_local_get_ex"
 }
 
-func (e *AppLocalGetExExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeUint64)
-	b.pop(vmTypeUint64)
+func (e *AppLocalGetExExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
+	b.pop(vmTypeUint64)
+	b.pop(vmTypeAny)
 	b.push(vmValue{t: vmTypeAny})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1555,10 +1576,10 @@ func (e *AppLocalDelExpr) String() string {
 	return "app_local_del"
 }
 
-func (e *AppLocalDelExpr) Execute(b *vmBranch) error {
+func (e *AppLocalDelExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
-	b.ln++
+	b.pop(vmTypeAny)
+	b.Line++
 	return nil
 }
 
@@ -1568,26 +1589,31 @@ type RetSubExpr struct{}
 
 var RetSub = &RetSubExpr{}
 
-func (e *RetSubExpr) Execute(b *vmBranch) error {
-	f := b.fs[len(b.fs)-1]
+func (e *RetSubExpr) Execute(b *VmBranch) error {
+	if len(b.fs) > 0 {
+		f := b.fs[len(b.fs)-1]
 
-	rs := []vmValue{}
+		rs := []vmValue{}
 
-	for i := uint8(0); i < f.r; i++ {
-		rs = append(rs, b.pop(vmTypeAny))
+		for i := uint8(0); i < f.r; i++ {
+			rs = append(rs, b.pop(vmTypeAny))
+		}
+
+		for i := uint8(0); i < f.a; i++ {
+			b.pop(vmTypeAny)
+		}
+
+		for i := len(rs) - 1; i >= 0; i-- {
+			b.push(rs[i])
+		}
+
+		b.fs = b.fs[:len(b.fs)-1]
+		b.Line = b.cs[len(b.cs)-1]
+		b.cs = b.cs[:len(b.cs)-1]
+	} else {
+		b.Line++
 	}
 
-	for i := uint8(0); i < f.a; i++ {
-		b.pop(vmTypeAny)
-	}
-
-	for i := len(rs) - 1; i >= 0; i-- {
-		b.push(rs[i])
-	}
-
-	b.fs = b.fs[:len(b.fs)-1]
-
-	b.retsub()
 	return nil
 }
 
@@ -1600,7 +1626,7 @@ func (e *RetSubExpr) IsTerminator() {}
 type ReturnExpr struct {
 }
 
-func (e *ReturnExpr) Execute(b *vmBranch) error {
+func (e *ReturnExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.exit()
 	return nil
@@ -1618,15 +1644,16 @@ type SwitchExpr struct {
 
 func (e *SwitchExpr) IsBranch() {}
 
-func (e *SwitchExpr) Execute(b *vmBranch) error {
+func (e *SwitchExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 
 	for _, t := range e.Targets {
 		b.fork(t.Name)
+		b.Line = -1
 	}
 
 	if len(e.Targets) == 0 {
-		b.ln++
+		b.Line++
 	}
 
 	return nil
@@ -1663,7 +1690,7 @@ type MatchExpr struct {
 
 func (e *MatchExpr) IsBranch() {}
 
-func (e *MatchExpr) Execute(b *vmBranch) error {
+func (e *MatchExpr) Execute(b *VmBranch) error {
 	for range e.Targets {
 		b.pop(vmTypeAny)
 	}
@@ -1672,10 +1699,11 @@ func (e *MatchExpr) Execute(b *vmBranch) error {
 
 	for _, t := range e.Targets {
 		b.fork(t.Name)
+		b.Line = -1
 	}
 
 	if len(e.Targets) == 0 {
-		b.ln++
+		b.Line++
 	}
 
 	return nil
@@ -1712,7 +1740,7 @@ type CallSubExpr struct {
 
 func (e *CallSubExpr) IsBranch() {}
 
-func (e *CallSubExpr) Execute(b *vmBranch) error {
+func (e *CallSubExpr) Execute(b *VmBranch) error {
 	b.call(e.Label.Name)
 	return nil
 }
@@ -1737,9 +1765,9 @@ func (e *AssertExpr) String() string {
 	return "assert"
 }
 
-func (e *AssertExpr) Execute(b *vmBranch) error {
+func (e *AssertExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1748,14 +1776,18 @@ var Assert = &AssertExpr{}
 type DupExpr struct{}
 
 func (e *DupExpr) String() string {
+	return e.Name()
+}
+
+func (e *DupExpr) Name() string {
 	return "dup"
 }
 
-func (e *DupExpr) Execute(b *vmBranch) error {
+func (e *DupExpr) Execute(b *VmBranch) error {
 	v := b.pop(vmTypeAny)
 	b.push(v)
 	b.push(v)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1765,10 +1797,10 @@ type BuryExpr struct {
 	Depth uint8
 }
 
-func (e *BuryExpr) Execute(b *vmBranch) error {
+func (e *BuryExpr) Execute(b *VmBranch) error {
 	v := b.pop(vmTypeAny)
 	b.replace(e.Depth, v)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1784,11 +1816,11 @@ func (e *PopNExpr) String() string {
 	return fmt.Sprintf("popn %d", e.Depth)
 }
 
-func (e *PopNExpr) Execute(b *vmBranch) error {
+func (e *PopNExpr) Execute(b *VmBranch) error {
 	for i := uint8(0); i < e.Depth; i++ {
 		b.pop(vmTypeAny)
 	}
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1800,12 +1832,12 @@ func (e *DupNExpr) String() string {
 	return fmt.Sprintf("dupn %d", e.Count)
 }
 
-func (e *DupNExpr) Execute(b *vmBranch) error {
+func (e *DupNExpr) Execute(b *VmBranch) error {
 	v := b.pop(vmTypeAny)
 	for i := uint8(0); i <= e.Count; i++ {
 		b.push(v)
 	}
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1815,11 +1847,11 @@ func (e *ExtractUint16Expr) String() string {
 	return "extract_uint16"
 }
 
-func (e *ExtractUint16Expr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
+func (e *ExtractUint16Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
+	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1831,11 +1863,11 @@ func (e *ExtractUint32Expr) String() string {
 	return "extract_uint32"
 }
 
-func (e *ExtractUint32Expr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
+func (e *ExtractUint32Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
+	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1847,11 +1879,11 @@ func (e *Extract64BitsExpr) String() string {
 	return "extract_uint64"
 }
 
-func (e *ExtractUint64Expr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
+func (e *ExtractUint64Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
+	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1865,11 +1897,11 @@ func (e *Replace2Expr) String() string {
 	return fmt.Sprintf("repace2 %d", e.Start)
 }
 
-func (e *Replace2Expr) Execute(b *vmBranch) error {
+func (e *Replace2Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1879,12 +1911,12 @@ func (e *Replace3Expr) String() string {
 	return "replace3"
 }
 
-func (e *Replace3Expr) Execute(b *vmBranch) error {
+func (e *Replace3Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1898,10 +1930,10 @@ func (e *Base64DecodeExpr) String() string {
 	return fmt.Sprintf("base64_decode %d", e.Index)
 }
 
-func (e *Base64DecodeExpr) Execute(b *vmBranch) error {
+func (e *Base64DecodeExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1913,11 +1945,11 @@ func (e *JsonRefExpr) String() string {
 	return fmt.Sprintf("json_ref %d", e.Index)
 }
 
-func (e *JsonRefExpr) Execute(b *vmBranch) error {
+func (e *JsonRefExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1927,12 +1959,12 @@ func (e *Ed25519VerifyBareExpr) String() string {
 	return "ed25519verify_bare"
 }
 
-func (e *Ed25519VerifyBareExpr) Execute(b *vmBranch) error {
+func (e *Ed25519VerifyBareExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -1944,10 +1976,10 @@ func (e *BitLenExpr) String() string {
 	return "bitlen"
 }
 
-func (e *BitLenExpr) Execute(b *vmBranch) error {
+func (e *BitLenExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 
 	return nil
 }
@@ -1960,12 +1992,12 @@ func (e *ExpwExpr) String() string {
 	return "expw"
 }
 
-func (e *ExpwExpr) Execute(b *vmBranch) error {
+func (e *ExpwExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 
 	return nil
 }
@@ -1986,10 +2018,10 @@ type GtxnasExpr struct {
 	Index uint8
 }
 
-func (e *GtxnasExpr) Execute(b *vmBranch) error {
+func (e *GtxnasExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2003,10 +2035,10 @@ func (e *ArgsExpr) String() string {
 	return "args"
 }
 
-func (e *ArgsExpr) Execute(b *vmBranch) error {
+func (e *ArgsExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2018,11 +2050,11 @@ func (e *GloadssExpr) String() string {
 	return "gloadss"
 }
 
-func (e *GloadssExpr) Execute(b *vmBranch) error {
+func (e *GloadssExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2032,10 +2064,10 @@ type ItxnasExpr struct {
 	Field TxnField
 }
 
-func (e *ItxnasExpr) Execute(b *vmBranch) error {
+func (e *ItxnasExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2048,10 +2080,10 @@ type GitxnasExpr struct {
 	Field TxnField
 }
 
-func (e *GitxnasExpr) Execute(b *vmBranch) error {
+func (e *GitxnasExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2063,11 +2095,11 @@ type PushIntsExpr struct {
 	Ints []uint64
 }
 
-func (e *PushIntsExpr) Execute(b *vmBranch) error {
+func (e *PushIntsExpr) Execute(b *VmBranch) error {
 	for range e.Ints {
 		b.push(vmValue{t: vmTypeBytes})
 	}
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2102,11 +2134,11 @@ type PushBytessExpr struct {
 	Bytess [][]byte
 }
 
-func (e *PushBytessExpr) Execute(b *vmBranch) error {
+func (e *PushBytessExpr) Execute(b *VmBranch) error {
 	for range e.Bytess {
 		b.push(vmValue{t: vmTypeBytes})
 	}
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2126,11 +2158,11 @@ func (e *Bn256AddExpr) String() string {
 	return "bn256_add"
 }
 
-func (e *Bn256AddExpr) Execute(b *vmBranch) error {
+func (e *Bn256AddExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2142,11 +2174,11 @@ func (e *Bn256ScalarMulExpr) String() string {
 	return "bn256_scalar_mul"
 }
 
-func (e *Bn256ScalarMulExpr) Execute(b *vmBranch) error {
+func (e *Bn256ScalarMulExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2158,11 +2190,11 @@ func (e *Bn256PairingExpr) String() string {
 	return "bn256_pairing"
 }
 
-func (e *Bn256PairingExpr) Execute(b *vmBranch) error {
+func (e *Bn256PairingExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2172,13 +2204,13 @@ type FrameBuryExpr struct {
 	Index int8
 }
 
-func (e *FrameBuryExpr) Execute(b *vmBranch) error {
+func (e *FrameBuryExpr) Execute(b *VmBranch) error {
 	f := b.fs[len(b.fs)-1]
 
 	v := b.pop(vmTypeAny)
 	b.replace(uint8(int8(f.p)+e.Index), v)
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2190,13 +2222,13 @@ type FrameDigExpr struct {
 	Index int8
 }
 
-func (e *FrameDigExpr) Execute(b *vmBranch) error {
+func (e *FrameDigExpr) Execute(b *VmBranch) error {
 	f := b.fs[len(b.fs)-1]
 
-	v := b.at(uint8(int8(f.p) + e.Index))
+	v := b.Stack.Items[uint8(int8(f.p)+e.Index)]
 	b.push(v)
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2210,12 +2242,12 @@ func (e *SetByteExpr) String() string {
 	return "setbyte"
 }
 
-func (e *SetByteExpr) Execute(b *vmBranch) error {
+func (e *SetByteExpr) Execute(b *VmBranch) error {
+	b.pop(vmTypeUint64)
+	b.pop(vmTypeUint64)
 	b.pop(vmTypeBytes)
-	b.pop(vmTypeUint64)
-	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2229,7 +2261,7 @@ func (e *CoverExpr) String() string {
 	return fmt.Sprintf("cover %d", e.Depth)
 }
 
-func (e *CoverExpr) Execute(b *vmBranch) error {
+func (e *CoverExpr) Execute(b *VmBranch) error {
 	is := []vmValue{}
 
 	v := b.pop(vmTypeAny)
@@ -2240,11 +2272,11 @@ func (e *CoverExpr) Execute(b *vmBranch) error {
 
 	b.push(v)
 
-	for i := len(is) - 1; i >= 0; i++ {
+	for i := len(is) - 1; i >= 0; i-- {
 		b.push(is[i])
 	}
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2252,7 +2284,7 @@ type UncoverExpr struct {
 	Depth uint8
 }
 
-func (e *UncoverExpr) Execute(b *vmBranch) error {
+func (e *UncoverExpr) Execute(b *VmBranch) error {
 	is := []vmValue{}
 
 	for i := uint8(0); i < e.Depth; i++ {
@@ -2261,13 +2293,13 @@ func (e *UncoverExpr) Execute(b *vmBranch) error {
 
 	v := b.pop(vmTypeAny)
 
-	for i := len(is) - 1; i >= 0; i++ {
+	for i := len(is) - 1; i >= 0; i-- {
 		b.push(is[i])
 	}
 
 	b.push(v)
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2297,11 +2329,11 @@ func (e *AssetParamsGetExpr) String() string {
 	return fmt.Sprintf("asset_params_get %s", e.Field)
 }
 
-func (e *AssetParamsGetExpr) Execute(b *vmBranch) error {
+func (e *AssetParamsGetExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2311,11 +2343,11 @@ func (e *ConcatExpr) String() string {
 	return "concat"
 }
 
-func (e *ConcatExpr) Execute(b *vmBranch) error {
+func (e *ConcatExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2341,9 +2373,9 @@ type ItxnExpr struct {
 	Field TxnField
 }
 
-func (e *ItxnExpr) Execute(b *vmBranch) error {
+func (e *ItxnExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2359,9 +2391,9 @@ func (e *ItxnFieldExpr) String() string {
 	return fmt.Sprintf("itxn_field %s", e.Field)
 }
 
-func (e *ItxnFieldExpr) Execute(b *vmBranch) error {
+func (e *ItxnFieldExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeAny)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2371,9 +2403,9 @@ func (e *PopExpr) String() string {
 	return "pop"
 }
 
-func (e *PopExpr) Execute(b *vmBranch) error {
+func (e *PopExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeAny)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2385,14 +2417,14 @@ func (e *SwapExpr) String() string {
 	return "swap"
 }
 
-func (e *SwapExpr) Execute(b *vmBranch) error {
+func (e *SwapExpr) Execute(b *VmBranch) error {
 	v1 := b.pop(vmTypeAny)
 	v2 := b.pop(vmTypeAny)
 
 	b.push(v1)
 	b.push(v2)
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2408,7 +2440,7 @@ func (e *GtxnaExpr) String() string {
 	return fmt.Sprintf("gtxna %d %s %d", e.Group, e.Field, e.Index)
 }
 
-func (e *GtxnaExpr) Execute(b *vmBranch) error {
+func (e *GtxnaExpr) Execute(b *VmBranch) error {
 	spec, ok := txnFieldSpecByField(e.Field)
 	if !ok {
 		panic("unknown field")
@@ -2416,7 +2448,7 @@ func (e *GtxnaExpr) Execute(b *vmBranch) error {
 
 	b.push(vmValue{t: spec.Type().Vm()})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2429,7 +2461,7 @@ func (e *GtxnsaExpr) String() string {
 	return fmt.Sprintf("gtxnsa %s %d", e.Field, e.Index)
 }
 
-func (e *GtxnsaExpr) Execute(b *vmBranch) error {
+func (e *GtxnsaExpr) Execute(b *VmBranch) error {
 	spec, ok := txnFieldSpecByField(e.Field)
 	if !ok {
 		panic("unknown field")
@@ -2438,7 +2470,7 @@ func (e *GtxnsaExpr) Execute(b *vmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: spec.Type().Vm()})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2451,10 +2483,10 @@ func (e *GloadExpr) String() string {
 	return fmt.Sprintf("gload %d %d", e.Group, e.Index)
 }
 
-func (e *GloadExpr) Execute(b *vmBranch) error {
+func (e *GloadExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeAny})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2466,11 +2498,11 @@ func (e *GloadsExpr) String() string {
 	return fmt.Sprintf("gloads %d", e.Index)
 }
 
-func (e *GloadsExpr) Execute(b *vmBranch) error {
+func (e *GloadsExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2480,11 +2512,11 @@ func (e *SqrtExpr) String() string {
 	return "sqrt"
 }
 
-func (e *SqrtExpr) Execute(b *vmBranch) error {
+func (e *SqrtExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2496,10 +2528,10 @@ func (e *BalanceExpr) String() string {
 	return "balance"
 }
 
-func (e *BalanceExpr) Execute(b *vmBranch) error {
+func (e *BalanceExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeAny)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2509,10 +2541,10 @@ type TxnasExpr struct {
 	Field TxnField
 }
 
-func (e *TxnasExpr) Execute(b *vmBranch) error {
+func (e *TxnasExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2529,10 +2561,10 @@ func (e *ExtractExpr) String() string {
 	return fmt.Sprintf("extract %d %d", e.Start, e.Length)
 }
 
-func (e *ExtractExpr) Execute(b *vmBranch) error {
+func (e *ExtractExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2542,11 +2574,11 @@ func (e *ExpExpr) String() string {
 	return "exp"
 }
 
-func (e *ExpExpr) Execute(b *vmBranch) error {
+func (e *ExpExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2560,11 +2592,11 @@ func (e *AppParamsGetExpr) String() string {
 	return fmt.Sprintf("app_params_get %s", e.Field)
 }
 
-func (e *AppParamsGetExpr) Execute(b *vmBranch) error {
+func (e *AppParamsGetExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2576,11 +2608,11 @@ func (e *AcctParamsGetExpr) String() string {
 	return fmt.Sprintf("acct_params_get %s", e.Field)
 }
 
-func (e *AcctParamsGetExpr) Execute(b *vmBranch) error {
+func (e *AcctParamsGetExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeAny)
 	b.push(vmValue{t: vmTypeAny})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2590,9 +2622,9 @@ func (e *LogExpr) String() string {
 	return "log"
 }
 
-func (e *LogExpr) Execute(b *vmBranch) error {
+func (e *LogExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2602,10 +2634,10 @@ type BlockExpr struct {
 	Field BlockField
 }
 
-func (e *BlockExpr) Execute(b *vmBranch) error {
+func (e *BlockExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2621,13 +2653,13 @@ func (e *VrfVerifyExpr) String() string {
 	return fmt.Sprintf("vrf_verify %s", e.Field)
 }
 
-func (e *VrfVerifyExpr) Execute(b *vmBranch) error {
+func (e *VrfVerifyExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2637,12 +2669,12 @@ func (e *Extract3Expr) String() string {
 	return "extract3"
 }
 
-func (e *Extract3Expr) Execute(b *vmBranch) error {
+func (e *Extract3Expr) Execute(b *VmBranch) error {
+	b.pop(vmTypeUint64)
+	b.pop(vmTypeUint64)
 	b.pop(vmTypeBytes)
-	b.pop(vmTypeUint64)
-	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2664,12 +2696,12 @@ func (e *AssetHoldingGetExpr) String() string {
 	return fmt.Sprintf("asset_holding_get %s", e.Field)
 }
 
-func (e *AssetHoldingGetExpr) Execute(b *vmBranch) error {
+func (e *AssetHoldingGetExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
-	b.pop(vmTypeUint64)
+	b.pop(vmTypeAny)
 	b.push(vmValue{t: vmTypeAny})
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2687,10 +2719,10 @@ func (e *MinBalanceExpr) String() string {
 	return "min_balance"
 }
 
-func (e *MinBalanceExpr) Execute(b *vmBranch) error {
+func (e *MinBalanceExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeAny)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2705,9 +2737,9 @@ func (e *GitxnExpr) String() string {
 	return fmt.Sprintf("gitxn %d %s", e.Index, e.Field)
 }
 
-func (e *GitxnExpr) Execute(b *vmBranch) error {
+func (e *GitxnExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2725,11 +2757,11 @@ func (e *GetByteExpr) String() string {
 	return "getbyte"
 }
 
-func (e *GetByteExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
+func (e *GetByteExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
+	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2741,12 +2773,12 @@ func (e *Substring3Expr) String() string {
 	return "substring3"
 }
 
-func (e *Substring3Expr) Execute(b *vmBranch) error {
-	b.pop(vmTypeBytes)
-	b.pop(vmTypeBytes)
+func (e *Substring3Expr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
+	b.pop(vmTypeUint64)
+	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2758,11 +2790,11 @@ func (e *ShlExpr) String() string {
 	return "shl"
 }
 
-func (e *ShlExpr) Execute(b *vmBranch) error {
+func (e *ShlExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2774,11 +2806,11 @@ func (e *ShrExpr) String() string {
 	return "shr"
 }
 
-func (e *ShrExpr) Execute(b *vmBranch) error {
+func (e *ShrExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2790,11 +2822,11 @@ func (e *GetBitExpr) String() string {
 	return "getbit"
 }
 
-func (e *GetBitExpr) Execute(b *vmBranch) error {
+func (e *GetBitExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2806,12 +2838,12 @@ func (e *SetBitExpr) String() string {
 	return "setbit"
 }
 
-func (e *SetBitExpr) Execute(b *vmBranch) error {
+func (e *SetBitExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2821,11 +2853,11 @@ type GtxnsasExpr struct {
 	Field TxnField
 }
 
-func (e *GtxnsasExpr) Execute(b *vmBranch) error {
+func (e *GtxnsasExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2837,10 +2869,10 @@ type DigExpr struct {
 	Index uint8
 }
 
-func (e *DigExpr) Execute(b *vmBranch) error {
-	v := b.at(e.Index)
+func (e *DigExpr) Execute(b *VmBranch) error {
+	v := b.Stack.Items[uint8(len(b.Stack.Items))-1-e.Index]
 	b.push(v)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2862,11 +2894,11 @@ func (e *BmulExpr) String() string {
 	return "b*"
 }
 
-func (e *BmulExpr) Execute(b *vmBranch) error {
+func (e *BmulExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2878,11 +2910,11 @@ func (e *BdivExpr) String() string {
 	return "b/"
 }
 
-func (e *BdivExpr) Execute(b *vmBranch) error {
+func (e *BdivExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2894,11 +2926,11 @@ func (e *BplusExpr) String() string {
 	return "b+"
 }
 
-func (e *BplusExpr) Execute(b *vmBranch) error {
+func (e *BplusExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2912,10 +2944,10 @@ func (e *GaidExpr) String() string {
 	return fmt.Sprintf("gaid %d", e.Group)
 }
 
-func (e *GaidExpr) Execute(b *vmBranch) error {
+func (e *GaidExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2926,11 +2958,11 @@ func (e *GaidsExpr) String() string {
 	return "gaids"
 }
 
-func (e *GaidsExpr) Execute(b *vmBranch) error {
+func (e *GaidsExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2943,11 +2975,11 @@ func (e *LoadsExpr) String() string {
 	return "loads"
 }
 
-func (e *LoadsExpr) Execute(b *vmBranch) error {
+func (e *LoadsExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeAny})
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2956,11 +2988,11 @@ var Loads = &LoadsExpr{}
 type StoresExpr struct {
 }
 
-func (e *StoresExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeUint64)
+func (e *StoresExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeAny)
+	b.pop(vmTypeUint64)
 
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2976,14 +3008,14 @@ func (e *Dup2Expr) String() string {
 	return "dup2"
 }
 
-func (e *Dup2Expr) Execute(b *vmBranch) error {
+func (e *Dup2Expr) Execute(b *VmBranch) error {
 	v1 := b.pop(vmTypeAny)
 	v2 := b.pop(vmTypeAny)
 	b.push(v1)
 	b.push(v2)
 	b.push(v1)
 	b.push(v2)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -2998,10 +3030,10 @@ func (e *SubstringExpr) String() string {
 	return fmt.Sprintf("substring %d %d", e.Start, e.End)
 }
 
-func (e *SubstringExpr) Execute(b *vmBranch) error {
+func (e *SubstringExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3011,12 +3043,12 @@ func (e *DivwExpr) String() string {
 	return "divw"
 }
 
-func (e *DivwExpr) Execute(b *vmBranch) error {
+func (e *DivwExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3030,13 +3062,13 @@ func (e *SelectExpr) String() string {
 
 var Select = &SelectExpr{}
 
-func (e *SelectExpr) Execute(b *vmBranch) error {
-	b.pop(vmTypeAny)
-	b.pop(vmTypeAny)
+func (e *SelectExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
+	b.pop(vmTypeAny)
+	b.pop(vmTypeAny)
 
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3054,11 +3086,11 @@ func (e *BGtExpr) String() string {
 	return "b>"
 }
 
-func (e *BGtExpr) Execute(b *vmBranch) error {
+func (e *BGtExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3070,11 +3102,11 @@ func (e *BytesLeExpr) String() string {
 	return "b<="
 }
 
-func (e *BytesLeExpr) Execute(b *vmBranch) error {
+func (e *BytesLeExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3086,11 +3118,11 @@ func (e *BytesGeExpr) String() string {
 	return "b>="
 }
 
-func (e *BytesGeExpr) Execute(b *vmBranch) error {
+func (e *BytesGeExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3102,11 +3134,11 @@ func (e *BytesEqExpr) String() string {
 	return "b=="
 }
 
-func (e *BytesEqExpr) Execute(b *vmBranch) error {
+func (e *BytesEqExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3118,11 +3150,11 @@ func (e *BytesNeqExpr) String() string {
 	return "b!="
 }
 
-func (e *BytesNeqExpr) Execute(b *vmBranch) error {
+func (e *BytesNeqExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3134,11 +3166,11 @@ func (e *BytesModuloExpr) String() string {
 	return "b%"
 }
 
-func (e *BytesModuloExpr) Execute(b *vmBranch) error {
+func (e *BytesModuloExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3158,11 +3190,11 @@ func (e *BytesBitAndExpr) String() string {
 	return "b&"
 }
 
-func (e *BytesBitAndExpr) Execute(b *vmBranch) error {
+func (e *BytesBitAndExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3174,10 +3206,10 @@ func (e *BsqrtExpr) String() string {
 	return "bsqrt"
 }
 
-func (e *BsqrtExpr) Execute(b *vmBranch) error {
+func (e *BsqrtExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3193,9 +3225,9 @@ func (e *GitxnaExpr) String() string {
 	return fmt.Sprintf("gitxna %d %s %d", e.Group, e.Field, e.Index)
 }
 
-func (e *GitxnaExpr) Execute(b *vmBranch) error {
+func (e *GitxnaExpr) Execute(b *VmBranch) error {
 	b.push(vmValue{t: vmTypeAny})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3205,9 +3237,9 @@ func (e *AppGlobalDelExpr) String() string {
 	return "app_global_del"
 }
 
-func (e *AppGlobalDelExpr) Execute(b *vmBranch) error {
+func (e *AppGlobalDelExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3219,11 +3251,11 @@ func (e *BltExpr) String() string {
 	return "b<"
 }
 
-func (e *BltExpr) Execute(b *vmBranch) error {
+func (e *BltExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3243,11 +3275,11 @@ func (e *BytesBitXorExpr) String() string {
 	return "b^"
 }
 
-func (e *BytesBitXorExpr) Execute(b *vmBranch) error {
+func (e *BytesBitXorExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3259,10 +3291,10 @@ func (e *BytesBitNotExpr) String() string {
 	return "b~"
 }
 
-func (e *BytesBitNotExpr) Execute(b *vmBranch) error {
+func (e *BytesBitNotExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeBytes)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3274,10 +3306,10 @@ func (e *BytesZeroExpr) String() string {
 	return "bzero"
 }
 
-func (e *BytesZeroExpr) Execute(b *vmBranch) error {
+func (e *BytesZeroExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeBytes})
-	b.ln++
+	b.Line++
 	return nil
 }
 
@@ -3289,11 +3321,11 @@ func (e *AppOptedInExpr) String() string {
 	return "app_opted_in"
 }
 
-func (e *AppOptedInExpr) Execute(b *vmBranch) error {
+func (e *AppOptedInExpr) Execute(b *VmBranch) error {
 	b.pop(vmTypeUint64)
 	b.pop(vmTypeUint64)
 	b.push(vmValue{t: vmTypeUint64})
-	b.ln++
+	b.Line++
 	return nil
 }
 
