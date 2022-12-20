@@ -6,19 +6,24 @@ import (
 	"net"
 	"os"
 
+	"github.com/dragmz/teal/dbg"
 	"github.com/dragmz/teal/lsp"
 
 	"github.com/pkg/errors"
 )
 
-type args struct {
+type lspArgs struct {
 	Debug string
 
 	Addr string
 	Net  string
 }
 
-func run(a args) (int, error) {
+type dbgArgs struct {
+	Debug string
+}
+
+func runLsp(a lspArgs) (int, error) {
 	var r io.Reader
 	var w io.Writer
 
@@ -53,19 +58,57 @@ func run(a args) (int, error) {
 	return l.Run()
 }
 
-func main() {
-	var a args
+func runDbg(a dbgArgs) (int, error) {
+	r := os.Stdin
+	w := os.Stdout
 
-	flag.StringVar(&a.Net, "net", "tcp", "client network")
-	flag.StringVar(&a.Addr, "addr", "", "client address")
-	flag.StringVar(&a.Debug, "debug", "", "debug file path")
+	var opts []dbg.DbgOption
+	if a.Debug != "" {
+		f, err := os.Create(a.Debug)
+		if err != nil {
+			return -2, errors.Wrap(err, "failed to create debug output file")
+		}
 
-	flag.Parse()
-
-	code, err := run(a)
-	if err != nil {
-		panic(err)
+		opts = append(opts, dbg.WithDebug(f))
 	}
 
-	os.Exit(code)
+	l, err := dbg.New(r, w, opts...)
+	if err != nil {
+		return -3, errors.Wrap(err, "failed to create dbg")
+	}
+
+	return l.Run()
+}
+
+func main() {
+	if len(os.Args) > 1 && os.Args[1] == "dbg" {
+		var a dbgArgs
+
+		flag.StringVar(&a.Debug, "debug", "", "debug file path")
+		copy(os.Args[1:], os.Args[2:])
+		os.Args = os.Args[:len(os.Args)-1]
+
+		flag.Parse()
+
+		code, err := runDbg(a)
+		if err != nil {
+			panic(err)
+		}
+		os.Exit(code)
+	} else {
+		var a lspArgs
+
+		flag.StringVar(&a.Net, "net", "tcp", "client network")
+		flag.StringVar(&a.Addr, "addr", "", "client address")
+		flag.StringVar(&a.Debug, "debug", "", "debug file path")
+
+		flag.Parse()
+
+		code, err := runLsp(a)
+		if err != nil {
+			panic(err)
+		}
+
+		os.Exit(code)
+	}
 }
