@@ -2308,7 +2308,9 @@ func (r ProcessResult) getOp(name string) (opItem, bool) {
 }
 
 type opItemArgVal struct {
+	NoValue bool
 	Value   uint64
+
 	Name    string
 	Doc     string
 	Version uint64
@@ -2449,7 +2451,8 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 	case OpArgTypeLabel:
 		for _, sym := range r.Symbols {
 			res = append(res, opItemArgVal{
-				Name: sym.Name(),
+				NoValue: true,
+				Name:    sym.Name(),
 			})
 		}
 	default:

@@ -1212,10 +1212,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			switch mode {
 			case tealCompletionArg:
 				for _, v := range res.ArgValsAt(req.Params.Position.Line, req.Params.Position.Character) {
-					ccs = append(ccs, lspCompletionItem{
-						LabelDetails: &lspCompletionItemLabelDetails{
+					var d *lspCompletionItemLabelDetails
+					if !v.NoValue {
+						d = &lspCompletionItemLabelDetails{
 							Detail: fmt.Sprintf(" = %d", v.Value),
-						},
+						}
+					}
+					ccs = append(ccs, lspCompletionItem{
+						LabelDetails:  d,
 						Label:         v.Name,
 						Documentation: v.Doc,
 					})
