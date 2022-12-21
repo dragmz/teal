@@ -655,10 +655,28 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 			if l.vm != nil {
 				for _, b := range l.vm.tvm.Branches {
 					if b.Id == sreq.Arguments.ThreadId {
+						line := b.Line
+						name := b.Name
+						for i := len(b.Frames) - 1; i >= 0; i-- {
+							f := b.Frames[i]
+							sf = append(sf, dapStackFrame{
+								Id:     b.Id,
+								Name:   name,
+								Line:   line + l.lz,
+								Column: l.cz,
+								Source: &dapSource{
+									Name: l.vm.name,
+									Path: l.vm.path,
+								},
+							})
+
+							line = f.Return
+							name = f.Name
+						}
 						sf = append(sf, dapStackFrame{
 							Id:     b.Id,
-							Name:   b.Name,
-							Line:   b.Line + l.lz,
+							Name:   name,
+							Line:   line + l.lz,
 							Column: l.cz,
 							Source: &dapSource{
 								Name: l.vm.name,

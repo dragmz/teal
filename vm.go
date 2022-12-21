@@ -12,11 +12,12 @@ const (
 	ExitName = "(exited)"
 )
 
-type vmFrame struct {
-	a uint8
-	r uint8
-	p uint8
-	n string
+type VmFrame struct {
+	Return     int
+	NumArgs    uint8
+	NumReturns uint8
+	p          uint8
+	Name       string
 }
 
 type vmSource interface {
@@ -123,15 +124,35 @@ type vmStack struct {
 	Items []VmValue
 }
 
+func (b *VmBranch) skipNops() bool {
+	for b.Line < len(b.vm.Program) {
+		op := b.vm.Program[b.Line]
+
+		lbl, ok := op.(*LabelExpr)
+		if ok {
+			b.Name = lbl.Name
+		}
+
+		_, isnop := op.(Nop)
+		if !isnop {
+			return true
+		}
+
+		b.Line++
+	}
+
+	return false
+}
+
 func (b *VmBranch) push(t VmValue) {
 	b.Stack.Items = append(b.Stack.Items, t)
 }
 
 func (b *VmBranch) prepare(a uint8, r uint8) {
-	f := b.fs[len(b.fs)-1]
-	f.a = a
-	f.r = r
-	b.fs[len(b.fs)-1] = f
+	f := b.Frames[len(b.Frames)-1]
+	f.NumArgs = a
+	f.NumReturns = r
+	b.Frames[len(b.Frames)-1] = f
 }
 
 func (b *VmBranch) replace(n uint8, v VmValue) {
@@ -178,11 +199,10 @@ type VmBranch struct {
 	vm *Vm
 
 	Line int
-	cs   []int
 
 	Stack *vmStack
 
-	fs []vmFrame
+	Frames []VmFrame
 
 	Budget int
 
@@ -203,6 +223,7 @@ func (b *VmBranch) fork(target string) {
 
 	b.vm.Id++
 
+	nb.skipNops()
 	b.vm.Branches = append(b.vm.Branches, nb)
 }
 
@@ -211,9 +232,8 @@ func (b *VmBranch) jump(target string) {
 }
 
 func (b *VmBranch) call(target string) {
-	b.cs = append(b.cs, b.Line+1)
+	b.Frames = append(b.Frames, VmFrame{Return: b.Line, NumArgs: 0, NumReturns: 0, p: uint8(len(b.Stack.Items)), Name: b.Name})
 	b.Line = b.vm.find(target)
-	b.fs = append(b.fs, vmFrame{a: 0, r: 0, p: uint8(len(b.Stack.Items)), n: b.Name})
 }
 
 func (b *VmBranch) exit() {
@@ -299,31 +319,25 @@ func Interpret(l Listing) *Vm {
 }
 
 func (v *Vm) skipNops() {
-	var op Op
+	begin := v.Current
 
 	for len(v.Branches) > v.Current {
 		b := v.Branches[v.Current]
 
 		if b.Line == ExitLine {
 			v.Current++
+			if v.Current == len(v.Branches) {
+				v.Current = 0
+			}
+			if v.Current == begin {
+				break
+			}
 			continue
 		}
 
-		for b.Line < len(v.Program) {
-			op = v.Program[b.Line]
-
-			lbl, ok := op.(*LabelExpr)
-			if ok {
-				b.Name = lbl.Name
-			}
-
-			_, ok = op.(Nop)
-			if !ok {
-				v.Branch = b
-				return
-			}
-
-			b.Line++
+		if ok := b.skipNops(); ok {
+			v.Branch = b
+			return
 		}
 
 		b.exit()
@@ -380,6 +394,7 @@ func (v *Vm) Step() {
 
 		if b.Budget > 0 {
 			b.Budget--
+			b.Trace = append(b.Trace, op)
 
 			switch op := op.(type) {
 			case vmOp:
@@ -387,8 +402,6 @@ func (v *Vm) Step() {
 			default:
 				b.Line++
 			}
-
-			b.Trace = append(b.Trace, op)
 
 			v.skipNops()
 			v.updateBreakpoints()

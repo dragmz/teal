@@ -1593,16 +1593,16 @@ type RetSubExpr struct{}
 var RetSub = &RetSubExpr{}
 
 func (e *RetSubExpr) Execute(b *VmBranch) error {
-	if len(b.fs) > 0 {
-		f := b.fs[len(b.fs)-1]
+	if len(b.Frames) > 0 {
+		f := b.Frames[len(b.Frames)-1]
 
 		rs := []VmValue{}
 
-		for i := uint8(0); i < f.r; i++ {
+		for i := uint8(0); i < f.NumReturns; i++ {
 			rs = append(rs, b.pop(VmTypeAny))
 		}
 
-		for i := uint8(0); i < f.a; i++ {
+		for i := uint8(0); i < f.NumArgs; i++ {
 			b.pop(VmTypeAny)
 		}
 
@@ -1610,10 +1610,10 @@ func (e *RetSubExpr) Execute(b *VmBranch) error {
 			b.push(rs[i])
 		}
 
-		b.fs = b.fs[:len(b.fs)-1]
-		b.Line = b.cs[len(b.cs)-1]
-		b.cs = b.cs[:len(b.cs)-1]
-		b.Name = f.n
+		b.Line = f.Return + 1
+		b.Name = f.Name
+
+		b.Frames = b.Frames[:len(b.Frames)-1]
 	} else {
 		b.Line++
 	}
@@ -2203,7 +2203,7 @@ type FrameBuryExpr struct {
 }
 
 func (e *FrameBuryExpr) Execute(b *VmBranch) error {
-	f := b.fs[len(b.fs)-1]
+	f := b.Frames[len(b.Frames)-1]
 
 	v := b.pop(VmTypeAny)
 	b.replace(uint8(int8(f.p)+e.Index), v)
@@ -2221,7 +2221,7 @@ type FrameDigExpr struct {
 }
 
 func (e *FrameDigExpr) Execute(b *VmBranch) error {
-	f := b.fs[len(b.fs)-1]
+	f := b.Frames[len(b.Frames)-1]
 
 	v := b.Stack.Items[uint8(int8(f.p)+e.Index)]
 	b.push(v)
