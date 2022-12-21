@@ -6,10 +6,17 @@ import (
 	"strings"
 )
 
+const (
+	MainName = "(main)"
+	ExitLine = -1
+	ExitName = "(exited)"
+)
+
 type vmFrame struct {
 	a uint8
 	r uint8
 	p uint8
+	n string
 }
 
 type vmSource interface {
@@ -178,6 +185,9 @@ type VmBranch struct {
 	fs []vmFrame
 
 	Budget int
+
+	Name  string
+	Trace []Op
 }
 
 func (b *VmBranch) fork(target string) {
@@ -187,6 +197,8 @@ func (b *VmBranch) fork(target string) {
 		Line:   b.vm.find(target),
 		Stack:  b.Stack.clone(),
 		Budget: b.Budget,
+		Name:   target,
+		Trace:  append([]Op{}, b.Trace...),
 	}
 
 	b.vm.Id++
@@ -201,27 +213,36 @@ func (b *VmBranch) jump(target string) {
 func (b *VmBranch) call(target string) {
 	b.cs = append(b.cs, b.Line+1)
 	b.Line = b.vm.find(target)
-	b.fs = append(b.fs, vmFrame{a: 0, r: 0, p: uint8(len(b.Stack.Items))})
+	b.fs = append(b.fs, vmFrame{a: 0, r: 0, p: uint8(len(b.Stack.Items)), n: b.Name})
 }
 
 func (b *VmBranch) exit() {
-	b.Line = -1
+	b.Line = ExitLine
+	b.Name = ExitName
 }
 
 type VmScratch struct {
 	Items [256]VmValue
 }
 
+type VmBreakpoint struct {
+	Line      int
+	Triggered bool
+}
+
 type Vm struct {
 	Id int
 
-	Line Listing
-	syms map[string]int
+	Program Listing
+	syms    map[string]int
 
-	Scratch  VmScratch
+	Scratch VmScratch
+
 	Branches []*VmBranch
 	Branch   *VmBranch
 	Current  int
+
+	Breakpoints []VmBreakpoint
 
 	Trace string
 }
@@ -235,6 +256,16 @@ func (v *Vm) find(target string) int {
 	return ln
 }
 
+func (v *Vm) updateBreakpoints() {
+	for _, br := range v.Branches {
+		for i, bp := range v.Breakpoints {
+			if br.Line == bp.Line {
+				v.Breakpoints[i].Triggered = true
+			}
+		}
+	}
+}
+
 func Interpret(l Listing) *Vm {
 	syms := map[string]int{}
 
@@ -246,8 +277,8 @@ func Interpret(l Listing) *Vm {
 	}
 
 	v := &Vm{
-		Line: l,
-		syms: syms,
+		Program: l,
+		syms:    syms,
 	}
 
 	b := &VmBranch{
@@ -255,6 +286,7 @@ func Interpret(l Listing) *Vm {
 		vm:     v,
 		Stack:  &vmStack{},
 		Budget: 700,
+		Name:   MainName,
 	}
 
 	v.Id++
@@ -272,22 +304,29 @@ func (v *Vm) skipNops() {
 	for len(v.Branches) > v.Current {
 		b := v.Branches[v.Current]
 
-		if b.Line == -1 || b.Line == len(v.Line) {
+		if b.Line == ExitLine {
 			v.Current++
 			continue
 		}
 
-		for b.Line < len(v.Line) {
-			op = v.Line[b.Line]
+		for b.Line < len(v.Program) {
+			op = v.Program[b.Line]
 
-			_, nop := op.(Nop)
-			if !nop {
+			lbl, ok := op.(*LabelExpr)
+			if ok {
+				b.Name = lbl.Name
+			}
+
+			_, ok = op.(Nop)
+			if !ok {
 				v.Branch = b
 				return
 			}
 
 			b.Line++
 		}
+
+		b.exit()
 	}
 
 	v.Branch = nil
@@ -303,17 +342,42 @@ func (v *Vm) Switch(id int) {
 	}
 }
 
+func (v *Vm) SetBreakpoints(lns []int) map[int]bool {
+	verified := map[int]bool{}
+
+	var res []VmBreakpoint
+
+	for _, ln := range lns {
+		if ln >= len(v.Program) {
+			continue
+		}
+
+		if _, isnop := v.Program[ln].(Nop); !isnop {
+			res = append(res, VmBreakpoint{
+				Line: ln,
+			})
+			verified[ln] = true
+		}
+	}
+
+	v.Breakpoints = res
+	return verified
+}
+
 func (v *Vm) Step() {
+	for i := range v.Breakpoints {
+		v.Breakpoints[i].Triggered = false
+	}
+
 	v.skipNops()
 
 	if v.Branch == nil {
 		return
 	}
 
-	b := v.Branch
+	if b := v.Branch; b != nil {
+		op := v.Program[b.Line]
 
-	if b.Line < len(v.Line) {
-		op := v.Line[b.Line]
 		if b.Budget > 0 {
 			b.Budget--
 
@@ -324,15 +388,24 @@ func (v *Vm) Step() {
 				b.Line++
 			}
 
+			b.Trace = append(b.Trace, op)
+
 			v.skipNops()
+			v.updateBreakpoints()
 		} else {
-			b.Line = -1
+			b.exit()
 		}
 	}
 }
 
 func (v *Vm) Run() {
-	for len(v.Branches) > 0 {
+	for v.Branch != nil {
 		v.Step()
+
+		for _, br := range v.Breakpoints {
+			if br.Triggered {
+				return
+			}
+		}
 	}
 }

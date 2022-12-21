@@ -1613,6 +1613,7 @@ func (e *RetSubExpr) Execute(b *VmBranch) error {
 		b.fs = b.fs[:len(b.fs)-1]
 		b.Line = b.cs[len(b.cs)-1]
 		b.cs = b.cs[:len(b.cs)-1]
+		b.Name = f.n
 	} else {
 		b.Line++
 	}

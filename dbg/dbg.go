@@ -384,35 +384,40 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				return err
 			}
 
-			l.bs = []dbgBreakpoint{}
-			for _, b := range ser.Arguments.Breakpoints {
-				l.bid++
-
-				bt := dbgBreakpoint{
-					id:   l.bid,
-					l:    b.Line,
-					name: ser.Arguments.Source.Name,
-					path: ser.Arguments.Source.Path,
-				}
-
-				l.bs = append(l.bs, bt)
-			}
-
 			bs := []dapBreakpoint{}
 
-			for _, b := range l.bs {
-				id := new(int)
-				*id = b.id
+			if l.vm != nil {
 
-				l := new(int)
-				*l = b.l
+				l.bs = []dbgBreakpoint{}
+				for _, b := range ser.Arguments.Breakpoints {
+					bt := dbgBreakpoint{
+						id:   b.Line - l.lz, // TODO: line number used as id - review the design
+						l:    b.Line - l.lz,
+						name: ser.Arguments.Source.Name,
+						path: ser.Arguments.Source.Path,
+					}
 
-				bs = append(bs, dapBreakpoint{
-					Id:       id,
-					Verified: true,
-					Line:     l,
-					Source:   &ser.Arguments.Source,
-				})
+					l.bs = append(l.bs, bt)
+				}
+
+				lns := []int{}
+				for _, b := range l.bs {
+					lns = append(lns, b.l)
+				}
+
+				verified := l.vm.tvm.SetBreakpoints(lns)
+
+				for _, b := range l.bs {
+					id := b.id
+					ln := b.l + l.lz
+
+					bs = append(bs, dapBreakpoint{
+						Id:       &id,
+						Verified: verified[b.id], // TODO: line number used as id - review the design
+						Line:     &ln,
+						Source:   &ser.Arguments.Source,
+					})
+				}
 			}
 
 			err = l.reply(h.Seq, req.Command, "", dapSetBreakpointsResponse{
@@ -460,12 +465,33 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				ThreadId:          tid,
 			})
 		case "continue":
-			if l.vm != nil {
-				l.vm.tvm.Step()
-			}
-			return l.reply(h.Seq, req.Command, "", dapContinueResponse{
+			err = l.reply(h.Seq, req.Command, "", dapContinueResponse{
 				AllThreadsContinued: yes,
 			}, nil)
+
+			if err != nil {
+				return err
+			}
+
+			if l.vm != nil {
+				l.vm.tvm.Run()
+
+				ids := []int{}
+				for _, b := range l.vm.tvm.Breakpoints {
+					if b.Triggered {
+						ids = append(ids, b.Line) // TODO: line used as breakpoint it - review the design
+					}
+				}
+
+				return l.notify("stopped", dapStoppedEventParams{
+					Reason:            "breakpoint",
+					AllThreadsStopped: yes,
+					ThreadId:          &l.vm.tvm.Current,
+					HitBreakpointIds:  ids,
+				})
+
+			}
+
 		case "configurationDone":
 			return l.reply(h.Seq, req.Command, "", nil, nil)
 		case "next":
@@ -546,6 +572,25 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 										})
 									}
 								}
+							case 3:
+								s := 0
+								e := len(b.Trace)
+
+								if vreq.Arguments.Start != nil {
+									s = *vreq.Arguments.Start
+								}
+
+								if vreq.Arguments.Count != nil {
+									e = s + *vreq.Arguments.Count
+								}
+
+								for i := s; i < e; i++ {
+									v := b.Trace[i]
+									vs = append(vs, dapVariable{
+										Name:  strconv.Itoa(i),
+										Value: v.String(),
+									})
+								}
 							}
 						}
 					}
@@ -584,6 +629,13 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 							VariablesReference: 3 + 10*b.Id,
 							IndexedVariables:   &scratchlen,
 						})
+
+						tracelen := len(b.Trace)
+						ss = append(ss, dapScope{
+							Name:               "Trace",
+							VariablesReference: 4 + 10*b.Id,
+							IndexedVariables:   &tracelen,
+						})
 					}
 				}
 			}
@@ -605,7 +657,7 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 					if b.Id == sreq.Arguments.ThreadId {
 						sf = append(sf, dapStackFrame{
 							Id:     b.Id,
-							Name:   "app",
+							Name:   b.Name,
 							Line:   b.Line + l.lz,
 							Column: l.cz,
 							Source: &dapSource{
