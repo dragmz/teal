@@ -131,7 +131,9 @@ type dapScopesRequestParams struct {
 }
 
 type dapVariablesRequestParams struct {
-	VariablesReference int `json:"variablesReference"`
+	VariablesReference int  `json:"variablesReference"`
+	Start              *int `json:"start,omitempty"`
+	Count              *int `json:"count,omitempty"`
 }
 
 type dapVariablesResponse struct {
@@ -155,12 +157,19 @@ type dapScope struct {
 	Expensive          bool   `json:"expensive"`
 }
 
+type dapNextRequestParams struct {
+	ThreadId     int    `json:"threadId"`
+	SingleThread *bool  `json:"singleThread,omitempty"`
+	Granularity  string `json:"granularity,omitempty"`
+}
+
 type dapInitializeRequest dapRequest[*dapInitializeRequestParams]
 type dapSetBreakpointsRequest dapRequest[*dapSetBreakpointsRequestParams]
 type dapLaunchRequest dapRequest[*dapLaunchRequestParams]
 type dapStackTraceRequest dapRequest[*dapStackTraceRequestParams]
 type dapScopesRequest dapRequest[*dapScopesRequestParams]
 type dapVariablesRequest dapRequest[*dapVariablesRequestParams]
+type dapNextRequest dapRequest[*dapNextRequestParams]
 
 type dapCapabilities struct {
 	SupportsInstructionBreakpoints    *bool `json:"supportsInstructionBreakpoints,omitempty"`
@@ -460,11 +469,17 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 		case "configurationDone":
 			return l.reply(h.Seq, req.Command, "", nil, nil)
 		case "next":
+			nreq, err := read[dapNextRequest](b)
+			if err != nil {
+				return err
+			}
+
 			if l.vm != nil {
+				l.vm.tvm.Switch(nreq.Arguments.ThreadId)
 				l.vm.tvm.Step()
 			}
 
-			err := l.reply(h.Seq, req.Command, "", nil, nil)
+			err = l.reply(h.Seq, req.Command, "", nil, nil)
 			if err != nil {
 				return err
 			}
@@ -510,7 +525,27 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 										Value: b.Stack.Items[i].String(),
 									})
 								}
+							case 2:
+								s := 0
+								e := len(l.vm.tvm.Scratch.Items)
 
+								if vreq.Arguments.Start != nil {
+									s = *vreq.Arguments.Start
+								}
+
+								if vreq.Arguments.Count != nil {
+									e = s + *vreq.Arguments.Count
+								}
+
+								for i := s; i < e; i++ {
+									v := l.vm.tvm.Scratch.Items[i]
+									if v.T != teal.VmTypeNone {
+										vs = append(vs, dapVariable{
+											Name:  strconv.Itoa(i),
+											Value: v.String(),
+										})
+									}
+								}
 							}
 						}
 					}
@@ -531,16 +566,23 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 			if l.vm != nil {
 				for _, b := range l.vm.tvm.Branches {
 					if b.Id == sreq.Arguments.FrameId {
-						iv := len(b.Stack.Items)
 						ss = append(ss, dapScope{
 							Name:               "State",
 							VariablesReference: 1 + 10*b.Id, // TODO: make sure var ref calculation is reliable
-							IndexedVariables:   &iv,
 						})
+
+						stacklen := len(b.Stack.Items)
 						ss = append(ss, dapScope{
 							Name:               "Stack",
 							VariablesReference: 2 + 10*b.Id, // TODO: make sure var ref calculation is reliable
-							IndexedVariables:   &iv,
+							IndexedVariables:   &stacklen,
+						})
+
+						scratchlen := 256
+						ss = append(ss, dapScope{
+							Name:               "Scratch",
+							VariablesReference: 3 + 10*b.Id,
+							IndexedVariables:   &scratchlen,
 						})
 					}
 				}

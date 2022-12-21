@@ -2,6 +2,7 @@ package teal
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -15,10 +16,18 @@ type vmSource interface {
 	String() string
 }
 
-type vmValue struct {
-	t vmDataType
+type VmValue struct {
+	T VmDataType
 
 	src vmSource
+}
+
+type vmUint64Const struct {
+	v uint64
+}
+
+func (c vmUint64Const) String() string {
+	return strconv.FormatUint(c.v, 10)
 }
 
 type vmConst struct {
@@ -52,8 +61,8 @@ func (c vmConst) String() string {
 	return c.v
 }
 
-func (v vmValue) String() string {
-	res := v.t.String()
+func (v VmValue) String() string {
+	res := v.T.String()
 	if v.src != nil {
 		res += ": " + v.src.String()
 	}
@@ -62,22 +71,22 @@ func (v vmValue) String() string {
 
 type vmValueType int
 
-type vmDataType int
+type VmDataType int
 
 const (
-	vmTypeNone = iota
-	vmTypeAny
-	vmTypeUint64
-	vmTypeBytes
+	VmTypeNone = iota
+	VmTypeAny
+	VmTypeUint64
+	VmTypeBytes
 )
 
-func (t vmDataType) String() string {
+func (t VmDataType) String() string {
 	switch t {
-	case vmTypeAny:
+	case VmTypeAny:
 		return "any"
-	case vmTypeUint64:
+	case VmTypeUint64:
 		return "uint64"
-	case vmTypeBytes:
+	case VmTypeBytes:
 		return "bytes"
 	default:
 		return "(none)"
@@ -88,26 +97,26 @@ type vmOp interface {
 	Execute(b *VmBranch) error
 }
 
-func (t StackType) Vm() vmDataType {
+func (t StackType) Vm() VmDataType {
 	switch t {
 	case StackAny:
-		return vmTypeAny
+		return VmTypeAny
 	case StackBytes:
-		return vmTypeBytes
+		return VmTypeBytes
 	case StackUint64:
-		return vmTypeUint64
+		return VmTypeUint64
 	case StackNone:
-		return vmTypeNone
+		return VmTypeNone
 	default:
 		panic("unknown stack type")
 	}
 }
 
 type vmStack struct {
-	Items []vmValue
+	Items []VmValue
 }
 
-func (b *VmBranch) push(t vmValue) {
+func (b *VmBranch) push(t VmValue) {
 	b.Stack.Items = append(b.Stack.Items, t)
 }
 
@@ -118,24 +127,31 @@ func (b *VmBranch) prepare(a uint8, r uint8) {
 	b.fs[len(b.fs)-1] = f
 }
 
-func (b *VmBranch) replace(n uint8, v vmValue) {
+func (b *VmBranch) replace(n uint8, v VmValue) {
 	b.Stack.Items[n] = v
 }
 
-func (b *VmBranch) pop(t vmDataType) vmValue {
+func (b *VmBranch) store(index VmValue, v VmValue) {
+	switch src := index.src.(type) {
+	case vmUint64Const:
+		b.vm.Scratch.Items[src.v] = v
+	}
+}
+
+func (b *VmBranch) pop(t VmDataType) VmValue {
 	if len(b.Stack.Items) == 0 {
 		panic("empty stack")
 	}
 
 	v := b.Stack.Items[len(b.Stack.Items)-1]
 	switch t {
-	case vmTypeAny:
+	case VmTypeAny:
 	default:
-		switch v.t {
-		case vmTypeAny:
+		switch v.T {
+		case VmTypeAny:
 		default:
-			if v.t != t {
-				panic(fmt.Sprintf("unexpected data type on stack - expected: %s, got: %s", t, v.t))
+			if v.T != t {
+				panic(fmt.Sprintf("unexpected data type on stack - expected: %s, got: %s", t, v.T))
 			}
 		}
 	}
@@ -145,7 +161,7 @@ func (b *VmBranch) pop(t vmDataType) vmValue {
 
 func (s *vmStack) clone() *vmStack {
 	return &vmStack{
-		Items: append([]vmValue{}, s.Items...),
+		Items: append([]VmValue{}, s.Items...),
 	}
 }
 
@@ -192,12 +208,17 @@ func (b *VmBranch) exit() {
 	b.Line = -1
 }
 
+type VmScratch struct {
+	Items [256]VmValue
+}
+
 type Vm struct {
 	Id int
 
 	Line Listing
 	syms map[string]int
 
+	Scratch  VmScratch
 	Branches []*VmBranch
 	Branch   *VmBranch
 	Current  int
@@ -270,6 +291,16 @@ func (v *Vm) skipNops() {
 	}
 
 	v.Branch = nil
+}
+
+func (v *Vm) Switch(id int) {
+	for i, b := range v.Branches {
+		if b.Id == id {
+			v.Current = i
+			v.Branch = b
+			break
+		}
+	}
 }
 
 func (v *Vm) Step() {

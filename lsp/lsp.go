@@ -319,7 +319,7 @@ type lspDocumentSymbolParams struct {
 type tealReplaceValueCommandArgs struct {
 	Uri   string   `json:"uri"`
 	Range lspRange `json:"range"`
-	Name  string   `json:"name"`
+	Value string   `json:"name"`
 }
 
 type tealCreateLabelCommandArgs struct {
@@ -825,7 +825,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				edits := []lspTextEdit{
 					{
 						Range:   args[0].Range,
-						NewText: args[0].Name,
+						NewText: args[0].Value,
 					},
 				}
 
@@ -1534,7 +1534,35 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 										Character: named.T.End(),
 									},
 								},
-								Name: named.Name,
+								Value: named.Name,
+							},
+						},
+					},
+				})
+			}
+
+			for _, named := range hs.Decoded {
+				kind := "quickfix"
+				cas = append(cas, lspCodeAction{
+					Title: fmt.Sprintf("Replace with literal '%s'", named.Value),
+					Kind:  &kind,
+					Command: &lspCommand{
+						Title:   "Replace with literal",
+						Command: "teal.value.replace",
+						Arguments: []interface{}{
+							tealReplaceValueCommandArgs{
+								Uri: req.Params.TextDocument.Uri,
+								Range: lspRange{
+									Start: lspPosition{
+										Line:      named.T.Line(),
+										Character: named.T.Begin(),
+									},
+									End: lspPosition{
+										Line:      named.T.Line(),
+										Character: named.T.End(),
+									},
+								},
+								Value: fmt.Sprintf("\"%s\"", strings.ReplaceAll(named.Value, "\"", "\\\"")),
 							},
 						},
 					},
