@@ -1652,12 +1652,9 @@ func (e *SwitchExpr) Execute(b *VmBranch) error {
 
 	for _, t := range e.Targets {
 		b.fork(t.Name)
-		b.Line = -1
 	}
 
-	if len(e.Targets) == 0 {
-		b.Line++
-	}
+	b.Line++
 
 	return nil
 }
@@ -1702,12 +1699,9 @@ func (e *MatchExpr) Execute(b *VmBranch) error {
 
 	for _, t := range e.Targets {
 		b.fork(t.Name)
-		b.Line = -1
 	}
 
-	if len(e.Targets) == 0 {
-		b.Line++
-	}
+	b.Line++
 
 	return nil
 }
