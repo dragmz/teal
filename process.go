@@ -1512,17 +1512,17 @@ func opErr(c ProcessContext) {
 }
 
 func opSHA256(c ProcessContext) {
-	c.minVersion(2)
+	c.minVersion(1)
 	c.emit(Sha256)
 }
 
 func opKeccak256(c ProcessContext) {
-	c.minVersion(2)
+	c.minVersion(1)
 	c.emit(Keccak256)
 }
 
 func opSHA512_256(c ProcessContext) {
-	c.minVersion(2)
+	c.minVersion(1)
 	c.emit(Sha512256)
 }
 func opEd25519Verify(c ProcessContext) {
