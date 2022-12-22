@@ -125,8 +125,8 @@ type vmStack struct {
 }
 
 func (b *VmBranch) skipNops() bool {
-	for b.Line < len(b.vm.Program) {
-		op := b.vm.Program[b.Line]
+	for b.Line < len(b.vm.Process.Listing) {
+		op := b.vm.Process.Listing[b.Line]
 
 		lbl, ok := op.(*LabelExpr)
 		if ok {
@@ -253,7 +253,7 @@ type VmBreakpoint struct {
 type Vm struct {
 	Id int
 
-	Program Listing
+	Process *ProcessResult
 	syms    map[string]int
 
 	Scratch VmScratch
@@ -285,10 +285,10 @@ func (v *Vm) updateBreakpoints(br *VmBranch) {
 	}
 }
 
-func Interpret(l Listing) *Vm {
+func NewVm(res *ProcessResult) *Vm {
 	syms := map[string]int{}
 
-	for i, op := range l {
+	for i, op := range res.Listing {
 		switch op := op.(type) {
 		case *LabelExpr:
 			syms[op.Name] = i
@@ -296,7 +296,7 @@ func Interpret(l Listing) *Vm {
 	}
 
 	v := &Vm{
-		Program:   l,
+		Process:   res,
 		Triggered: map[int][]int{},
 		syms:      syms,
 	}
@@ -362,11 +362,11 @@ func (v *Vm) SetBreakpoints(lns []int) map[int]bool {
 	var res []VmBreakpoint
 
 	for _, ln := range lns {
-		if ln >= len(v.Program) {
+		if ln >= len(v.Process.Listing) {
 			continue
 		}
 
-		if _, isnop := v.Program[ln].(Nop); !isnop {
+		if _, isnop := v.Process.Listing[ln].(Nop); !isnop {
 			res = append(res, VmBreakpoint{
 				Line: ln,
 			})
@@ -388,7 +388,7 @@ func (v *Vm) Step() {
 	}
 
 	if b := v.Branch; b != nil {
-		op := v.Program[b.Line]
+		op := v.Process.Listing[b.Line]
 
 		if b.Budget > 0 {
 			b.Budget--

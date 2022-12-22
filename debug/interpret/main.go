@@ -20,7 +20,7 @@ func run(a args) error {
 
 	res := teal.Process(string(bs))
 
-	vm := teal.Interpret(res.Listing)
+	vm := teal.NewVm(res)
 
 	vm.Run()
 	return nil
