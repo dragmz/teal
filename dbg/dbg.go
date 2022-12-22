@@ -163,6 +163,10 @@ type dapNextRequestParams struct {
 	Granularity  string `json:"granularity,omitempty"`
 }
 
+type dapContinueRequestParams struct {
+	ThreadId int `json:"threadId"`
+}
+
 type dapInitializeRequest dapRequest[*dapInitializeRequestParams]
 type dapSetBreakpointsRequest dapRequest[*dapSetBreakpointsRequestParams]
 type dapLaunchRequest dapRequest[*dapLaunchRequestParams]
@@ -170,6 +174,7 @@ type dapStackTraceRequest dapRequest[*dapStackTraceRequestParams]
 type dapScopesRequest dapRequest[*dapScopesRequestParams]
 type dapVariablesRequest dapRequest[*dapVariablesRequestParams]
 type dapNextRequest dapRequest[*dapNextRequestParams]
+type dapContinueRequest dapRequest[*dapContinueRequestParams]
 
 type dapCapabilities struct {
 	SupportsInstructionBreakpoints    *bool `json:"supportsInstructionBreakpoints,omitempty"`
@@ -247,6 +252,10 @@ type dapStoppedEventParams struct {
 	AllThreadsStopped *bool  `json:"allThreadsStopped,omitempty"`
 	HitBreakpointIds  []int  `json:"hitBreakpointIds,omitempty"`
 	PreserveFocusHint *bool  `json:"preserveFocusHint,omitempty"`
+}
+
+type dapExitedEventParams struct {
+	ExitCode int `json:"exitCode"`
 }
 
 func readInto(b []byte, v interface{}) error {
@@ -465,6 +474,10 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				ThreadId:          tid,
 			})
 		case "continue":
+			creq, err := read[dapContinueRequest](b)
+			if err != nil {
+				return err
+			}
 			err = l.reply(h.Seq, req.Command, "", dapContinueResponse{
 				AllThreadsContinued: yes,
 			}, nil)
@@ -476,20 +489,30 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 			if l.vm != nil {
 				l.vm.tvm.Run()
 
-				ids := []int{}
-				for _, b := range l.vm.tvm.Breakpoints {
-					if b.Triggered {
-						ids = append(ids, b.Line) // TODO: line used as breakpoint it - review the design
+				if len(l.vm.tvm.Triggered) > 0 {
+					var tid int
+					ids := l.vm.tvm.Triggered
+					if _, ok := ids[creq.Arguments.ThreadId]; ok {
+						tid = creq.Arguments.ThreadId
+					} else {
+						for id := range l.vm.tvm.Triggered {
+							tid = id
+							break
+						}
 					}
+
+					return l.notify("stopped", dapStoppedEventParams{
+						Reason:            "breakpoint",
+						AllThreadsStopped: yes,
+						ThreadId:          &tid,
+						HitBreakpointIds:  ids[tid],
+					})
+				} else if l.vm.tvm.Branch == nil {
+					return l.notify("stopped", dapStoppedEventParams{
+						Reason:            "breakpoint",
+						AllThreadsStopped: yes,
+					})
 				}
-
-				return l.notify("stopped", dapStoppedEventParams{
-					Reason:            "breakpoint",
-					AllThreadsStopped: yes,
-					ThreadId:          &l.vm.tvm.Current,
-					HitBreakpointIds:  ids,
-				})
-
 			}
 
 		case "configurationDone":
