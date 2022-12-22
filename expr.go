@@ -2120,6 +2120,12 @@ func (e *MethodExpr) String() string {
 	return fmt.Sprintf("method \"%s\"", strings.ReplaceAll(e.Signature, "\"", "\\\""))
 }
 
+func (e *MethodExpr) Execute(b *VmBranch) error {
+	b.push(VmValue{T: VmTypeBytes, src: vmConst{v: e.Signature}})
+	b.Line++
+	return nil
+}
+
 type AddrExpr struct {
 	Address string
 }
