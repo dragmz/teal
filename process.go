@@ -2896,6 +2896,7 @@ func Process(source string) *ProcessResult {
 				if strings.TrimSpace(c.args.Curr().String()) == "#pragma mode logicsig" {
 					c.mode = ModeSig
 				}
+				c.emit(Empty)
 				return
 			} else if strings.HasSuffix(c.args.Text(), ":") {
 				name := c.args.Text()
