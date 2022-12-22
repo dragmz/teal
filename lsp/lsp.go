@@ -1232,8 +1232,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				snippetFormat := new(int)
 				*snippetFormat = 2
 
-				for name, info := range teal.OpDocs.Items {
-					if info.Version <= res.Version && strings.HasPrefix(name, prefix) {
+				for name, info := range teal.Ops.Items {
+					if info.AppVersion <= res.Version && strings.HasPrefix(name, prefix) {
 						var insert string
 						var format *int
 						if len(info.Args) > 0 {
@@ -1253,7 +1253,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							format = nil
 						}
 
-						ld := fmt.Sprintf("v%d", info.Version)
+						ld := fmt.Sprintf("v%d", info.AppVersion)
 						ccs = append(ccs, lspCompletionItem{
 							Label: name,
 							Documentation: lspMarkupContent{
@@ -1387,7 +1387,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			var sh interface{} = struct{}{}
 			for _, op := range res.Ops {
 				if op.Line() == req.Params.Position.Line {
-					info, ok := teal.OpDocs.GetDoc(teal.OpDocContext{
+					info, ok := teal.Ops.Get(teal.OpContext{
 						Name:    op.String(),
 						Version: res.Version,
 					})

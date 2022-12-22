@@ -282,14 +282,15 @@ type opItemArg struct {
 type opItem struct {
 	Name string
 
-	Version uint64
+	SigVersion uint64
+	AppVersion uint64
 
 	Args []opItemArg
 
 	ArgsSig string
 	FullSig string
 
-	Parse parserFunc
+	Parse processFunc
 
 	Doc     string
 	FullDoc string
@@ -297,7 +298,7 @@ type opItem struct {
 
 type opListItem struct {
 	Name  string
-	Parse parserFunc
+	Parse processFunc
 }
 
 var opsList = []opListItem{
@@ -408,25 +409,18 @@ var opsList = []opListItem{
 	{"balance", opBalance},
 	{"balance", opBalance},
 	{"app_opted_in", opAppOptedIn},
-	{"app_opted_in", opAppOptedIn},
 	{"app_local_get", opAppLocalGet},
-	{"app_local_get", opAppLocalGet},
-	{"app_local_get_ex", opAppLocalGetEx},
 	{"app_local_get_ex", opAppLocalGetEx},
 	{"app_global_get", opAppGlobalGet},
 	{"app_global_get_ex", opAppGlobalGetEx},
 	{"app_local_put", opAppLocalPut},
-	{"app_local_put", opAppLocalPut},
 	{"app_global_put", opAppGlobalPut},
 	{"app_local_del", opAppLocalDel},
-	{"app_local_del", opAppLocalDel},
 	{"app_global_del", opAppGlobalDel},
-	{"asset_holding_get", opAssetHoldingGet},
 	{"asset_holding_get", opAssetHoldingGet},
 	{"asset_params_get", opAssetParamsGet},
 	{"app_params_get", opAppParamsGet},
 	{"acct_params_get", opAcctParamsGet},
-	{"min_balance", opMinBalance},
 	{"min_balance", opMinBalance},
 	{"pushbytes", opPushBytes},
 	{"pushint", opPushInt},
@@ -497,10 +491,11 @@ var opsList = []opListItem{
 
 type recoverable struct{}
 
-type OpContext interface {
+type ProcessContext interface {
 	emit(op Op)
 
 	minVersion(v uint64)
+	modeMinVersion(mode ProgramMode, v uint64)
 
 	mustReadBase64Encoding(name string) Base64Encoding
 	mustReadPragma(name string) uint64
@@ -530,9 +525,10 @@ type OpContext interface {
 }
 
 type docContext struct {
-	args     []opItemArg
-	version  uint64
-	optional bool
+	args       []opItemArg
+	sigVersion uint64
+	appVersion uint64
+	optional   bool
 }
 
 func (c *docContext) arg(a opItemArg) {
@@ -550,7 +546,17 @@ func (c *docContext) emit(op Op) {
 }
 
 func (c *docContext) minVersion(v uint64) {
-	c.version = v
+	c.appVersion = v
+	c.sigVersion = v
+}
+
+func (c *docContext) modeMinVersion(mode ProgramMode, v uint64) {
+	switch mode {
+	case ModeSig:
+		c.sigVersion = v
+	case ModeApp:
+		c.appVersion = v
+	}
 }
 
 func (c *docContext) mustReadPragma(name string) (v uint64) {
@@ -784,7 +790,27 @@ func (c *docContext) mustReadBlockField(name string) (v BlockField) {
 	return
 }
 
+type ProgramMode int
+
+const (
+	ModeNone = iota
+	ModeApp
+	ModeSig
+)
+
+func (m ProgramMode) String() string {
+	switch m {
+	case ModeApp:
+		return "application"
+	case ModeSig:
+		return "logicsig"
+	default:
+		return "(unknown)"
+	}
+}
+
 type parserContext struct {
+	mode    ProgramMode
 	version uint64
 
 	ops  []Op
@@ -804,6 +830,9 @@ func (c *parserContext) emit(op Op) {
 
 func (c *parserContext) minVersion(v uint64) {
 
+}
+
+func (c *parserContext) modeMinVersion(mode ProgramMode, v uint64) {
 }
 
 func (c *parserContext) failAt(l int, b int, e int, err error) {
@@ -1287,29 +1316,30 @@ func (c *parserContext) mustReadEcdsaCurveIndex(name string) EcdsaCurve {
 	return c.parseEcdsaCurveIndex(name)
 }
 
-type opDocs struct {
+type opItems struct {
 	Items map[string]opItem
 }
 
-type OpDocContext struct {
+type OpContext struct {
 	Name    string
 	Version uint64
 }
 
-func (d opDocs) GetDoc(c OpDocContext) (opItem, bool) {
+func (d opItems) Get(c OpContext) (opItem, bool) {
 	item, ok := d.Items[c.Name]
 	return item, ok
 }
 
-var OpDocs = func() *opDocs {
-	d := &opDocs{
+var Ops = func() *opItems {
+	d := &opItems{
 		Items: map[string]opItem{},
 	}
 
 	for _, info := range opsList {
 		c := &docContext{
-			version: 1,
-			args:    []opItemArg{},
+			appVersion: 1,
+			sigVersion: 1,
+			args:       []opItemArg{},
 		}
 
 		info.Parse(c)
@@ -1381,7 +1411,8 @@ var OpDocs = func() *opDocs {
 		d.Items[info.Name] = opItem{
 			Name: info.Name,
 
-			Version: c.version,
+			SigVersion: c.sigVersion,
+			AppVersion: c.appVersion,
 
 			ArgsSig: sigargs,
 			FullSig: sigfull,
@@ -1398,7 +1429,7 @@ var OpDocs = func() *opDocs {
 	return d
 }()
 
-type parserFunc func(c OpContext)
+type processFunc func(c ProcessContext)
 
 type asmType int
 
@@ -1420,208 +1451,219 @@ var checkByteImmArgs = []interface{}{}
 var immBytess = []interface{}{}
 var typeTxField = []interface{}{}
 
-func opPragma(c OpContext) {
+func opPragma(c ProcessContext) {
 	version := c.mustReadPragma("version")
 	c.emit(&PragmaExpr{Version: uint8(version)})
 }
 
-func opAddr(c OpContext) {
+func opAddr(c ProcessContext) {
 	value := c.mustReadAddr("address")
 	c.emit(&AddrExpr{Address: value})
 }
 
-func opByte(c OpContext) {
+func opByte(c ProcessContext) {
 	value := c.mustReadBytes("value")
 	c.emit(&ByteExpr{Value: value})
 }
 
-func opInt(c OpContext) {
+func opInt(c ProcessContext) {
 	value := c.mustReadInt("value")
 	c.emit(&IntExpr{Value: value})
 }
 
-func opMethod(c OpContext) {
+func opMethod(c ProcessContext) {
 	value := c.mustReadSignature("signature")
 	c.emit(&MethodExpr{Signature: value})
 }
 
-func opErr(c OpContext) {
+func opErr(c ProcessContext) {
 	c.emit(Err)
 }
 
-func opSHA256(c OpContext) {
+func opSHA256(c ProcessContext) {
 	c.minVersion(2)
 	c.emit(Sha256)
 }
 
-func opKeccak256(c OpContext) {
+func opKeccak256(c ProcessContext) {
 	c.minVersion(2)
 	c.emit(Keccak256)
 }
 
-func opSHA512_256(c OpContext) {
+func opSHA512_256(c ProcessContext) {
 	c.minVersion(2)
 	c.emit(Sha512256)
 }
-func opEd25519Verify(c OpContext) {
-	// TODO: 1 for sig, 5 for app - needs mode support
+func opEd25519Verify(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 1)
+	c.modeMinVersion(ModeApp, 5)
 	c.emit(ED25519Verify)
 }
 
-func opEcdsaVerify(c OpContext) {
+func opEcdsaVerify(c ProcessContext) {
 	c.minVersion(5)
 	curve := c.mustReadEcdsaCurveIndex("curve index")
 	c.emit(&EcdsaVerifyExpr{Index: curve})
 }
-func opEcdsaPkDecompress(c OpContext) {
+func opEcdsaPkDecompress(c ProcessContext) {
 	c.minVersion(5)
 	curve := c.mustReadEcdsaCurveIndex("curve index")
 	c.emit(&EcdsaPkDecompressExpr{Index: curve})
 }
 
-func opEcdsaPkRecover(c OpContext) {
+func opEcdsaPkRecover(c ProcessContext) {
 	c.minVersion(5)
 	curve := c.mustReadEcdsaCurveIndex("curve index")
 	c.emit(&EcdsaPkRecoverExpr{Index: curve})
 }
 
-func opPlus(c OpContext) {
+func opPlus(c ProcessContext) {
 	c.emit(PlusOp)
 }
-func opMinus(c OpContext) {
+func opMinus(c ProcessContext) {
 	c.emit(MinusOp)
 }
-func opDiv(c OpContext) {
+func opDiv(c ProcessContext) {
 	c.emit(Div)
 }
-func opMul(c OpContext) {
+func opMul(c ProcessContext) {
 	c.emit(Mul)
 }
-func opLt(c OpContext) {
+func opLt(c ProcessContext) {
 	c.emit(Lt)
 }
-func opGt(c OpContext) {
+func opGt(c ProcessContext) {
 	c.emit(Gt)
 }
-func opLe(c OpContext) {
+func opLe(c ProcessContext) {
 	c.emit(Le)
 }
-func opGe(c OpContext) {
+func opGe(c ProcessContext) {
 	c.emit(Ge)
 }
-func opAnd(c OpContext) {
+func opAnd(c ProcessContext) {
 	c.emit(And)
 }
-func opOr(c OpContext) {
+func opOr(c ProcessContext) {
 	c.emit(Or)
 }
-func opEq(c OpContext) {
+func opEq(c ProcessContext) {
 	c.emit(Eq)
 }
-func opNeq(c OpContext) {
+func opNeq(c ProcessContext) {
 	c.emit(Neq)
 }
-func opNot(c OpContext) {
+func opNot(c ProcessContext) {
 	c.emit(Not)
 }
-func opLen(c OpContext) {
+func opLen(c ProcessContext) {
 	c.emit(Len)
 }
-func opItob(c OpContext) {
+func opItob(c ProcessContext) {
 	c.emit(Itob)
 }
-func opBtoi(c OpContext) {
+func opBtoi(c ProcessContext) {
 	c.emit(Btoi)
 }
-func opModulo(c OpContext) {
+func opModulo(c ProcessContext) {
 	c.emit(Modulo)
 }
-func opBitOr(c OpContext) {
+func opBitOr(c ProcessContext) {
 	c.emit(BitOr)
 }
-func opBitAnd(c OpContext) {
+func opBitAnd(c ProcessContext) {
 	c.emit(BitAnd)
 }
-func opBitXor(c OpContext) {
+func opBitXor(c ProcessContext) {
 	c.emit(BitXor)
 }
-func opBitNot(c OpContext) {
+func opBitNot(c ProcessContext) {
 	c.emit(BitNot)
 }
-func opMulw(c OpContext) {
+func opMulw(c ProcessContext) {
 	c.emit(Mulw)
 }
-func opAddw(c OpContext) {
+func opAddw(c ProcessContext) {
 	c.minVersion(2)
 	c.emit(Addw)
 }
-func opDivModw(c OpContext) {
+func opDivModw(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(DivModw)
 }
-func opIntConstBlock(c OpContext) {
+func opIntConstBlock(c ProcessContext) {
 	values := c.readUint64Array("value")
 
 	c.emit(&IntcBlockExpr{Values: values})
 }
 
-func opIntConstLoad(c OpContext) {
+func opIntConstLoad(c ProcessContext) {
 	value := c.mustReadUint8("value")
 	c.emit(&IntcExpr{Index: uint8(value)})
 }
 
-func opIntConst0(c OpContext) {
+func opIntConst0(c ProcessContext) {
 	c.emit(Intc0)
 }
-func opIntConst1(c OpContext) {
+func opIntConst1(c ProcessContext) {
 	c.emit(Intc1)
 }
-func opIntConst2(c OpContext) {
+func opIntConst2(c ProcessContext) {
 	c.emit(Intc2)
 }
-func opIntConst3(c OpContext) {
+func opIntConst3(c ProcessContext) {
 	c.emit(Intc3)
 }
-func opByteConstBlock(c OpContext) {
+func opByteConstBlock(c ProcessContext) {
 	values := c.readBytesArray("bytes")
 
 	c.emit(&BytecBlockExpr{Values: values})
 }
 
-func opByteConstLoad(c OpContext) {
+func opByteConstLoad(c ProcessContext) {
 	value := c.mustReadUint8("index")
 	c.emit(&BytecExpr{Index: uint8(value)})
 }
 
-func opByteConst0(c OpContext) {
+func opByteConst0(c ProcessContext) {
 	c.emit(Bytec0)
 }
-func opByteConst1(c OpContext) {
+func opByteConst1(c ProcessContext) {
 	c.emit(Bytec1)
 }
-func opByteConst2(c OpContext) {
+func opByteConst2(c ProcessContext) {
 	c.emit(Bytec2)
 }
-func opByteConst3(c OpContext) {
+func opByteConst3(c ProcessContext) {
 	c.emit(Bytec3)
 }
-func opArg(c OpContext) {
+func opArg(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 1)
+	c.modeMinVersion(ModeApp, 0)
 	value := c.mustReadUint8("index")
 	c.emit(&ArgExpr{Index: uint8(value)})
 }
-func opArg0(c OpContext) {
+func opArg0(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 1)
+	c.modeMinVersion(ModeApp, 0)
 	c.emit(Arg0)
 }
-func opArg1(c OpContext) {
+func opArg1(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 1)
+	c.modeMinVersion(ModeApp, 0)
 	c.emit(Arg1)
 }
-func opArg2(c OpContext) {
+func opArg2(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 1)
+	c.modeMinVersion(ModeApp, 0)
 	c.emit(Arg2)
 }
-func opArg3(c OpContext) {
+func opArg3(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 1)
+	c.modeMinVersion(ModeApp, 0)
 	c.emit(Arg3)
 }
-func opTxn(c OpContext) {
+func opTxn(c ProcessContext) {
 	f := c.mustReadTxnField("f")
 
 	i, ok := c.maybeReadUint8("i")
@@ -1631,13 +1673,13 @@ func opTxn(c OpContext) {
 		c.emit(&TxnExpr{Field: f})
 	}
 }
-func opGlobal(c OpContext) {
+func opGlobal(c ProcessContext) {
 	field := c.mustReadGlobalField("field")
 
 	c.emit(&GlobalExpr{Field: field})
 }
 
-func opGtxn(c OpContext) {
+func opGtxn(c ProcessContext) {
 	t := c.mustReadUint8("t")
 	f := c.mustReadTxnField("f")
 	i, ok := c.maybeReadUint8("i")
@@ -1648,16 +1690,16 @@ func opGtxn(c OpContext) {
 	}
 }
 
-func opLoad(c OpContext) {
+func opLoad(c ProcessContext) {
 	value := c.mustReadUint8("i")
 	c.emit(&LoadExpr{Index: uint8(value)})
 }
-func opStore(c OpContext) {
+func opStore(c ProcessContext) {
 	value := c.mustReadUint8("i")
 	c.emit(&StoreExpr{Index: uint8(value)})
 }
 
-func opTxna(c OpContext) {
+func opTxna(c ProcessContext) {
 	c.minVersion(2)
 
 	f := c.mustReadTxnaField("f")
@@ -1666,7 +1708,7 @@ func opTxna(c OpContext) {
 	c.emit(&TxnaExpr{Field: f, Index: i})
 }
 
-func opGtxna(c OpContext) {
+func opGtxna(c ProcessContext) {
 	c.minVersion(2)
 
 	t := c.mustReadUint8("t")
@@ -1675,7 +1717,7 @@ func opGtxna(c OpContext) {
 
 	c.emit(&GtxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
 }
-func opGtxns(c OpContext) {
+func opGtxns(c ProcessContext) {
 	c.minVersion(3)
 
 	f := c.mustReadTxnField("f")
@@ -1688,7 +1730,7 @@ func opGtxns(c OpContext) {
 	}
 }
 
-func opGtxnsa(c OpContext) {
+func opGtxnsa(c ProcessContext) {
 	c.minVersion(3)
 
 	f := c.mustReadTxnaField("f")
@@ -1697,8 +1739,9 @@ func opGtxnsa(c OpContext) {
 	c.emit(&GtxnsaExpr{Field: f, Index: uint8(i)})
 }
 
-func opGload(c OpContext) {
-	c.minVersion(4)
+func opGload(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 4)
 
 	t := c.mustReadUint8("t")
 	value := c.mustReadUint8("i")
@@ -1706,141 +1749,143 @@ func opGload(c OpContext) {
 	c.emit(&GloadExpr{Group: uint8(t), Index: uint8(value)})
 }
 
-func opGloads(c OpContext) {
-	c.minVersion(4)
-
+func opGloads(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 4)
 	value := c.mustReadUint8("i")
 	c.emit(&GloadsExpr{Index: uint8(value)})
 }
 
-func opGaid(c OpContext) {
-	c.minVersion(4)
+func opGaid(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 4)
 
 	t := c.mustReadUint8("t")
 	c.emit(&GaidExpr{Group: uint8(t)})
 }
-func opGaids(c OpContext) {
-	c.minVersion(4)
+func opGaids(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 4)
 
 	c.emit(Gaids)
 }
-func opLoads(c OpContext) {
+func opLoads(c ProcessContext) {
 	c.minVersion(5)
 
 	c.emit(Loads)
 }
-func opStores(c OpContext) {
+func opStores(c ProcessContext) {
 	c.minVersion(5)
 	c.emit(Stores)
 }
-func opBnz(c OpContext) {
+func opBnz(c ProcessContext) {
 	name := c.mustReadLabel("label")
 	c.emit(&BnzExpr{Label: &LabelExpr{Name: name}})
 }
-func opBz(c OpContext) {
+func opBz(c ProcessContext) {
 	c.minVersion(2)
 	name := c.mustReadLabel("label")
 	c.emit(&BzExpr{Label: &LabelExpr{Name: name}})
 }
-func opB(c OpContext) {
+func opB(c ProcessContext) {
 	c.minVersion(2)
 	name := c.mustReadLabel("label")
 	c.emit(&BExpr{Label: &LabelExpr{Name: name}})
 }
-func opReturn(c OpContext) {
+func opReturn(c ProcessContext) {
 	c.minVersion(2)
 	c.emit(Return)
 }
-func opAssert(c OpContext) {
+func opAssert(c ProcessContext) {
 	c.minVersion(3)
 	c.emit(Assert)
 }
 
-func opBury(c OpContext) {
+func opBury(c ProcessContext) {
 	c.minVersion(8)
 
 	n := c.mustReadUint8("n")
 	c.emit(&BuryExpr{Depth: n})
 }
 
-func opPopN(c OpContext) {
+func opPopN(c ProcessContext) {
 	c.minVersion(8)
 
 	n := c.mustReadUint8("n")
 	c.emit(&PopNExpr{Depth: n})
 }
-func opDupN(c OpContext) {
+func opDupN(c ProcessContext) {
 	c.minVersion(8)
 
 	n := c.mustReadUint8("n")
 	c.emit(&DupNExpr{Count: n})
 }
 
-func opPop(c OpContext) {
+func opPop(c ProcessContext) {
 	c.emit(Pop)
 }
-func opDup(c OpContext) {
+func opDup(c ProcessContext) {
 	c.emit(Dup)
 }
-func opDup2(c OpContext) {
+func opDup2(c ProcessContext) {
 	c.minVersion(2)
 	c.emit(Dup2)
 }
-func opDig(c OpContext) {
+func opDig(c ProcessContext) {
 	c.minVersion(3)
 	value := c.mustReadUint8("n")
 	c.emit(&DigExpr{Index: uint8(value)})
 }
-func opSwap(c OpContext) {
+func opSwap(c ProcessContext) {
 	c.minVersion(3)
 	c.emit(Swap)
 }
-func opSelect(c OpContext) {
+func opSelect(c ProcessContext) {
 	c.minVersion(3)
 	c.emit(Select)
 }
-func opCover(c OpContext) {
+func opCover(c ProcessContext) {
 	c.minVersion(5)
 	value := c.mustReadUint8("n")
 	c.emit(&CoverExpr{Depth: uint8(value)})
 }
-func opUncover(c OpContext) {
+func opUncover(c ProcessContext) {
 	c.minVersion(5)
 	value := c.mustReadUint8("index")
 	c.emit(&UncoverExpr{Depth: uint8(value)})
 }
-func opConcat(c OpContext) {
+func opConcat(c ProcessContext) {
 	c.minVersion(2)
 	c.emit(Concat)
 }
-func opSubstring(c OpContext) {
+func opSubstring(c ProcessContext) {
 	c.minVersion(2)
 	start := c.mustReadUint8("s")
 	end := c.mustReadUint8("e")
 	c.emit(&SubstringExpr{Start: uint8(start), End: uint8(end)})
 }
-func opSubstring3(c OpContext) {
+func opSubstring3(c ProcessContext) {
 	c.minVersion(2)
 	c.emit(Substring3)
 }
-func opGetBit(c OpContext) {
+func opGetBit(c ProcessContext) {
 	c.minVersion(3)
 	c.emit(GetBit)
 }
-func opSetBit(c OpContext) {
+func opSetBit(c ProcessContext) {
 	c.minVersion(3)
 	c.emit(SetBit)
 }
-func opGetByte(c OpContext) {
+func opGetByte(c ProcessContext) {
 	c.minVersion(3)
 	c.emit(GetByte)
 }
-func opSetByte(c OpContext) {
+func opSetByte(c ProcessContext) {
 	c.minVersion(3)
 	c.emit(SetByte)
 }
 
-func opReplace(c OpContext) {
+func opReplace(c ProcessContext) {
 	c.minVersion(7)
 	s, ok := c.maybeReadUint8("s")
 	if !ok {
@@ -1850,7 +1895,7 @@ func opReplace(c OpContext) {
 	}
 }
 
-func opExtract(c OpContext) {
+func opExtract(c ProcessContext) {
 	c.minVersion(5)
 	s, ok := c.maybeReadUint8("s")
 	if !ok {
@@ -1861,162 +1906,178 @@ func opExtract(c OpContext) {
 	}
 }
 
-func opExtract3(c OpContext) {
+func opExtract3(c ProcessContext) {
 	c.minVersion(5)
 	c.emit(Extract3)
 }
-func opExtract16Bits(c OpContext) {
+func opExtract16Bits(c ProcessContext) {
 	c.minVersion(5)
 	c.emit(Extract16Bits)
 }
-func opExtract32Bits(c OpContext) {
+func opExtract32Bits(c ProcessContext) {
 	c.minVersion(5)
 	c.emit(Extract32Bits)
 }
-func opExtract64Bits(c OpContext) {
+func opExtract64Bits(c ProcessContext) {
 	c.minVersion(5)
 	c.emit(Extract64Bits)
 }
-func opReplace2(c OpContext) {
+func opReplace2(c ProcessContext) {
 	c.minVersion(7)
 	value := c.mustReadUint8("s")
 	c.emit(&Replace2Expr{Start: uint8(value)})
 }
-func opReplace3(c OpContext) {
+func opReplace3(c ProcessContext) {
 	c.minVersion(7)
 	c.emit(Replace3)
 }
-func opBase64Decode(c OpContext) {
+func opBase64Decode(c ProcessContext) {
 	c.minVersion(7)
 	value := c.mustReadBase64Encoding("e")
 	c.emit(&Base64DecodeExpr{Index: uint8(value)})
 }
-func opJSONRef(c OpContext) {
+func opJSONRef(c ProcessContext) {
 	c.minVersion(7)
 	value := c.mustReadJsonRef("r")
 	c.emit(&JsonRefExpr{Index: uint8(value)})
 }
-func opBalance(c OpContext) {
-	c.minVersion(2)
+func opBalance(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
+
 	c.emit(Balance)
 }
-func opAppOptedIn(c OpContext) {
-	c.minVersion(2)
+func opAppOptedIn(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppOptedIn)
 }
-func opAppLocalGet(c OpContext) {
-	c.minVersion(2)
+func opAppLocalGet(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppLocalGet)
 }
-func opAppLocalGetEx(c OpContext) {
-	c.minVersion(2)
+func opAppLocalGetEx(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppLocalGetEx)
 }
-func opAppGlobalGet(c OpContext) {
-	c.minVersion(2)
+func opAppGlobalGet(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppGlobalGet)
 }
-func opAppGlobalGetEx(c OpContext) {
-	c.minVersion(2)
+func opAppGlobalGetEx(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppGlobalGetEx)
 }
-func opAppLocalPut(c OpContext) {
-	c.minVersion(2)
+func opAppLocalPut(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppLocalPut)
 }
-func opAppGlobalPut(c OpContext) {
-	c.minVersion(2)
+func opAppGlobalPut(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppGlobalPut)
 }
-func opAppLocalDel(c OpContext) {
-	c.minVersion(2)
+func opAppLocalDel(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppLocalDel)
 }
-func opAppGlobalDel(c OpContext) {
-	c.minVersion(2)
+func opAppGlobalDel(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	c.emit(AppGlobalDel)
 }
-func opAssetHoldingGet(c OpContext) {
-	c.minVersion(2)
+func opAssetHoldingGet(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	f := c.mustReadAssetHoldingField("f")
 	// TODO report semantics
 
 	c.emit(&AssetHoldingGetExpr{Field: f})
 }
-func opAssetParamsGet(c OpContext) {
-	c.minVersion(2)
+func opAssetParamsGet(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 2)
 	field := c.mustReadAssetParamsField("f")
 	c.emit(&AssetParamsGetExpr{Field: field})
 }
-func opAppParamsGet(c OpContext) {
-	c.minVersion(5)
+func opAppParamsGet(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 5)
 	f := c.mustReadAppParamsField("f")
 	c.emit(&AppParamsGetExpr{Field: f})
 }
-func opAcctParamsGet(c OpContext) {
-	c.minVersion(6)
+func opAcctParamsGet(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 6)
 	f := c.mustReadAcctParamsField("f")
 	c.emit(&AcctParamsGetExpr{Field: f})
 }
-func opMinBalance(c OpContext) {
-	c.minVersion(3)
+func opMinBalance(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 3)
 	c.emit(MinBalanceOp)
 }
-func opPushBytes(c OpContext) {
+func opPushBytes(c ProcessContext) {
 	c.minVersion(3)
 	value := c.mustReadBytes("value")
 	c.emit(&PushBytesExpr{Value: value})
 }
-func opPushInt(c OpContext) {
+func opPushInt(c ProcessContext) {
 	c.minVersion(3)
 	value := c.mustReadInt("value")
 	c.emit(&PushIntExpr{Value: value})
 }
-func opPushBytess(c OpContext) {
+func opPushBytess(c ProcessContext) {
 	c.minVersion(8)
 	bss := c.readBytesArray("value")
 	c.emit(&PushBytessExpr{
 		Bytess: bss,
 	})
 }
-func opPushInts(c OpContext) {
+func opPushInts(c ProcessContext) {
 	c.minVersion(8)
 	iss := c.readUint64Array("value")
 	c.emit(&PushIntsExpr{
 		Ints: iss,
 	})
 }
-func opEd25519VerifyBare(c OpContext) {
+func opEd25519VerifyBare(c ProcessContext) {
 	c.minVersion(7)
 	c.emit(Ed25519VerifyBare)
 }
-func opCallSub(c OpContext) {
+func opCallSub(c ProcessContext) {
 	c.minVersion(4)
 	name := c.mustReadLabel("label")
 	c.emit(&CallSubExpr{Label: &LabelExpr{Name: name}})
 }
-func opRetSub(c OpContext) {
+func opRetSub(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(RetSub)
 }
-func opProto(c OpContext) {
+func opProto(c ProcessContext) {
 	c.minVersion(8)
 	a := c.mustReadUint8("a")
 	r := c.mustReadUint8("r")
 
 	c.emit(&ProtoExpr{Args: uint8(a), Results: uint8(r)})
 }
-func opFrameDig(c OpContext) {
+func opFrameDig(c ProcessContext) {
 	c.minVersion(8)
 	value := c.mustReadInt8("index")
 	c.emit(&FrameDigExpr{Index: value})
 }
-func opFrameBury(c OpContext) {
+func opFrameBury(c ProcessContext) {
 	c.minVersion(8)
 	value := c.mustReadInt8("index")
 	c.emit(&FrameBuryExpr{Index: value})
 }
-func opSwitch(c OpContext) {
+func opSwitch(c ProcessContext) {
 	c.minVersion(8)
 	names := c.readLabelsArray("label")
 
@@ -2027,7 +2088,7 @@ func opSwitch(c OpContext) {
 
 	c.emit(&SwitchExpr{Targets: labels})
 }
-func opMatch(c OpContext) {
+func opMatch(c ProcessContext) {
 	c.minVersion(8)
 	names := c.readLabelsArray("label")
 
@@ -2038,158 +2099,167 @@ func opMatch(c OpContext) {
 
 	c.emit(&MatchExpr{Targets: labels})
 }
-func opShiftLeft(c OpContext) {
+func opShiftLeft(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(ShiftLeft)
 }
-func opShiftRight(c OpContext) {
+func opShiftRight(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(ShiftRight)
 }
-func opSqrt(c OpContext) {
+func opSqrt(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(Sqrt)
 }
-func opBitLen(c OpContext) {
+func opBitLen(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BitLen)
 }
-func opExp(c OpContext) {
+func opExp(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(Exp)
 }
-func opExpw(c OpContext) {
+func opExpw(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(Expw)
 }
-func opBytesSqrt(c OpContext) {
+func opBytesSqrt(c ProcessContext) {
 	c.minVersion(6)
 	c.emit(Bsqrt)
 }
-func opDivw(c OpContext) {
+func opDivw(c ProcessContext) {
 	c.minVersion(6)
 	c.emit(Divw)
 }
-func opSHA3_256(c OpContext) {
+func opSHA3_256(c ProcessContext) {
 	c.minVersion(7)
 	c.emit(Sha3256)
 }
-func opBn256Add(c OpContext) {
+func opBn256Add(c ProcessContext) {
 	c.minVersion(9)
 	c.emit(Bn256Add)
 }
-func opBn256ScalarMul(c OpContext) {
+func opBn256ScalarMul(c ProcessContext) {
 	c.minVersion(9)
 	c.emit(Bn256ScalarMul)
 }
-func opBn256Pairing(c OpContext) {
+func opBn256Pairing(c ProcessContext) {
 	c.minVersion(9)
 	c.emit(Bn256Pairing)
 }
-func opBytesPlus(c OpContext) {
+func opBytesPlus(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesPlus)
 }
-func opBytesMinus(c OpContext) {
+func opBytesMinus(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesMinus)
 }
-func opBytesDiv(c OpContext) {
+func opBytesDiv(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesDiv)
 }
-func opBytesMul(c OpContext) {
+func opBytesMul(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesMul)
 }
-func opBytesLt(c OpContext) {
+func opBytesLt(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesLt)
 }
-func opBytesGt(c OpContext) {
+func opBytesGt(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesGt)
 }
-func opBytesLe(c OpContext) {
+func opBytesLe(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesLe)
 }
-func opBytesGe(c OpContext) {
+func opBytesGe(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesGe)
 }
-func opBytesEq(c OpContext) {
+func opBytesEq(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesEq)
 }
-func opBytesNeq(c OpContext) {
+func opBytesNeq(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesNeq)
 }
-func opBytesModulo(c OpContext) {
+func opBytesModulo(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesModulo)
 }
-func opBytesBitOr(c OpContext) {
+func opBytesBitOr(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesBitOr)
 }
-func opBytesBitAnd(c OpContext) {
+func opBytesBitAnd(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesBitAnd)
 }
-func opBytesBitXor(c OpContext) {
+func opBytesBitXor(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesBitXor)
 }
-func opBytesBitNot(c OpContext) {
+func opBytesBitNot(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesBitNot)
 }
-func opBytesZero(c OpContext) {
+func opBytesZero(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesZero)
 }
-func opLog(c OpContext) {
-	c.minVersion(5)
+func opLog(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 5)
 	c.emit(Log)
 }
-func opTxBegin(c OpContext) {
-	c.minVersion(5)
+func opTxBegin(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 5)
 	c.emit(ItxnBegin)
 }
-func opItxnField(c OpContext) {
-	c.minVersion(5)
+func opItxnField(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 5)
 	f := c.mustReadItxnField("f")
 	c.emit(&ItxnFieldExpr{Field: f})
 }
-func opItxnSubmit(c OpContext) {
-	c.minVersion(5)
+func opItxnSubmit(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 5)
 	c.emit(ItxnSubmit)
 }
-func opItxn(c OpContext) {
-	c.minVersion(5)
+func opItxn(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 5)
 	f := c.mustReadTxnField("f")
 	c.emit(&ItxnExpr{Field: f})
 }
-func opItxna(c OpContext) {
-	c.minVersion(5)
+func opItxna(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 5)
 	f := c.mustReadTxnaField("f")
 	i := c.mustReadUint8("i")
 	c.emit(&ItxnaExpr{Field: f, Index: i})
 }
-func opItxnNext(c OpContext) {
-	c.minVersion(6)
+func opItxnNext(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 6)
 	c.emit(ItxnNext)
 }
-func opGitxn(c OpContext) {
-	c.minVersion(6)
+func opGitxn(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 6)
 	t := c.mustReadUint8("t")
 	f := c.mustReadTxnField("f")
 	c.emit(&GitxnExpr{Index: uint8(t), Field: f})
 }
-func opGitxna(c OpContext) {
-	c.minVersion(6)
+func opGitxna(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 6)
 	t := c.mustReadInt("t")
 	f := c.mustReadTxnaField("f")
 	i := c.mustReadUint8("i")
@@ -2197,75 +2267,87 @@ func opGitxna(c OpContext) {
 	c.emit(&GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
 
 }
-func opBoxCreate(c OpContext) {
-	c.minVersion(8)
+func opBoxCreate(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 8)
 	c.emit(BoxCreate)
 }
-func opBoxExtract(c OpContext) {
-	c.minVersion(8)
+func opBoxExtract(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 8)
 	c.emit(BoxExtract)
 }
-func opBoxReplace(c OpContext) {
-	c.minVersion(8)
+func opBoxReplace(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 8)
 	c.emit(BoxReplace)
 }
-func opBoxDel(c OpContext) {
-	c.minVersion(8)
+func opBoxDel(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 8)
 	c.emit(BoxDel)
 }
-func opBoxLen(c OpContext) {
-	c.minVersion(8)
+func opBoxLen(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 8)
 	c.emit(BoxLen)
 }
-func opBoxGet(c OpContext) {
-	c.minVersion(8)
+func opBoxGet(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 8)
 	c.emit(BoxGet)
 }
-func opBoxPut(c OpContext) {
-	c.minVersion(8)
+func opBoxPut(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 8)
 	c.emit(BoxPut)
 }
-func opTxnas(c OpContext) {
+func opTxnas(c ProcessContext) {
 	c.minVersion(5)
 	f := c.mustReadTxnaField("f")
 	c.emit(&TxnasExpr{Field: f})
 }
-func opGtxnas(c OpContext) {
+func opGtxnas(c ProcessContext) {
 	c.minVersion(5)
 	t := c.mustReadUint8("t")
 	f := c.mustReadTxnaField("f")
 	c.emit(&GtxnasExpr{Index: t, Field: f})
 }
-func opGtxnsas(c OpContext) {
+func opGtxnsas(c ProcessContext) {
 	c.minVersion(5)
 	f := c.mustReadTxnaField("f")
 	c.emit(&GtxnsasExpr{Field: f})
 }
-func opArgs(c OpContext) {
-	c.minVersion(5)
+func opArgs(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 5)
+
 	c.emit(Args)
 }
-func opGloadss(c OpContext) {
-	c.minVersion(6)
+func opGloadss(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 6)
 	c.emit(Gloadss)
 }
-func opItxnas(c OpContext) {
-	c.minVersion(6)
+func opItxnas(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 6)
 	f := c.mustReadTxnaField("f")
 	c.emit(&ItxnasExpr{Field: f})
 }
-func opGitxnas(c OpContext) {
-	c.minVersion(6)
+func opGitxnas(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 6)
 	t := c.mustReadUint8("t")
 	f := c.mustReadTxnaField("f")
 	c.emit(&GitxnasExpr{Index: t, Field: f})
 }
-func opVrfVerify(c OpContext) {
+func opVrfVerify(c ProcessContext) {
 	c.minVersion(7)
 	f := c.mustReadVrfVerifyField("f")
 	c.emit(&VrfVerifyExpr{Field: f})
 }
-func opBlock(c OpContext) {
+func opBlock(c ProcessContext) {
 	c.minVersion(7)
 	f := c.mustReadBlockField("f")
 	c.emit(&BlockExpr{Field: f})
@@ -2286,6 +2368,7 @@ func (ln Line) ImmAt(pos int) (Token, int, bool) {
 }
 
 type ProcessResult struct {
+	Mode        ProgramMode
 	Version     uint64
 	Diagnostics []Diagnostic
 	Symbols     []Symbol
@@ -2301,7 +2384,7 @@ type ProcessResult struct {
 }
 
 func (r ProcessResult) getOp(name string) (opItem, bool) {
-	return OpDocs.GetDoc(OpDocContext{
+	return Ops.Get(OpContext{
 		Name:    name,
 		Version: r.Version,
 	})
@@ -2483,7 +2566,7 @@ func (r ProcessResult) ArgAt(l int, ch int) (opItemArg, int, bool) {
 	}
 
 	op := ln[0]
-	info, ok := OpDocs.GetDoc(OpDocContext{
+	info, ok := Ops.Get(OpContext{
 		Name:    op.String(),
 		Version: r.Version,
 	})
@@ -2751,6 +2834,7 @@ func Process(source string) *ProcessResult {
 	c := &parserContext{
 		version: 1,
 		ops:     []Op{},
+		mode:    ModeApp,
 	}
 
 	var ts []Token
@@ -2777,7 +2861,7 @@ func Process(source string) *ProcessResult {
 	}
 
 	for li, l := range lines {
-		for i := 0; i < len(l); i++ {
+		for i := 1; i < len(l); i++ {
 			t := l[i]
 			if t.Type() == TokenComment {
 				lines[li] = l[:i]
@@ -2808,7 +2892,12 @@ func Process(source string) *ProcessResult {
 				return
 			}
 
-			if strings.HasSuffix(c.args.Text(), ":") {
+			if c.args.Curr().Type() == TokenComment {
+				if strings.TrimSpace(c.args.Curr().String()) == "#pragma mode logicsig" {
+					c.mode = ModeSig
+				}
+				return
+			} else if strings.HasSuffix(c.args.Text(), ":") {
 				name := c.args.Text()
 				name = name[:len(name)-1]
 				if len(name) == 0 {
@@ -2835,16 +2924,35 @@ func Process(source string) *ProcessResult {
 			case "#pragma":
 				opPragma(c)
 			default:
-				info, ok := OpDocs.GetDoc(OpDocContext{
+				info, ok := Ops.Get(OpContext{
 					Name:    name,
 					Version: c.version,
 				})
 				if ok {
 					curr := c.args.Curr()
 					ops = append(ops, curr)
-					if info.Version > c.version {
+
+					var min uint64
+					switch c.mode {
+					case ModeApp:
+						min = info.AppVersion
+					case ModeSig:
+						min = info.SigVersion
+					}
+
+					if min == 0 {
 						c.diag = append(c.diag, lintError{
-							error: errors.Errorf("opcode requires version >= %d (current: %d)", info.Version, c.version),
+							error: errors.Errorf("opcode not available in the current mode: %s", c.mode),
+							l:     curr.l,
+							b:     curr.b,
+							e:     curr.e,
+							s:     DiagErr,
+						})
+					}
+
+					if min > c.version {
+						c.diag = append(c.diag, lintError{
+							error: errors.Errorf("opcode requires version >= %d (current: %d)", min, c.version),
 							l:     curr.l,
 							b:     curr.b,
 							e:     curr.e,
@@ -2891,6 +2999,7 @@ func Process(source string) *ProcessResult {
 	}
 
 	result := &ProcessResult{
+		Mode:        c.mode,
 		Version:     c.version,
 		Diagnostics: c.diag,
 		Symbols:     syms,

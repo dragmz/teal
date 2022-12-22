@@ -8,7 +8,7 @@ import (
 )
 
 func TestDocs(t *testing.T) {
-	i, ok := OpDocs.GetDoc(OpDocContext{
+	i, ok := Ops.Get(OpContext{
 		Name:    "txn",
 		Version: 9,
 	})
