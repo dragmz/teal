@@ -56,6 +56,8 @@ func (d *lspDoc) Results() *teal.ProcessResult {
 type lsp struct {
 	id int
 
+	config tealConfig
+
 	docs     map[string]*lspDoc
 	shutdown bool
 
@@ -82,6 +84,11 @@ func New(r io.Reader, w io.Writer, opts ...LspOption) (*lsp, error) {
 		tp:   textproto.NewReader(bufio.NewReader(r)),
 		w:    bufio.NewWriter(w),
 		docs: map[string]*lspDoc{},
+		config: tealConfig{
+			SemanticTokens: true,
+			InlayNamed:     true,
+			InlayDecoded:   true,
+		},
 	}
 
 	for _, opt := range opts {
@@ -271,9 +278,22 @@ type lspInitializeClientInfo struct {
 	Version string `json:"version"`
 }
 
+type tealInitializationOptions struct {
+	SemanticTokens *bool `json:"semanticTokens,omitempty"`
+	InlayNamed     *bool `json:"inlayNamed,omitempty"`
+	InlayDecoded   *bool `json:"inlayDecoded,omitempty"`
+}
+
+type tealConfig struct {
+	SemanticTokens bool
+	InlayNamed     bool
+	InlayDecoded   bool
+}
+
 type lspInitializeRequestParams struct {
-	ProcessId  int                      `json:"id"`
-	ClientInfo *lspInitializeClientInfo `json:"clientInfo"`
+	ProcessId             int                        `json:"id"`
+	ClientInfo            *lspInitializeClientInfo   `json:"clientInfo"`
+	InitializationOptions *tealInitializationOptions `json:"initializationOptions,omitempty"`
 }
 
 type lspDidOpenTextDocument struct {
@@ -626,6 +646,7 @@ type lspHoverRequest lspRequest[*lspHoverRequestParams]
 type lspSignatureHelpRequest lspRequest[*lspSignatureHelpRequestParams]
 type lspInlayHintRequest lspRequest[*lspInlayHintRequestParams]
 type lspInlineValueRequest lspRequest[*lspInlineValueRequestParams]
+type lspInitializeRequest lspRequest[*lspInitializeRequestParams]
 
 func readInto(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, &v)
@@ -1148,30 +1169,35 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			hs := res.InlayHints(req.Params.Range.Start.Line, req.Params.Range.Start.Character, req.Params.Range.End.Line, req.Params.Range.End.Character)
 
-			for _, named := range hs.Named {
-				ihs = append(ihs, lspInlayHint{
-					Position: lspPosition{
-						Line:      named.T.Line(),
-						Character: named.T.End(),
-					},
-					Label:       named.Name,
-					Kind:        parameter,
-					PaddingLeft: padding,
-				})
+			if l.config.InlayNamed {
+				for _, named := range hs.Named {
+					ihs = append(ihs, lspInlayHint{
+						Position: lspPosition{
+							Line:      named.T.Line(),
+							Character: named.T.End(),
+						},
+						Label:       named.Name,
+						Kind:        parameter,
+						PaddingLeft: padding,
+					})
+				}
 			}
 
-			for _, decoded := range hs.Decoded {
-				ihs = append(ihs, lspInlayHint{
-					Position: lspPosition{
-						Line:      decoded.T.Line(),
-						Character: decoded.T.End(),
-					},
-					Label:       decoded.Value,
-					Kind:        parameter,
-					PaddingLeft: padding,
-				})
+			if l.config.InlayDecoded {
+				for _, decoded := range hs.Decoded {
+					ihs = append(ihs, lspInlayHint{
+						Position: lspPosition{
+							Line:      decoded.T.Line(),
+							Character: decoded.T.End(),
+						},
+						Label:       decoded.Value,
+						Kind:        parameter,
+						PaddingLeft: padding,
+					})
 
+				}
 			}
+
 			return l.success(h.Id, ihs)
 
 		case "textDocument/completion":
@@ -1517,6 +1543,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			hs := res.InlayHints(req.Params.Range.Start.Line, req.Params.Range.Start.Character, req.Params.Range.End.Line, req.Params.Range.End.Character)
+
 			for _, named := range hs.Named {
 				kind := "quickfix"
 				cas = append(cas, lspCodeAction{
@@ -1808,6 +1835,25 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			})
 
 		case "initialize":
+			req, err := read[lspInitializeRequest](b)
+			if err != nil {
+				return err
+			}
+
+			if req.Params != nil {
+				if req.Params.InitializationOptions != nil {
+					if req.Params.InitializationOptions.SemanticTokens != nil {
+						l.config.SemanticTokens = *req.Params.InitializationOptions.SemanticTokens
+					}
+					if req.Params.InitializationOptions.InlayNamed != nil {
+						l.config.InlayNamed = *req.Params.InitializationOptions.InlayNamed
+					}
+					if req.Params.InitializationOptions.InlayDecoded != nil {
+						l.config.InlayDecoded = *req.Params.InitializationOptions.InlayDecoded
+					}
+				}
+			}
+
 			sync := new(int)
 			*sync = 1
 
@@ -1836,10 +1882,24 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			*hover = true
 
 			inlayHint := new(bool)
-			*inlayHint = true
+			if l.config.InlayNamed || l.config.InlayDecoded {
+				*inlayHint = true
+			}
 
 			inlineValue := new(bool)
 			*inlineValue = true
+
+			var semanticTokensProvider *lspSemanticTokensProvider
+
+			if l.config.SemanticTokens {
+				semanticTokensProvider = &lspSemanticTokensProvider{
+					Full: fullSemantic,
+					Legend: lspSemanticTokensLegend{
+						TokenTypes:     []string{"keyword", "string", "comment", "method", "macro", "value", "number", "operator", "function"},
+						TokenModifiers: []string{},
+					},
+				}
+			}
 
 			return l.success(h.Id, lspInitializeResult{
 				Capabilities: &lspServerCapabilities{
@@ -1858,13 +1918,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					RenameProvider: &lspRenameOptions{
 						PrepareProvider: rename,
 					},
-					SemanticTokensProvider: &lspSemanticTokensProvider{
-						Full: fullSemantic,
-						Legend: lspSemanticTokensLegend{
-							TokenTypes:     []string{"keyword", "string", "comment", "method", "macro", "value", "number", "operator", "function"},
-							TokenModifiers: []string{},
-						},
-					},
+					SemanticTokensProvider:     semanticTokensProvider,
 					CompletionProvider:         &lspCompletionProvider{},
 					DocumentFormattingProvider: formatting,
 					DefinitionProvider:         definition,

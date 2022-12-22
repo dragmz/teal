@@ -20,6 +20,7 @@ type NewOpArgType int
 
 const (
 	OpArgTypeNone = iota
+	OpArgTypeConstInt
 	OpArgTypeUint64
 	OpArgTypeUint8
 	OpArgTypeInt8
@@ -227,6 +228,8 @@ func (t NewOpArgType) String() string {
 	switch t {
 	default:
 		return "(none)"
+	case OpArgTypeConstInt:
+		return "uint64"
 	case OpArgTypeUint64:
 		return "uint64"
 	case OpArgTypeUint8:
@@ -513,6 +516,7 @@ type ProcessContext interface {
 	readBytesArray(name string) [][]byte
 	mustReadGlobalField(name string) GlobalField
 	mustReadInt(name string) uint64
+	mustReadConstInt(name string) uint64
 	mustReadLabel(name string) string
 	readLabelsArray(name string) []string
 	mustReadAssetHoldingField(name string) AssetHoldingField
@@ -715,6 +719,16 @@ func (c *docContext) mustReadInt(name string) (v uint64) {
 
 	return
 }
+
+func (c *docContext) mustReadConstInt(name string) (v uint64) {
+	c.arg(opItemArg{
+		Name: name,
+		Type: OpArgTypeConstInt,
+	})
+
+	return
+}
+
 func (c *docContext) mustReadLabel(name string) (v string) {
 	c.arg(opItemArg{
 		Name: name,
@@ -1072,8 +1086,20 @@ func (c *parserContext) mustReadAppParamsField(name string) AppParamsField {
 
 	return f
 }
+
 func (c *parserContext) parseUint64(name string) uint64 {
 	v, err := readInt(c.args)
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse uint64: %s", name))
+	}
+
+	c.nums = append(c.nums, c.args.Curr())
+
+	return v
+}
+
+func (c *parserContext) parseConstUint64(name string) uint64 {
+	v, err := readConstInt(c.args)
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse uint64: %s", name))
 	}
@@ -1260,6 +1286,11 @@ func (c *parserContext) mustReadBytes(name string) []byte {
 func (c *parserContext) mustReadInt(name string) uint64 {
 	c.mustReadArg(name)
 	return c.parseUint64(name)
+}
+
+func (c *parserContext) mustReadConstInt(name string) uint64 {
+	c.mustReadArg(name)
+	return c.parseConstUint64(name)
 }
 
 func (c *parserContext) mustReadUint8(name string) uint8 {
@@ -1467,7 +1498,7 @@ func opByte(c ProcessContext) {
 }
 
 func opInt(c ProcessContext) {
-	value := c.mustReadInt("value")
+	value := c.mustReadConstInt("value")
 	c.emit(&IntExpr{Value: value})
 }
 
@@ -2537,6 +2568,23 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 				NoValue: true,
 				Name:    sym.Name(),
 			})
+		}
+	case OpArgTypeConstInt:
+		for name, value := range txnTypeMap {
+			if value != 0 {
+				res = append(res, opItemArgVal{
+					Name:  name,
+					Value: value,
+				})
+			}
+		}
+		for name, value := range onCompletionMap {
+			if value != 0 {
+				res = append(res, opItemArgVal{
+					Name:  name,
+					Value: value,
+				})
+			}
 		}
 	default:
 		for _, v := range OpArgVals[arg.Type] {

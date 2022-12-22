@@ -289,6 +289,15 @@ func readTxnField(c fieldContext, v uint64, s string) (TxnField, bool, error) {
 }
 
 func readInt(a *arguments) (uint64, error) {
+	val, err := strconv.ParseUint(a.Text(), 0, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return val, nil
+}
+
+func readConstInt(a *arguments) (uint64, error) {
 	i, ok := txnTypeMap[a.Text()]
 	if ok {
 		return i, nil
