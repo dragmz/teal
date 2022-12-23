@@ -30,16 +30,49 @@ type VmValue struct {
 	src vmSource
 }
 
+type lenValue interface {
+	Lengths() []int
+}
+
+func (v VmValue) Lengths() []int {
+	switch src := v.src.(type) {
+	case lenValue:
+		return src.Lengths()
+	default:
+		return []int{}
+	}
+}
+
 type vmUint64Const struct {
 	v uint64
+}
+
+func (c vmUint64Const) Lengths() []int {
+	return []int{0}
 }
 
 func (c vmUint64Const) String() string {
 	return strconv.FormatUint(c.v, 10)
 }
 
-type vmConst struct {
+type vmSignatureValue struct {
 	v string
+}
+
+func (v vmSignatureValue) String() string {
+	return v.v
+}
+
+func (v vmSignatureValue) Lengths() []int {
+	return []int{4}
+}
+
+type vmByteConst struct {
+	v []byte
+}
+
+func (c vmByteConst) Lengths() []int {
+	return []int{len(c.v)}
 }
 
 type NamedExpr interface {
@@ -65,8 +98,8 @@ func (s vmOpSource) String() string {
 	return res
 }
 
-func (c vmConst) String() string {
-	return c.v
+func (c vmByteConst) String() string {
+	return Bytes{Value: c.v}.String()
 }
 
 func (v VmValue) String() string {
@@ -105,6 +138,10 @@ type vmOp interface {
 	Execute(b *VmBranch) error
 }
 
+type costlyOp interface {
+	Cost(b *VmBranch) []int
+}
+
 func (t StackType) Vm() VmDataType {
 	switch t {
 	case StackAny:
@@ -125,6 +162,10 @@ type vmStack struct {
 }
 
 func (b *VmBranch) skipNops() bool {
+	if b.Line == ExitLine {
+		return false
+	}
+
 	for b.Line < len(b.vm.Process.Listing) {
 		op := b.vm.Process.Listing[b.Line]
 
@@ -165,6 +206,10 @@ func (b *VmBranch) store(index VmValue, v VmValue) {
 	case vmUint64Const:
 		b.vm.Scratch.Items[src.v] = v
 	}
+}
+
+func (b *VmBranch) peek(index int) VmValue {
+	return b.Stack.Items[len(b.Stack.Items)-1-index]
 }
 
 func (b *VmBranch) pop(t VmDataType) VmValue {
@@ -390,21 +435,52 @@ func (v *Vm) Step() {
 	if b := v.Branch; b != nil {
 		op := v.Process.Listing[b.Line]
 
-		if b.Budget > 0 {
-			b.Budget--
-			b.Trace = append(b.Trace, op)
+		var costs []int
 
-			switch op := op.(type) {
-			case vmOp:
-				op.Execute(b)
-			default:
-				b.Line++
+		switch op := op.(type) {
+		case costlyOp:
+			costs = op.Cost(b)
+		}
+
+		if len(costs) == 0 {
+			costs = []int{1}
+		}
+
+		cb := b
+
+		for _, cost := range costs {
+			if cb == nil {
+				cb := &VmBranch{
+					Id:     b.vm.Id,
+					vm:     b.vm,
+					Line:   b.Line,
+					Stack:  b.Stack.clone(),
+					Budget: b.Budget,
+					Name:   b.Name,
+					Trace:  append([]Op{}, b.Trace...),
+				}
+
+				b.vm.Id++
+				b.vm.Branches = append(b.vm.Branches, cb)
 			}
 
-			v.skipNops()
-			v.updateBreakpoints(b)
-		} else {
-			b.exit()
+			if cb.Budget >= cost {
+				cb.Budget -= cost
+				cb.Trace = append(cb.Trace, op)
+
+				switch op := op.(type) {
+				case vmOp:
+					op.Execute(cb)
+				default:
+					cb.Line++
+				}
+
+				cb.skipNops()
+				v.skipNops()
+				v.updateBreakpoints(cb)
+			} else {
+				cb.exit()
+			}
 		}
 	}
 }

@@ -2176,3 +2176,13 @@ func (i BlockField) String() string {
 	}
 	return _BlockField_name[_BlockField_index[i]:_BlockField_index[i+1]]
 }
+
+var ecdsaVerifyCosts = []int{
+	Secp256k1: 1700,
+	Secp256r1: 2500,
+}
+
+var ecdsaDecompressCosts = []int{
+	Secp256k1: 650,
+	Secp256r1: 2400,
+}

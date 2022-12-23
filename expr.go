@@ -41,6 +41,10 @@ func (e *Sha3256Expr) String() string {
 	return "sha3_256"
 }
 
+func (e *Sha3256Expr) Cost(b *VmBranch) []int {
+	return []int{130}
+}
+
 func (e *Sha3256Expr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.push(VmValue{T: VmTypeBytes})
@@ -56,6 +60,15 @@ type Sha256Expr struct{}
 
 func (e *Sha256Expr) String() string {
 	return e.Name()
+}
+
+func (e *Sha256Expr) Cost(b *VmBranch) []int {
+	switch b.vm.Process.Version {
+	case 1:
+		return []int{7}
+	default:
+		return []int{35}
+	}
 }
 
 func (e *Sha256Expr) Execute(b *VmBranch) error {
@@ -80,6 +93,15 @@ func (e *Keccak256Expr) String() string {
 	return "keccak256"
 }
 
+func (e *Keccak256Expr) Cost(b *VmBranch) []int {
+	switch b.vm.Process.Version {
+	case 1:
+		return []int{26}
+	default:
+		return []int{130}
+	}
+}
+
 func (e *Keccak256Expr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.push(VmValue{T: VmTypeBytes})
@@ -98,6 +120,15 @@ func (e *Sha512256Expr) String() string {
 	return "sha512_256"
 }
 
+func (e *Sha512256Expr) Cost(b *VmBranch) []int {
+	switch b.vm.Process.Version {
+	case 1:
+		return []int{9}
+	default:
+		return []int{45}
+	}
+}
+
 func (e *Sha512256Expr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.push(VmValue{T: VmTypeBytes})
@@ -114,6 +145,10 @@ type ED25519VerifyExpr struct{}
 
 func (e *ED25519VerifyExpr) String() string {
 	return e.Name()
+}
+
+func (e *ED25519VerifyExpr) Cost(b *VmBranch) []int {
+	return []int{1900}
 }
 
 func (e *ED25519VerifyExpr) Execute(b *VmBranch) error {
@@ -138,6 +173,10 @@ var ED25519Verify = &ED25519VerifyExpr{}
 
 type EcdsaVerifyExpr struct {
 	Index EcdsaCurve
+}
+
+func (e *EcdsaVerifyExpr) Cost(b *VmBranch) []int {
+	return []int{ecdsaVerifyCosts[e.Index]}
 }
 
 func (e *EcdsaVerifyExpr) String() string {
@@ -167,6 +206,10 @@ type EcdsaPkDecompressExpr struct {
 	Index EcdsaCurve
 }
 
+func (e *EcdsaPkDecompressExpr) Cost(b *VmBranch) []int {
+	return []int{ecdsaDecompressCosts[e.Index]}
+}
+
 func (e *EcdsaPkDecompressExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.push(VmValue{T: VmTypeBytes})
@@ -184,6 +227,10 @@ func (e *EcdsaPkDecompressExpr) String() string {
 
 type EcdsaPkRecoverExpr struct {
 	Index EcdsaCurve
+}
+
+func (e *EcdsaPkRecoverExpr) Cost(b *VmBranch) []int {
+	return []int{2000}
 }
 
 func (e *EcdsaPkRecoverExpr) Execute(b *VmBranch) error {
@@ -652,6 +699,10 @@ type DivModwExpr struct{}
 
 func (e *DivModwExpr) String() string {
 	return "divmodw"
+}
+
+func (e *DivModwExpr) Cost(b *VmBranch) []int {
+	return []int{20}
 }
 
 var DivModw = &DivModwExpr{}
@@ -1199,7 +1250,7 @@ func (e *PushBytesExpr) String() string {
 }
 
 func (e *PushBytesExpr) Execute(b *VmBranch) error {
-	b.push(VmValue{T: VmTypeBytes})
+	b.push(VmValue{T: VmTypeBytes, src: vmByteConst{v: e.Value}})
 	b.Line++
 	return nil
 }
@@ -1223,7 +1274,7 @@ type IntExpr struct {
 }
 
 func (e *IntExpr) Execute(b *VmBranch) error {
-	b.push(VmValue{T: VmTypeUint64, src: vmConst{v: strconv.FormatUint(e.Value, 10)}})
+	b.push(VmValue{T: VmTypeUint64, src: vmUint64Const{v: e.Value}})
 	b.Line++
 
 	return nil
@@ -1269,8 +1320,8 @@ func (e *ByteExpr) String() string {
 func (e *ByteExpr) Execute(b *VmBranch) error {
 	b.push(VmValue{
 		T: VmTypeBytes,
-		src: vmConst{
-			v: Bytes{Value: e.Value, Format: BytesStringLiteral}.String(),
+		src: vmByteConst{
+			v: e.Value,
 		}})
 	b.Line++
 	return nil
@@ -1924,6 +1975,22 @@ type Base64DecodeExpr struct {
 	Index uint8
 }
 
+func (e *Base64DecodeExpr) Cost(b *VmBranch) []int {
+	v := b.peek(0)
+
+	costs := []int{}
+	for _, l := range v.Lengths() {
+		cost := 1 + l/16
+		if l%16 > 0 {
+			cost += 1
+		}
+
+		costs = append(costs, cost)
+	}
+
+	return costs
+}
+
 func (e *Base64DecodeExpr) String() string {
 	return fmt.Sprintf("base64_decode %d", e.Index)
 }
@@ -1937,6 +2004,22 @@ func (e *Base64DecodeExpr) Execute(b *VmBranch) error {
 
 type JsonRefExpr struct {
 	Index uint8
+}
+
+func (e *JsonRefExpr) Cost(b *VmBranch) []int {
+	v := b.peek(0)
+
+	costs := []int{}
+	for _, l := range v.Lengths() {
+		cost := 25 + 2*l/7
+		if l%7 > 0 {
+			cost += 2
+		}
+
+		costs = append(costs, cost)
+	}
+
+	return costs
 }
 
 func (e *JsonRefExpr) String() string {
@@ -1955,6 +2038,10 @@ type Ed25519VerifyBareExpr struct{}
 
 func (e *Ed25519VerifyBareExpr) String() string {
 	return "ed25519verify_bare"
+}
+
+func (e *Ed25519VerifyBareExpr) Cost(b *VmBranch) []int {
+	return []int{1900}
 }
 
 func (e *Ed25519VerifyBareExpr) Execute(b *VmBranch) error {
@@ -1988,6 +2075,10 @@ type ExpwExpr struct{}
 
 func (e *ExpwExpr) String() string {
 	return "expw"
+}
+
+func (e *ExpwExpr) Cost(b *VmBranch) []int {
+	return []int{10}
 }
 
 func (e *ExpwExpr) Execute(b *VmBranch) error {
@@ -2121,7 +2212,7 @@ func (e *MethodExpr) String() string {
 }
 
 func (e *MethodExpr) Execute(b *VmBranch) error {
-	b.push(VmValue{T: VmTypeBytes, src: vmConst{v: e.Signature}})
+	b.push(VmValue{T: VmTypeBytes, src: vmSignatureValue{v: e.Signature}})
 	b.Line++
 	return nil
 }
@@ -2139,8 +2230,8 @@ type PushBytessExpr struct {
 }
 
 func (e *PushBytessExpr) Execute(b *VmBranch) error {
-	for range e.Bytess {
-		b.push(VmValue{T: VmTypeBytes})
+	for _, bs := range e.Bytess {
+		b.push(VmValue{T: VmTypeBytes, src: vmByteConst{v: bs}})
 	}
 	b.Line++
 	return nil
@@ -2162,6 +2253,10 @@ func (e *Bn256AddExpr) String() string {
 	return "bn256_add"
 }
 
+func (e *Bn256AddExpr) Cost(b *VmBranch) []int {
+	return []int{70}
+}
+
 func (e *Bn256AddExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.pop(VmTypeBytes)
@@ -2178,6 +2273,10 @@ func (e *Bn256ScalarMulExpr) String() string {
 	return "bn256_scalar_mul"
 }
 
+func (e *Bn256ScalarMulExpr) Cost(b *VmBranch) []int {
+	return []int{970}
+}
+
 func (e *Bn256ScalarMulExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.pop(VmTypeBytes)
@@ -2192,6 +2291,10 @@ type Bn256PairingExpr struct{}
 
 func (e *Bn256PairingExpr) String() string {
 	return "bn256_pairing"
+}
+
+func (e *Bn256PairingExpr) Cost(b *VmBranch) []int {
+	return []int{8700}
 }
 
 func (e *Bn256PairingExpr) Execute(b *VmBranch) error {
@@ -2516,6 +2619,10 @@ func (e *SqrtExpr) String() string {
 	return "sqrt"
 }
 
+func (e *SqrtExpr) Cost(b *VmBranch) []int {
+	return []int{4}
+}
+
 func (e *SqrtExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
 	b.push(VmValue{T: VmTypeUint64})
@@ -2655,6 +2762,10 @@ type VrfVerifyExpr struct {
 
 func (e *VrfVerifyExpr) String() string {
 	return fmt.Sprintf("vrf_verify %s", e.Field)
+}
+
+func (e *VrfVerifyExpr) Cost(b *VmBranch) []int {
+	return []int{5700}
 }
 
 func (e *VrfVerifyExpr) Execute(b *VmBranch) error {
@@ -2890,12 +3001,20 @@ func (e *BminusExpr) String() string {
 	return "b-"
 }
 
+func (e *BminusExpr) Cost(b *VmBranch) []int {
+	return []int{10}
+}
+
 var BytesMinus = &BminusExpr{}
 
 type BmulExpr struct{}
 
 func (e *BmulExpr) String() string {
 	return "b*"
+}
+
+func (e *BmulExpr) Cost(b *VmBranch) []int {
+	return []int{20}
 }
 
 func (e *BmulExpr) Execute(b *VmBranch) error {
@@ -2914,6 +3033,10 @@ func (e *BdivExpr) String() string {
 	return "b/"
 }
 
+func (e *BdivExpr) Cost(b *VmBranch) []int {
+	return []int{20}
+}
+
 func (e *BdivExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.pop(VmTypeBytes)
@@ -2928,6 +3051,10 @@ type BplusExpr struct{}
 
 func (e *BplusExpr) String() string {
 	return "b+"
+}
+
+func (e *BplusExpr) Cost(b *VmBranch) []int {
+	return []int{10}
 }
 
 func (e *BplusExpr) Execute(b *VmBranch) error {
@@ -3172,6 +3299,10 @@ func (e *BytesModuloExpr) String() string {
 	return "b%"
 }
 
+func (e *BytesModuloExpr) Cost(b *VmBranch) []int {
+	return []int{20}
+}
+
 func (e *BytesModuloExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.pop(VmTypeBytes)
@@ -3188,12 +3319,20 @@ func (e *BytesBitOrExpr) String() string {
 	return "b|"
 }
 
+func (e *BytesBitOrExpr) Cost(b *VmBranch) []int {
+	return []int{6}
+}
+
 var BytesBitOr = &BytesBitOrExpr{}
 
 type BytesBitAndExpr struct{}
 
 func (e *BytesBitAndExpr) String() string {
 	return "b&"
+}
+
+func (e *BytesBitAndExpr) Cost(b *VmBranch) []int {
+	return []int{6}
 }
 
 func (e *BytesBitAndExpr) Execute(b *VmBranch) error {
@@ -3210,6 +3349,10 @@ type BsqrtExpr struct{}
 
 func (e *BsqrtExpr) String() string {
 	return "bsqrt"
+}
+
+func (e *BsqrtExpr) Cost(b *VmBranch) []int {
+	return []int{40}
 }
 
 func (e *BsqrtExpr) Execute(b *VmBranch) error {
@@ -3281,6 +3424,10 @@ func (e *BytesBitXorExpr) String() string {
 	return "b^"
 }
 
+func (e *BytesBitXorExpr) Cost(b *VmBranch) []int {
+	return []int{6}
+}
+
 func (e *BytesBitXorExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.pop(VmTypeBytes)
@@ -3295,6 +3442,10 @@ type BytesBitNotExpr struct{}
 
 func (e *BytesBitNotExpr) String() string {
 	return "b~"
+}
+
+func (e *BytesBitNotExpr) Cost(b *VmBranch) []int {
+	return []int{4}
 }
 
 func (e *BytesBitNotExpr) Execute(b *VmBranch) error {

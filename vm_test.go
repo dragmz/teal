@@ -2,6 +2,15 @@ package teal
 
 import "testing"
 
+func TestCostly(t *testing.T) {
+	res := Process(`#pragma version 7
+	txn Sender
+	base64_decode StdEncoding`)
+
+	vm := NewVm(res)
+	vm.Run()
+}
+
 func BenchmarkVm(b *testing.B) {
 	res := Process(`
 	#pragma version 8
