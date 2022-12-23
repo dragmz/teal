@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -214,7 +216,7 @@ func (b *VmBranch) peek(index int) VmValue {
 
 func (b *VmBranch) pop(t VmDataType) VmValue {
 	if len(b.Stack.Items) == 0 {
-		panic("empty stack")
+		panic(errors.Errorf("empty stack - expected: %s", t))
 	}
 
 	v := b.Stack.Items[len(b.Stack.Items)-1]
@@ -311,6 +313,8 @@ type Vm struct {
 	Triggered   map[int][]int
 
 	Trace string
+
+	Error any
 }
 
 func (v *Vm) find(target string) int {
@@ -424,6 +428,15 @@ func (v *Vm) SetBreakpoints(lns []int) map[int]bool {
 }
 
 func (v *Vm) Step() {
+	defer func() {
+		switch e := recover().(type) {
+		case nil:
+		default:
+			v.Error = e
+		}
+	}()
+
+	v.Error = nil
 	v.Triggered = map[int][]int{}
 
 	v.skipNops()
@@ -486,7 +499,7 @@ func (v *Vm) Step() {
 }
 
 func (v *Vm) Run() {
-	for v.Branch != nil {
+	for v.Branch != nil && v.Error == nil {
 		v.Step()
 
 		if len(v.Triggered) > 0 {

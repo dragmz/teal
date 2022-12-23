@@ -2109,7 +2109,14 @@ type GtxnasExpr struct {
 
 func (e *GtxnasExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := txnFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }
@@ -2155,7 +2162,14 @@ type ItxnasExpr struct {
 
 func (e *ItxnasExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := txnFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }
@@ -2171,7 +2185,14 @@ type GitxnasExpr struct {
 
 func (e *GitxnasExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := txnFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }
@@ -2438,7 +2459,14 @@ func (e *AssetParamsGetExpr) String() string {
 
 func (e *AssetParamsGetExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := assetParamsFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.push(VmValue{T: VmTypeUint64})
 	b.Line++
 	return nil
@@ -2481,7 +2509,13 @@ type ItxnExpr struct {
 }
 
 func (e *ItxnExpr) Execute(b *VmBranch) error {
-	b.push(VmValue{T: VmTypeAny})
+	spec, ok := txnFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }
@@ -2654,7 +2688,14 @@ type TxnasExpr struct {
 
 func (e *TxnasExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := txnFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }
@@ -2705,7 +2746,14 @@ func (e *AppParamsGetExpr) String() string {
 
 func (e *AppParamsGetExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := appParamsFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.push(VmValue{T: VmTypeUint64})
 	b.Line++
 	return nil
@@ -2721,8 +2769,15 @@ func (e *AcctParamsGetExpr) String() string {
 
 func (e *AcctParamsGetExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeAny)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := acctParamsFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
 	b.push(VmValue{T: VmTypeUint64})
+
 	b.Line++
 	return nil
 }
@@ -2747,7 +2802,14 @@ type BlockExpr struct {
 
 func (e *BlockExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := blockFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }
@@ -2814,7 +2876,14 @@ func (e *AssetHoldingGetExpr) String() string {
 func (e *AssetHoldingGetExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
 	b.pop(VmTypeAny)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := assetHoldingFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.push(VmValue{T: VmTypeUint64})
 	b.Line++
 	return nil
@@ -2853,7 +2922,13 @@ func (e *GitxnExpr) String() string {
 }
 
 func (e *GitxnExpr) Execute(b *VmBranch) error {
-	b.push(VmValue{T: VmTypeAny})
+	spec, ok := txnFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }
@@ -2971,7 +3046,14 @@ type GtxnsasExpr struct {
 func (e *GtxnsasExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeUint64)
 	b.pop(VmTypeUint64)
-	b.push(VmValue{T: VmTypeAny})
+
+	spec, ok := txnFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }
@@ -3375,7 +3457,13 @@ func (e *GitxnaExpr) String() string {
 }
 
 func (e *GitxnaExpr) Execute(b *VmBranch) error {
-	b.push(VmValue{T: VmTypeAny})
+	spec, ok := txnFieldSpecByField(e.Field)
+	if !ok {
+		panic("unknown field")
+	}
+
+	b.push(VmValue{T: spec.Type().Vm()})
+
 	b.Line++
 	return nil
 }

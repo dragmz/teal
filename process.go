@@ -2579,12 +2579,10 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 			}
 		}
 		for name, value := range onCompletionMap {
-			if value != 0 {
-				res = append(res, opItemArgVal{
-					Name:  name,
-					Value: value,
-				})
-			}
+			res = append(res, opItemArgVal{
+				Name:  name,
+				Value: value,
+			})
 		}
 	default:
 		for _, v := range OpArgVals[arg.Type] {

@@ -252,6 +252,7 @@ type dapStoppedEventParams struct {
 	AllThreadsStopped *bool  `json:"allThreadsStopped,omitempty"`
 	HitBreakpointIds  []int  `json:"hitBreakpointIds,omitempty"`
 	PreserveFocusHint *bool  `json:"preserveFocusHint,omitempty"`
+	Text              string `json:"text,omitempty"`
 }
 
 type dapExitedEventParams struct {
@@ -489,6 +490,14 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 			if l.vm != nil {
 				l.vm.tvm.Run()
 
+				if l.vm.tvm.Error != nil {
+					return l.notify("stopped", dapStoppedEventParams{
+						Reason:            "exception",
+						AllThreadsStopped: yes,
+						Description:       fmt.Sprintf("Error: %s", l.vm.tvm.Error),
+					})
+				}
+
 				if len(l.vm.tvm.Triggered) > 0 {
 					var tid int
 					ids := l.vm.tvm.Triggered
@@ -523,14 +532,22 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				return err
 			}
 
-			if l.vm != nil {
-				l.vm.tvm.Switch(nreq.Arguments.ThreadId)
-				l.vm.tvm.Step()
-			}
-
 			err = l.reply(h.Seq, req.Command, "", nil, nil)
 			if err != nil {
 				return err
+			}
+
+			if l.vm != nil {
+				l.vm.tvm.Switch(nreq.Arguments.ThreadId)
+				l.vm.tvm.Step()
+
+				if l.vm.tvm.Error != nil {
+					return l.notify("stopped", dapStoppedEventParams{
+						Reason:            "exception",
+						AllThreadsStopped: yes,
+						Description:       fmt.Sprintf("Error: %s", l.vm.tvm.Error),
+					})
+				}
 			}
 
 			var tid *int

@@ -1218,7 +1218,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				ln = res.Lines[req.Params.Position.Line]
 			}
 
-			var ccs []lspCompletionItem
+			ccs := []lspCompletionItem{}
 
 			var prefix string
 
@@ -1255,8 +1255,39 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				operator := new(int)
 				*operator = 25
 
+				snippet := 15
+
 				snippetFormat := new(int)
 				*snippetFormat = 2
+
+				var at string
+				var bt string
+				for i, name := range teal.OnCompletionNames {
+					if i > 0 {
+						at += " "
+					}
+
+					field := fmt.Sprintf("${%d:%s}", i+1, strings.ToLower(name))
+
+					at += field
+					bt += fmt.Sprintf("%s:\n", field)
+
+					if i < len(teal.OnCompletionNames)-1 {
+						bt += fmt.Sprintf("b ${%d:then}\n", len(teal.OnCompletionNames)+2)
+					}
+
+					bt += "\n"
+				}
+
+				bt += fmt.Sprintf("${%d:then}:\n$%d", len(teal.OnCompletionNames)+2, len(teal.OnCompletionNames)+3)
+
+				ccs = append(ccs, lspCompletionItem{
+					Label:            "soc",
+					Kind:             &snippet,
+					Detail:           "switch on OnCompletion",
+					InsertText:       fmt.Sprintf("txn OnCompletion\nswitch %s\n%s", at, bt),
+					InsertTextFormat: snippetFormat,
+				})
 
 				for name, info := range teal.Ops.Items {
 					if info.AppVersion <= res.Version && strings.HasPrefix(name, prefix) {
@@ -1296,6 +1327,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						})
 					}
 				}
+			}
+
+			if len(ccs) == 0 {
+				ccs = append(ccs, lspCompletionItem{
+					Label: "",
+				})
 			}
 
 			return l.success(h.Id, ccs)
@@ -1918,8 +1955,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					RenameProvider: &lspRenameOptions{
 						PrepareProvider: rename,
 					},
-					SemanticTokensProvider:     semanticTokensProvider,
-					CompletionProvider:         &lspCompletionProvider{},
+					SemanticTokensProvider: semanticTokensProvider,
+					CompletionProvider: &lspCompletionProvider{
+						TriggerCharacters: []string{" "},
+					},
 					DocumentFormattingProvider: formatting,
 					DefinitionProvider:         definition,
 					HoverProvider:              hover,
