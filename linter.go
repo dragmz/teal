@@ -4,6 +4,36 @@ import (
 	"fmt"
 )
 
+type RedundantLine interface {
+	Line() int
+	String() string
+}
+
+type RedundantLabelLine struct {
+	line int
+	name string
+}
+
+func (l RedundantLabelLine) Line() int {
+	return l.line
+}
+
+func (l RedundantLabelLine) String() string {
+	return fmt.Sprintf("Remove label '%s'", l.name)
+}
+
+type RedundantBLine struct {
+	line int
+}
+
+func (l RedundantBLine) Line() int {
+	return l.line
+}
+
+func (l RedundantBLine) String() string {
+	return "Remove b call"
+}
+
 type LineError interface {
 	error
 	Line() int
@@ -11,8 +41,10 @@ type LineError interface {
 }
 
 type Linter struct {
-	l   Listing
-	res []LineError
+	l Listing
+
+	errs []LineError
+	reds []RedundantLine
 }
 
 type DuplicateLabelError struct {
@@ -179,7 +211,8 @@ func (l *Linter) checkUnusedLabels() {
 	for name, lines := range l.getAllLabels() {
 		if len(used[name]) == 0 {
 			for _, line := range lines {
-				l.res = append(l.res, &UnusedLabelError{l: line, name: name})
+				l.errs = append(l.errs, &UnusedLabelError{l: line, name: name})
+				l.reds = append(l.reds, &RedundantLabelLine{line: line, name: name})
 			}
 		}
 	}
@@ -211,7 +244,7 @@ func (l *Linter) checkOpsAfterUnconditionalBranch() {
 					}
 				case Nop:
 				default:
-					l.res = append(l.res, UnreachableCodeError{i})
+					l.errs = append(l.errs, UnreachableCodeError{i})
 				}
 			}
 		}
@@ -242,7 +275,8 @@ func (l *Linter) checkBranchJustBeforeLabel() {
 						switch n := n.(type) {
 						case *LabelExpr:
 							if n.Name == o.Label.Name {
-								l.res = append(l.res, BJustBeforeLabelError{l: i})
+								l.errs = append(l.errs, BJustBeforeLabelError{l: i})
+								l.reds = append(l.reds, RedundantBLine{line: i})
 								return
 							}
 							break loop
@@ -266,7 +300,7 @@ func (l *Linter) checkLoops() {
 		_, ok := all[name]
 		if !ok {
 			for _, user := range users {
-				l.res = append(l.res, MissingLabelError{l: user, name: name})
+				l.errs = append(l.errs, MissingLabelError{l: user, name: name})
 			}
 		}
 	}
@@ -297,7 +331,7 @@ func (l *Linter) checkLoops() {
 						case *LabelExpr:
 							if n.Name == o.Label.Name {
 								if !l.canEscape(j, i) {
-									l.res = append(l.res, InfiniteLoopError{l: i})
+									l.errs = append(l.errs, InfiniteLoopError{l: i})
 								}
 								return
 							}
@@ -338,7 +372,7 @@ func (l *Linter) checkDuplicatedLabels() {
 	for name, lines := range labels {
 		if len(lines) > 1 {
 			for _, line := range lines {
-				l.res = append(l.res, DuplicateLabelError{l: line, name: name})
+				l.errs = append(l.errs, DuplicateLabelError{l: line, name: name})
 			}
 		}
 	}
@@ -350,7 +384,7 @@ func (l *Linter) checkPragma() {
 		switch op := op.(type) {
 		case *PragmaExpr:
 			if prev != nil {
-				l.res = append(l.res, PragmaVersionAfterInstrError{
+				l.errs = append(l.errs, PragmaVersionAfterInstrError{
 					l: i,
 				})
 			}

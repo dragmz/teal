@@ -214,7 +214,7 @@ func (l Listing) Lint() []LineError {
 	lnt := &Linter{l: l}
 	lnt.Lint()
 
-	return lnt.res
+	return lnt.errs
 }
 
 func (l Listing) Reconstruct() Program {

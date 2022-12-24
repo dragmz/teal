@@ -2412,6 +2412,7 @@ type ProcessResult struct {
 	Strings     []Token
 	Keywords    []Token
 	Macros      []Token
+	Redundants  []RedundantLine
 }
 
 func (r ProcessResult) getOp(name string) (opItem, bool) {
@@ -3014,7 +3015,7 @@ func Process(source string) *ProcessResult {
 						}
 					}
 				} else {
-					c.failCurr(errors.Errorf("unexpected opcode: %s", c.args.Text()))
+					c.failCurr(errors.Errorf("unknown opcode: %s", c.args.Text()))
 				}
 				return
 			}
@@ -3026,7 +3027,7 @@ func Process(source string) *ProcessResult {
 	l := &Linter{l: c.ops}
 	l.Lint()
 
-	for _, le := range l.res {
+	for _, le := range l.errs {
 		var b int
 		var e int
 
@@ -3043,6 +3044,7 @@ func Process(source string) *ProcessResult {
 			e:     e,
 			s:     le.Severity(),
 		})
+
 	}
 
 	result := &ProcessResult{
@@ -3059,6 +3061,7 @@ func Process(source string) *ProcessResult {
 		Strings:     c.strs,
 		Keywords:    c.keys,
 		Macros:      c.mcrs,
+		Redundants:  l.reds,
 	}
 
 	return result
