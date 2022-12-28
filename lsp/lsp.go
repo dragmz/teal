@@ -336,6 +336,11 @@ type lspDocumentSymbolParams struct {
 	TextDocument *lspDocumentSymbolTextDocument `json:"textDocument"`
 }
 
+type tealUpdateVersion struct {
+	Uri     string `json:"uri"`
+	Version uint64 `json:"version"`
+}
+
 type tealReplaceValueCommandArgs struct {
 	Uri   string   `json:"uri"`
 	Range lspRange `json:"range"`
@@ -850,6 +855,74 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			switch req.Params.Command {
+			case "teal.version.update":
+				var body lspWorkspaceExecuteCommandBody[[]tealUpdateVersion]
+				err := readInto(b, &body)
+				if err != nil {
+					return err
+				}
+
+				args := body.Params.Arguments
+				if len(args) != 1 {
+					return errors.New("unexpected number of args")
+				}
+
+				arg := args[0]
+
+				doc := l.docs[arg.Uri]
+				if doc == nil {
+					return errors.New("doc not found")
+				}
+
+				res := doc.Results()
+
+				var edits []lspTextEdit
+
+				if res.VersionToken != nil {
+					edits = append(edits, lspTextEdit{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      res.VersionToken.StartLine(),
+								Character: res.VersionToken.StartCharacter(),
+							},
+							End: lspPosition{
+								Line:      res.VersionToken.EndLine(),
+								Character: res.VersionToken.EndCharacter(),
+							},
+						},
+						NewText: fmt.Sprintf("%d", arg.Version),
+					})
+				} else {
+					edits = append(edits, lspTextEdit{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      0,
+								Character: 0,
+							},
+							End: lspPosition{
+								Line:      0,
+								Character: 0,
+							},
+						},
+						NewText: fmt.Sprintf("#pragma version %d\r\n", arg.Version),
+					})
+
+				}
+
+				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
+					Label: "Update version",
+					Edit: lspWorkspaceEdit{
+						DocumentChanges: []lspTextDocumentEdit{
+							{
+								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
+									Uri: args[0].Uri,
+								},
+								Edits: edits,
+							},
+						},
+					},
+				})
+
 			case "teal.value.replace":
 				var body lspWorkspaceExecuteCommandBody[[]tealReplaceValueCommandArgs]
 				err := readInto(b, &body)
@@ -1650,6 +1723,25 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				})
 			}
 
+			{
+				kind := "quickfix"
+				for _, v := range res.Versions {
+					cas = append(cas, lspCodeAction{
+						Title: fmt.Sprintf("Update version to %d", v.Version),
+						Kind:  &kind,
+						Command: &lspCommand{
+							Title:   "Update version",
+							Command: "teal.version.update",
+							Arguments: []interface{}{
+								tealUpdateVersion{
+									Uri:     req.Params.TextDocument.Uri,
+									Version: v.Version,
+								},
+							},
+						},
+					})
+				}
+			}
 			return l.success(h.Id, cas)
 		case "textDocument/diagnostic":
 			req, err := read[lspDiagnosticRequest](b)
@@ -1957,6 +2049,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							"teal.label.remove",
 							"teal.value.replace",
 							"teal.line.remove",
+							"teal.version.update",
 						},
 					},
 					RenameProvider: &lspRenameOptions{

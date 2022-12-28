@@ -836,6 +836,7 @@ type parserContext struct {
 	mcrs []Token
 	refs []Token
 
+	vtok   *Token
 	protos map[string]*ProtoExpr
 
 	// current state
@@ -903,7 +904,11 @@ func (c *parserContext) mustReadPragma(argName string) uint64 {
 		if v < 1 {
 			c.failCurr(errors.New("version must be at least 1"))
 		}
+
 		version = v
+
+		tok := c.args.Curr()
+		c.vtok = &tok
 	default:
 		c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
 	}
@@ -2435,22 +2440,36 @@ func (ln Line) ImmAt(pos int) (Token, int, bool) {
 	return Token{}, 0, false
 }
 
+type RequiredVersion struct {
+	Line    int
+	Version uint64
+}
+
 type ProcessResult struct {
-	Mode        ProgramMode
-	Version     uint64
+	Mode ProgramMode
+
+	Version      uint64
+	VersionToken *Token
+	Versions     []RequiredVersion
+
 	Diagnostics []Diagnostic
-	MissRefs    []Token
-	Symbols     []Symbol
-	SymbolRefs  []Token
-	Tokens      []Token
-	Listing     Listing
-	Lines       []Line
-	Ops         []Token
-	Numbers     []Token
-	Strings     []Token
-	Keywords    []Token
-	Macros      []Token
-	Redundants  []RedundantLine
+
+	MissRefs   []Token
+	Symbols    []Symbol
+	SymbolRefs []Token
+
+	Tokens  []Token
+	Listing Listing
+	Lines   []Line
+
+	Ops []Token
+
+	Numbers  []Token
+	Strings  []Token
+	Keywords []Token
+	Macros   []Token
+
+	Redundants []RedundantLine
 }
 
 func (r ProcessResult) SymbolsForRefWithin(rg Range) []Symbol {
@@ -3011,6 +3030,7 @@ func Process(source string) *ProcessResult {
 	var lts []Line
 	var ops []Token
 	var lsyms []*labelSymbol
+	var vers []RequiredVersion
 
 	for line, l := range lines {
 		c.line = line
@@ -3104,6 +3124,11 @@ func Process(source string) *ProcessResult {
 							e:     curr.e,
 							s:     DiagErr,
 						})
+
+						vers = append(vers, RequiredVersion{
+							Line:    curr.l,
+							Version: min,
+						})
 					}
 
 					info.Parse(c)
@@ -3164,21 +3189,23 @@ func Process(source string) *ProcessResult {
 	}
 
 	result := &ProcessResult{
-		Mode:        c.mode,
-		Version:     c.version,
-		Diagnostics: c.diag,
-		MissRefs:    mrefs,
-		Symbols:     syms,
-		SymbolRefs:  c.refs,
-		Tokens:      ts,
-		Lines:       lts,
-		Listing:     c.ops,
-		Ops:         ops,
-		Numbers:     c.nums,
-		Strings:     c.strs,
-		Keywords:    c.keys,
-		Macros:      c.mcrs,
-		Redundants:  l.reds,
+		Mode:         c.mode,
+		Version:      c.version,
+		VersionToken: c.vtok,
+		Diagnostics:  c.diag,
+		MissRefs:     mrefs,
+		Symbols:      syms,
+		SymbolRefs:   c.refs,
+		Tokens:       ts,
+		Lines:        lts,
+		Listing:      c.ops,
+		Ops:          ops,
+		Numbers:      c.nums,
+		Strings:      c.strs,
+		Keywords:     c.keys,
+		Macros:       c.mcrs,
+		Redundants:   l.reds,
+		Versions:     vers,
 	}
 
 	return result
