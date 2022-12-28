@@ -1293,9 +1293,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						}
 					}
 					ccs = append(ccs, lspCompletionItem{
-						LabelDetails:  d,
-						Label:         v.Name,
-						Documentation: v.Doc,
+						LabelDetails: d,
+						Label:        v.Name,
+						Documentation: lspMarkupContent{
+							Kind:  "markdown",
+							Value: v.Docs,
+						},
 					})
 				}
 
@@ -1423,28 +1426,20 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			ls := []lspLocation{}
 
-			refs := res.SymbolRefsWithin(req.Params.Position)
-
-			if len(refs) > 0 {
-				ref := refs[0]
-
-				for _, sym := range res.Symbols {
-					if sym.Name() == ref.String() {
-						ls = append(ls, lspLocation{
-							Uri: req.Params.TextDocument.Uri,
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin(),
-								},
-								End: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin() + len(sym.Name()),
-								},
-							},
-						})
-					}
-				}
+			for _, sym := range res.SymbolsForRefWithin(req.Params.Position) {
+				ls = append(ls, lspLocation{
+					Uri: req.Params.TextDocument.Uri,
+					Range: lspRange{
+						Start: lspPosition{
+							Line:      sym.Line(),
+							Character: sym.Begin(),
+						},
+						End: lspPosition{
+							Line:      sym.Line(),
+							Character: sym.Begin() + len(sym.Name()),
+						},
+					},
+				})
 			}
 
 			return l.success(h.Id, ls)

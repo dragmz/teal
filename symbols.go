@@ -11,13 +11,16 @@ type Symbol interface {
 
 	EndLine() int
 	EndCharacter() int
+
+	Docs() string
 }
 
 type labelSymbol struct {
-	n string
-	l int
-	b int
-	e int
+	n    string
+	l    int
+	b    int
+	e    int
+	docs string
 }
 
 func (s labelSymbol) Name() string {
@@ -50,4 +53,8 @@ func (s labelSymbol) EndLine() int {
 
 func (s labelSymbol) EndCharacter() int {
 	return s.e
+}
+
+func (s labelSymbol) Docs() string {
+	return s.docs
 }

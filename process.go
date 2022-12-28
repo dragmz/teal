@@ -74,7 +74,7 @@ func init() {
 					vals = append(vals, opItemArgVal{
 						Value:   uint64(spec.field),
 						Name:    name,
-						Doc:     spec.Note(),
+						Docs:    spec.Note(),
 						Version: spec.version,
 					})
 					vals2[int(spec.field)] = spec.field.String()
@@ -86,7 +86,7 @@ func init() {
 					vals = append(vals, opItemArgVal{
 						Value:   uint64(spec.field),
 						Name:    name,
-						Doc:     spec.Note(),
+						Docs:    spec.Note(),
 						Version: spec.itxVersion,
 					})
 					vals2[int(spec.field)] = spec.field.String()
@@ -97,7 +97,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -107,7 +107,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -118,7 +118,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -129,7 +129,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -140,7 +140,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -151,7 +151,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -162,7 +162,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -173,7 +173,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -184,7 +184,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -195,7 +195,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -205,7 +205,7 @@ func init() {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
-					Doc:     spec.Note(),
+					Docs:    spec.Note(),
 					Version: spec.version,
 				})
 				vals2[int(spec.field)] = spec.field.String()
@@ -491,6 +491,7 @@ var opsList = []opListItem{
 type recoverable struct{}
 
 type ProcessContext interface {
+	comment(text string)
 	emit(op Op)
 
 	minVersion(v uint64)
@@ -541,8 +542,10 @@ func (c *docContext) arg(a opItemArg) {
 	c.args = append(c.args, a)
 }
 
-func (c *docContext) emit(op Op) {
+func (c *docContext) comment(text string) {
+}
 
+func (c *docContext) emit(op Op) {
 }
 
 func (c *docContext) minVersion(v uint64) {
@@ -832,6 +835,12 @@ type parserContext struct {
 	keys []Token
 	mcrs []Token
 	refs []Token
+
+	comments []string
+}
+
+func (c *parserContext) comment(text string) {
+	c.comments = append(c.comments, text)
 }
 
 func (c *parserContext) emit(op Op) {
@@ -2430,6 +2439,24 @@ type ProcessResult struct {
 	Redundants  []RedundantLine
 }
 
+func (r ProcessResult) SymbolsForRefWithin(rg Range) []Symbol {
+	var res []Symbol
+
+	refs := r.SymbolRefsWithin(rg)
+
+	if len(refs) > 0 {
+		ref := refs[0]
+
+		for _, sym := range r.Symbols {
+			if sym.Name() == ref.String() {
+				res = append(res, sym)
+			}
+		}
+	}
+
+	return res
+}
+
 func (r ProcessResult) SymbolsWithin(rg Range) []Symbol {
 	var res []Symbol
 
@@ -2466,7 +2493,7 @@ type opItemArgVal struct {
 	Value   uint64
 
 	Name    string
-	Doc     string
+	Docs    string
 	Version uint64
 }
 
@@ -2607,6 +2634,7 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 			res = append(res, opItemArgVal{
 				NoValue: true,
 				Name:    sym.Name(),
+				Docs:    sym.Docs(),
 			})
 		}
 	case OpArgTypeConstInt:
@@ -2981,6 +3009,8 @@ func Process(source string) *ProcessResult {
 			if c.args.Curr().Type() == TokenComment {
 				if strings.TrimSpace(c.args.Curr().String()) == "#pragma mode logicsig" {
 					c.mode = ModeSig
+				} else {
+					c.comment(c.args.Curr().String())
 				}
 				c.emit(Empty)
 				return
@@ -2994,13 +3024,16 @@ func Process(source string) *ProcessResult {
 
 				t := c.args.Curr()
 				syms = append(syms, labelSymbol{
-					n: name,
-					l: t.l,
-					b: t.b, // TODO: what about whitespaces before label name?
-					e: t.e,
+					n:    name,
+					l:    t.l,
+					b:    t.b, // TODO: what about whitespaces before label name?
+					e:    t.e,
+					docs: strings.Join(c.comments, "\n"),
 				})
 
 				c.emit(&LabelExpr{Name: name})
+				c.comments = nil
+
 				return
 			}
 
