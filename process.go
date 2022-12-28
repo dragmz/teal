@@ -901,14 +901,15 @@ func (c *parserContext) mustReadPragma(argName string) uint64 {
 	case "version":
 		c.mcrs = append(c.mcrs, c.args.Curr())
 		v := c.mustReadInt("version value")
+
+		tok := c.args.Curr()
+		c.vtok = &tok
+
 		if v < 1 {
 			c.failCurr(errors.New("version must be at least 1"))
 		}
 
 		version = v
-
-		tok := c.args.Curr()
-		c.vtok = &tok
 	default:
 		c.failCurr(errors.Errorf("unexpected #pragma: %s", c.args.Text()))
 	}
