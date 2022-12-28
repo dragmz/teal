@@ -836,6 +836,11 @@ type parserContext struct {
 	mcrs []Token
 	refs []Token
 
+	protos map[string]*ProtoExpr
+
+	// current state
+	line     int
+	label    *LabelExpr
 	comments []string
 }
 
@@ -845,6 +850,15 @@ func (c *parserContext) comment(text string) {
 
 func (c *parserContext) emit(op Op) {
 	c.ops = append(c.ops, op)
+
+	switch op := op.(type) {
+	case *ProtoExpr:
+		if c.label != nil {
+			c.protos[c.label.Name] = op
+		}
+	case *LabelExpr:
+		c.label = op
+	}
 }
 
 func (c *parserContext) minVersion(v uint64) {
@@ -2492,9 +2506,10 @@ type opItemArgVal struct {
 	NoValue bool
 	Value   uint64
 
-	Name    string
-	Docs    string
-	Version uint64
+	Name      string
+	Docs      string
+	Signature string
+	Version   uint64
 }
 
 type NamedInlayHint struct {
@@ -2505,6 +2520,14 @@ type NamedInlayHint struct {
 type DecodedInlayHint struct {
 	T     Token
 	Value string
+}
+
+type SignatureInlayHint struct {
+	Line  int
+	Start int
+	End   int
+
+	Signature string
 }
 
 type InlayHints struct {
@@ -2632,9 +2655,10 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 	case OpArgTypeLabel:
 		for _, sym := range r.Symbols {
 			res = append(res, opItemArgVal{
-				NoValue: true,
-				Name:    sym.Name(),
-				Docs:    sym.Docs(),
+				NoValue:   true,
+				Name:      sym.Name(),
+				Docs:      sym.Docs(),
+				Signature: sym.Signature(),
 			})
 		}
 	case OpArgTypeConstInt:
@@ -2949,12 +2973,13 @@ func Process(source string) *ProcessResult {
 		version: 1,
 		ops:     []Op{},
 		mode:    ModeApp,
+		protos:  map[string]*ProtoExpr{},
 	}
 
 	var ts []Token
 	ts, c.diag = readTokens(source)
 
-	lines := [][]Token{}
+	lines := []Line{}
 
 	p := 0
 	for i := 0; i < len(ts); i++ {
@@ -2985,9 +3010,10 @@ func Process(source string) *ProcessResult {
 
 	var lts []Line
 	var ops []Token
-	var syms []Symbol
+	var lsyms []*labelSymbol
 
-	for _, l := range lines {
+	for line, l := range lines {
+		c.line = line
 		c.args = &arguments{ts: l}
 		func() {
 			defer func() {
@@ -3023,7 +3049,7 @@ func Process(source string) *ProcessResult {
 				}
 
 				t := c.args.Curr()
-				syms = append(syms, labelSymbol{
+				lsyms = append(lsyms, &labelSymbol{
 					n:    name,
 					l:    t.l,
 					b:    t.b, // TODO: what about whitespaces before label name?
@@ -3111,7 +3137,7 @@ func Process(source string) *ProcessResult {
 	}
 
 	symm := map[string]bool{}
-	for _, sym := range syms {
+	for _, sym := range lsyms {
 		symm[sym.Name()] = true
 	}
 
@@ -3122,6 +3148,21 @@ func Process(source string) *ProcessResult {
 		}
 	}
 
+	for i := 0; i < len(lsyms); i++ {
+		sym := lsyms[i]
+		proto := c.protos[sym.Name()]
+		if proto != nil {
+			sym.sig = fmt.Sprintf("in: %d, out: %d", proto.Args, proto.Results)
+			lsyms[i] = sym
+		}
+	}
+
+	syms := make([]Symbol, len(lsyms))
+
+	for i := 0; i < len(lsyms); i++ {
+		syms[i] = lsyms[i]
+	}
+
 	result := &ProcessResult{
 		Mode:        c.mode,
 		Version:     c.version,
@@ -3130,8 +3171,8 @@ func Process(source string) *ProcessResult {
 		Symbols:     syms,
 		SymbolRefs:  c.refs,
 		Tokens:      ts,
-		Listing:     c.ops,
 		Lines:       lts,
+		Listing:     c.ops,
 		Ops:         ops,
 		Numbers:     c.nums,
 		Strings:     c.strs,

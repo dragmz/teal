@@ -1291,6 +1291,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						d = &lspCompletionItemLabelDetails{
 							Detail: fmt.Sprintf(" = %d", v.Value),
 						}
+					} else if v.Signature != "" {
+						d = &lspCompletionItemLabelDetails{
+							Detail: fmt.Sprintf(" %s", v.Signature),
+						}
 					}
 					ccs = append(ccs, lspCompletionItem{
 						LabelDetails: d,
@@ -1644,7 +1648,6 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						},
 					},
 				})
-
 			}
 
 			return l.success(h.Id, cas)

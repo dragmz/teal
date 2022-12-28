@@ -13,6 +13,7 @@ type Symbol interface {
 	EndCharacter() int
 
 	Docs() string
+	Signature() string
 }
 
 type labelSymbol struct {
@@ -21,6 +22,7 @@ type labelSymbol struct {
 	b    int
 	e    int
 	docs string
+	sig  string
 }
 
 func (s labelSymbol) Name() string {
@@ -57,4 +59,8 @@ func (s labelSymbol) EndCharacter() int {
 
 func (s labelSymbol) Docs() string {
 	return s.docs
+}
+
+func (s labelSymbol) Signature() string {
+	return s.sig
 }
