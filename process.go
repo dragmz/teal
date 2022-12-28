@@ -12,10 +12,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-/*
-	TODO: add missing specs for pseudops
-*/
-
 type NewOpArgType int
 
 const (
@@ -2386,6 +2382,24 @@ func opBlock(c ProcessContext) {
 
 type Line []Token
 
+func (ln Line) Begin() int {
+	switch len(ln) {
+	case 0:
+		return 0
+	default:
+		return ln[0].b
+	}
+}
+
+func (ln Line) End() int {
+	switch len(ln) {
+	case 0:
+		return 0
+	default:
+		return ln[len(ln)-1].e
+	}
+}
+
 func (ln Line) ImmAt(pos int) (Token, int, bool) {
 	for idx, tok := range ln {
 		if idx > 0 {
@@ -2402,6 +2416,7 @@ type ProcessResult struct {
 	Mode        ProgramMode
 	Version     uint64
 	Diagnostics []Diagnostic
+	MissRefs    []Token
 	Symbols     []Symbol
 	SymbolRefs  []Token
 	Tokens      []Token
@@ -2413,6 +2428,30 @@ type ProcessResult struct {
 	Keywords    []Token
 	Macros      []Token
 	Redundants  []RedundantLine
+}
+
+func (r ProcessResult) SymbolsWithin(rg Range) []Symbol {
+	var res []Symbol
+
+	for _, sym := range r.Symbols {
+		if Overlaps(rg, sym) {
+			res = append(res, sym)
+		}
+	}
+
+	return res
+}
+
+func (r ProcessResult) SymbolRefsWithin(rg Range) []Token {
+	var res []Token
+
+	for _, ref := range r.SymbolRefs {
+		if Overlaps(rg, ref) {
+			res = append(res, ref)
+		}
+	}
+
+	return res
 }
 
 func (r ProcessResult) getOp(name string) (opItem, bool) {
@@ -2466,10 +2505,10 @@ func (r ProcessResult) ArgFieldName(t NewOpArgType, v int) string {
 	return n
 }
 
-func (r ProcessResult) InlayHints(sl int, sch int, el int, ech int) InlayHints {
+func (r ProcessResult) InlayHints(rg Range) InlayHints {
 	var ihs InlayHints
 
-	for li := sl; li <= el; li++ {
+	for li := rg.StartLine(); li <= rg.EndLine(); li++ {
 		if li >= len(r.Lines) {
 			continue
 		}
@@ -2484,7 +2523,7 @@ func (r ProcessResult) InlayHints(sl int, sch int, el int, ech int) InlayHints {
 		}
 
 		for i, tok := range ln {
-			if !tok.Overlaps(sl, sch, el, ech) {
+			if !Overlaps(tok, rg) {
 				continue
 			}
 
@@ -3028,29 +3067,33 @@ func Process(source string) *ProcessResult {
 	l.Lint()
 
 	for _, le := range l.errs {
-		var b int
-		var e int
-
-		lt := lts[le.Line()]
-		if len(lt) > 0 {
-			b = lt[0].b
-			e = lt[len(lt)-1].e
-		}
-
+		ln := lts[le.Line()]
 		c.diag = append(c.diag, lintError{
 			error: le,
 			l:     le.Line(),
-			b:     b,
-			e:     e,
+			b:     ln.Begin(),
+			e:     ln.End(),
 			s:     le.Severity(),
 		})
+	}
 
+	symm := map[string]bool{}
+	for _, sym := range syms {
+		symm[sym.Name()] = true
+	}
+
+	var mrefs []Token
+	for _, ref := range c.refs {
+		if _, ok := symm[ref.String()]; !ok {
+			mrefs = append(mrefs, ref)
+		}
 	}
 
 	result := &ProcessResult{
 		Mode:        c.mode,
 		Version:     c.version,
 		Diagnostics: c.diag,
+		MissRefs:    mrefs,
 		Symbols:     syms,
 		SymbolRefs:  c.refs,
 		Tokens:      ts,

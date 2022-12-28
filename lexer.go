@@ -25,23 +25,20 @@ type Token struct {
 	t TokenType
 }
 
-func (t Token) Overlaps(sl, sch, el, ech int) bool {
-	if t.l < sl || t.l > el {
-		return false
-	}
+func (t Token) StartLine() int {
+	return t.l
+}
 
-	switch t.l {
-	case sl:
-		if t.b < sch && t.e < sch {
-			return false
-		}
-	case el:
-		if t.b > ech && t.e > ech {
-			return false
-		}
-	}
+func (t Token) StartCharacter() int {
+	return t.b
+}
 
-	return true
+func (t Token) EndLine() int {
+	return t.l
+}
+
+func (t Token) EndCharacter() int {
+	return t.e
 }
 
 func (t Token) String() string {

@@ -5,6 +5,12 @@ type Symbol interface {
 	Line() int
 	Begin() int
 	End() int
+
+	StartLine() int
+	StartCharacter() int
+
+	EndLine() int
+	EndCharacter() int
 }
 
 type labelSymbol struct {
@@ -27,5 +33,21 @@ func (s labelSymbol) Begin() int {
 }
 
 func (s labelSymbol) End() int {
+	return s.e
+}
+
+func (s labelSymbol) StartLine() int {
+	return s.l
+}
+
+func (s labelSymbol) StartCharacter() int {
+	return s.b
+}
+
+func (s labelSymbol) EndLine() int {
+	return s.l
+}
+
+func (s labelSymbol) EndCharacter() int {
 	return s.e
 }

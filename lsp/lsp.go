@@ -495,8 +495,20 @@ type lspPosition struct {
 	Character int `json:"character"`
 }
 
-func (p lspPosition) Overlaps(line int, begin int, end int) bool {
-	return line == p.Line && p.Character >= begin && p.Character <= end
+func (p lspPosition) StartLine() int {
+	return p.Line
+}
+
+func (p lspPosition) StartCharacter() int {
+	return p.Character
+}
+
+func (p lspPosition) EndLine() int {
+	return p.Line
+}
+
+func (p lspPosition) EndCharacter() int {
+	return p.Character
 }
 
 type lspRange struct {
@@ -504,23 +516,20 @@ type lspRange struct {
 	End   lspPosition `json:"end"`
 }
 
-func (r lspRange) Overlaps(line int, begin int, end int) bool {
-	if line < r.Start.Line || line > r.End.Line {
-		return false
-	}
+func (r lspRange) StartLine() int {
+	return r.Start.Line
+}
 
-	switch line {
-	case r.Start.Line:
-		if begin < r.Start.Character && end < r.Start.Character {
-			return false
-		}
-	case r.End.Line:
-		if begin > r.End.Character && end > r.End.Character {
-			return false
-		}
-	}
+func (r lspRange) StartCharacter() int {
+	return r.Start.Character
+}
 
-	return true
+func (r lspRange) EndLine() int {
+	return r.End.Line
+}
+
+func (r lspRange) EndCharacter() int {
+	return r.End.Character
 }
 
 type lspDiagnostic struct {
@@ -741,6 +750,15 @@ func (l *lsp) doDiagnostic(doc *lspDoc) []lspDiagnostic {
 	return lds
 }
 
+func (l *lsp) prepare(uri string) (*lspDoc, *teal.ProcessResult, error) {
+	doc := l.docs[uri]
+	if doc == nil {
+		return nil, nil, errors.New("doc not found")
+	}
+
+	return doc, doc.Results(), nil
+}
+
 func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 	if h.Result != nil {
@@ -927,12 +945,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					return errors.New("unexpected number of args")
 				}
 
-				doc := l.docs[args[0].Uri]
-				if doc == nil {
-					return errors.New("doc not found")
+				_, res, err := l.prepare(args[0].Uri)
+				if err != nil {
+					return err
 				}
-
-				res := doc.Results()
 
 				name := args[0].Name
 
@@ -981,12 +997,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					return errors.New("unexpected number of args")
 				}
 
-				doc := l.docs[args[0].Uri]
-				if doc == nil {
-					return errors.New("doc not found")
+				_, res, err := l.prepare(args[0].Uri)
+				if err != nil {
+					return err
 				}
-
-				res := doc.Results()
 
 				name := args[0].Name
 				s := fmt.Sprintf("\r\n%s:\r\n", name)
@@ -1032,47 +1046,41 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
 
-			res := doc.Results()
-
-			for _, sym := range res.Symbols {
-				if req.Params.Position.Overlaps(sym.Line(), sym.Begin(), sym.End()) {
-					return l.success(h.Id, lspPrepareRenameResponse{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin(),
-							},
-							End: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin() + len(sym.Name()),
-							},
+			for _, sym := range res.SymbolsWithin(req.Params.Position) {
+				return l.success(h.Id, lspPrepareRenameResponse{
+					Range: lspRange{
+						Start: lspPosition{
+							Line:      sym.Line(),
+							Character: sym.Begin(),
 						},
-						Placeholder: sym.Name(),
-					})
-				}
+						End: lspPosition{
+							Line:      sym.Line(),
+							Character: sym.Begin() + len(sym.Name()),
+						},
+					},
+					Placeholder: sym.Name(),
+				})
 			}
 
-			for _, ref := range res.SymbolRefs {
-				if req.Params.Position.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
-					return l.success(h.Id, lspPrepareRenameResponse{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      ref.Line(),
-								Character: ref.Begin(),
-							},
-							End: lspPosition{
-								Line:      ref.Line(),
-								Character: ref.Begin() + len(ref.String()),
-							},
+			for _, ref := range res.SymbolRefsWithin(req.Params.Position) {
+				return l.success(h.Id, lspPrepareRenameResponse{
+					Range: lspRange{
+						Start: lspPosition{
+							Line:      ref.Line(),
+							Character: ref.Begin(),
 						},
-						Placeholder: ref.String(),
-					})
-				}
+						End: lspPosition{
+							Line:      ref.Line(),
+							Character: ref.Begin() + len(ref.String()),
+						},
+					},
+					Placeholder: ref.String(),
+				})
 			}
 
 			return l.success(h.Id, struct{}{})
@@ -1083,19 +1091,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
 
-			res := doc.Results()
-
 			chs := []lspTextEdit{}
-			for _, edited := range res.Symbols {
-				if !req.Params.Position.Overlaps(edited.Line(), edited.Begin(), edited.End()) {
-					continue
-				}
-
+			for _, edited := range res.SymbolsWithin(req.Params.Position) {
 				for _, sym := range res.Symbols {
 					if sym.Name() == edited.Name() {
 						chs = append(chs, lspTextEdit{
@@ -1183,12 +1185,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, _, err = l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			doc.Results()
 
 			ls := []lspInlineValueText{}
 
@@ -1205,12 +1205,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			ihs := []lspInlayHint{}
 			parameter := new(int)
@@ -1219,7 +1217,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			padding := new(bool)
 			*padding = true
 
-			hs := res.InlayHints(req.Params.Range.Start.Line, req.Params.Range.Start.Character, req.Params.Range.End.Line, req.Params.Range.End.Character)
+			hs := res.InlayHints(req.Params.Range)
 
 			if l.config.InlayNamed {
 				for _, named := range hs.Named {
@@ -1258,12 +1256,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			var ln teal.Line
 			if len(res.Lines) > req.Params.Position.Line {
@@ -1395,12 +1391,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return l.fail(h.Id, "document not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
 
-			res := doc.Results()
 			var c interface{} = struct{}{}
 
 			s := res.DocAt(req.Params.Position.Line, req.Params.Position.Character)
@@ -1421,35 +1416,34 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return l.fail(h.Id, "document not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			ls := []lspLocation{}
 
-			for _, ref := range res.SymbolRefs {
-				if req.Params.Position.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
-					for _, sym := range res.Symbols {
-						if sym.Name() == ref.String() {
-							ls = append(ls, lspLocation{
-								Uri: req.Params.TextDocument.Uri,
-								Range: lspRange{
-									Start: lspPosition{
-										Line:      sym.Line(),
-										Character: sym.Begin(),
-									},
-									End: lspPosition{
-										Line:      sym.Line(),
-										Character: sym.Begin() + len(sym.Name()),
-									},
+			refs := res.SymbolRefsWithin(req.Params.Position)
+
+			if len(refs) > 0 {
+				ref := refs[0]
+
+				for _, sym := range res.Symbols {
+					if sym.Name() == ref.String() {
+						ls = append(ls, lspLocation{
+							Uri: req.Params.TextDocument.Uri,
+							Range: lspRange{
+								Start: lspPosition{
+									Line:      sym.Line(),
+									Character: sym.Begin(),
 								},
-							})
-						}
+								End: lspPosition{
+									Line:      sym.Line(),
+									Character: sym.Begin() + len(sym.Name()),
+								},
+							},
+						})
 					}
-					break
 				}
 			}
 
@@ -1461,12 +1455,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return l.fail(h.Id, "document not found")
+			doc, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			formatted := tealfmt.Format(strings.NewReader(doc.s))
 
@@ -1492,12 +1484,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			var sh interface{} = struct{}{}
 			for _, op := range res.Ops {
@@ -1552,12 +1542,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			cas := []lspCodeAction{}
 
@@ -1583,22 +1571,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				}
 			}
 
-			for _, ref := range res.SymbolRefs {
-				if !req.Params.Range.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
-					continue
-				}
-
-				found := func() bool {
-					for _, sym := range res.Symbols {
-						if sym.Name() == ref.String() {
-							return true
-						}
-					}
-
-					return false
-				}()
-
-				if found {
+			for _, ref := range res.MissRefs {
+				if !teal.Overlaps(req.Params.Range, ref) {
 					continue
 				}
 
@@ -1619,7 +1593,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				})
 			}
 
-			hs := res.InlayHints(req.Params.Range.Start.Line, req.Params.Range.Start.Character, req.Params.Range.End.Line, req.Params.Range.End.Character)
+			hs := res.InlayHints(req.Params.Range)
 
 			for _, named := range hs.Named {
 				kind := "quickfix"
@@ -1705,12 +1679,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			kind := new(int)
 			*kind = 1
@@ -1718,13 +1690,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			name := func() string {
 				for _, sym := range res.Symbols {
-					if req.Params.Position.Overlaps(sym.Line(), sym.Begin(), sym.End()) {
+					if teal.Overlaps(req.Params.Position, sym) {
 						return sym.Name()
 					}
 				}
 
 				for _, ref := range res.SymbolRefs {
-					if req.Params.Position.Overlaps(ref.Line(), ref.Begin(), ref.End()) {
+					if teal.Overlaps(req.Params.Position, ref) {
 						return ref.String()
 					}
 				}
@@ -1776,12 +1748,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			syms := []lspDocumentSymbol{}
 			for _, s := range res.Symbols {
@@ -1811,12 +1781,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			doc := l.docs[req.Params.TextDocument.Uri]
-			if doc == nil {
-				return errors.New("doc not found")
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
 			}
-
-			res := doc.Results()
 
 			st := teal.SemanticTokens{}
 
