@@ -88,6 +88,7 @@ func New(r io.Reader, w io.Writer, opts ...LspOption) (*lsp, error) {
 			SemanticTokens: true,
 			InlayNamed:     true,
 			InlayDecoded:   true,
+			LensRefs:       true,
 		},
 	}
 
@@ -206,6 +207,10 @@ type lspSemanticTokensProvider struct {
 	Full   *bool                   `json:"full"`
 }
 
+type lspCodeLensProvider struct {
+	ResolveProvider *bool `json:"resolveProvider,omitempty"`
+}
+
 type lspSemanticTokens struct {
 	Data []uint32 `json:"data"`
 }
@@ -253,6 +258,7 @@ type lspServerCapabilities struct {
 	SignatureHelpProvider      *lspSignatureHelpOptions   `json:"signatureHelpProvider,omitempty"`
 	InlayHintProvider          *bool                      `json:"inlayHintProvider,omitempty"`
 	InlineValueProvider        *bool                      `json:"inlineValueProvider,omitempty"`
+	CodeLensProvider           *lspCodeLensProvider       `json:"codeLensProvider,omitempty"`
 }
 
 type lspInitializeResult struct {
@@ -282,12 +288,14 @@ type tealInitializationOptions struct {
 	SemanticTokens *bool `json:"semanticTokens,omitempty"`
 	InlayNamed     *bool `json:"inlayNamed,omitempty"`
 	InlayDecoded   *bool `json:"inlayDecoded,omitempty"`
+	LensRefs       *bool `json:"lensRefs,omitempty"`
 }
 
 type tealConfig struct {
 	SemanticTokens bool
 	InlayNamed     bool
 	InlayDecoded   bool
+	LensRefs       bool
 }
 
 type lspInitializeRequestParams struct {
@@ -642,6 +650,16 @@ type lspInlineValueText struct {
 	Text  string   `json:"text"`
 }
 
+type lspCodeLensRequestParams struct {
+	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
+}
+
+type lspCodeLens struct {
+	Range   lspRange    `json:"range"`
+	Command *lspCommand `json:"command,omitempty"`
+	Data    any         `json:"data,omitempty"`
+}
+
 // notifications
 type lspDidChange lspRequest[*lspDidChangeParams]
 type lspDidOpen lspRequest[*lspDidOpenParams]
@@ -666,6 +684,7 @@ type lspSignatureHelpRequest lspRequest[*lspSignatureHelpRequestParams]
 type lspInlayHintRequest lspRequest[*lspInlayHintRequestParams]
 type lspInlineValueRequest lspRequest[*lspInlineValueRequestParams]
 type lspInitializeRequest lspRequest[*lspInitializeRequestParams]
+type lspCodeLensRequest lspRequest[*lspCodeLensRequestParams]
 
 func readInto(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, &v)
@@ -1272,6 +1291,42 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			return l.success(h.Id, ls)
 
+		case "textDocument/codeLens":
+			req, err := read[lspCodeLensRequest](b)
+			if err != nil {
+				return err
+			}
+
+			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			if err != nil {
+				return err
+			}
+
+			var cls []lspCodeLens
+
+			if l.config.LensRefs {
+				for _, sym := range res.Symbols {
+					count := res.RefCounts[sym.Name()]
+					if count > 0 {
+						cls = append(cls, lspCodeLens{
+							Range: lspRange{
+								Start: lspPosition{
+									Line: sym.StartLine(),
+								},
+								End: lspPosition{
+									Line: sym.EndLine(),
+								},
+							},
+							Command: &lspCommand{
+								Title: fmt.Sprintf("refs: %d", count),
+							},
+						})
+					}
+				}
+			}
+
+			return l.success(h.Id, cls)
+
 		case "textDocument/inlayHint":
 			req, err := read[lspInlayHintRequest](b)
 			if err != nil {
@@ -1414,6 +1469,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					Kind:             &snippet,
 					Detail:           "switch on OnCompletion",
 					InsertText:       fmt.Sprintf("txn OnCompletion\nswitch %s\n%s", at, bt),
+					InsertTextFormat: snippetFormat,
+				})
+
+				ccs = append(ccs, lspCompletionItem{
+					Label:            "func",
+					Kind:             &snippet,
+					Detail:           "create subroutine",
+					InsertText:       "${1:sub}:\r\n\r\n\tproto ${2:0} ${3:0}\r\n\t${4}\r\n\tretsub\r\n",
 					InsertTextFormat: snippetFormat,
 				})
 
@@ -1986,6 +2049,9 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					if req.Params.InitializationOptions.InlayDecoded != nil {
 						l.config.InlayDecoded = *req.Params.InitializationOptions.InlayDecoded
 					}
+					if req.Params.InitializationOptions.LensRefs != nil {
+						l.config.LensRefs = *req.Params.InitializationOptions.LensRefs
+					}
 				}
 			}
 
@@ -2065,6 +2131,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					SignatureHelpProvider:      &lspSignatureHelpOptions{},
 					InlayHintProvider:          inlayHint,
 					InlineValueProvider:        inlineValue,
+					CodeLensProvider:           &lspCodeLensProvider{},
 				},
 			})
 		default:

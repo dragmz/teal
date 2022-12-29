@@ -822,6 +822,11 @@ func (m ProgramMode) String() string {
 	}
 }
 
+type Call struct {
+	Op   *CallSubExpr
+	Line int
+}
+
 type parserContext struct {
 	mode    ProgramMode
 	version uint64
@@ -838,6 +843,7 @@ type parserContext struct {
 
 	vtok   *Token
 	protos map[string]*ProtoExpr
+	refc   map[string]int
 
 	// current state
 	line     int
@@ -851,6 +857,13 @@ func (c *parserContext) comment(text string) {
 
 func (c *parserContext) emit(op Op) {
 	c.ops = append(c.ops, op)
+
+	switch op := op.(type) {
+	case usesLabels:
+		for _, lbl := range op.Labels() {
+			c.refc[lbl.Name]++
+		}
+	}
 
 	switch op := op.(type) {
 	case *ProtoExpr:
@@ -2471,6 +2484,8 @@ type ProcessResult struct {
 	Macros   []Token
 
 	Redundants []RedundantLine
+
+	RefCounts map[string]int
 }
 
 func (r ProcessResult) SymbolsForRefWithin(rg Range) []Symbol {
@@ -2994,6 +3009,7 @@ func Process(source string) *ProcessResult {
 		ops:     []Op{},
 		mode:    ModeApp,
 		protos:  map[string]*ProtoExpr{},
+		refc:    map[string]int{},
 	}
 
 	var ts []Token
@@ -3207,6 +3223,7 @@ func Process(source string) *ProcessResult {
 		Macros:       c.mcrs,
 		Redundants:   l.reds,
 		Versions:     vers,
+		RefCounts:    c.refc,
 	}
 
 	return result
