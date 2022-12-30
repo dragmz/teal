@@ -44,7 +44,7 @@ func run(a args) error {
 		Tool: sarif.Tool{
 			Driver: sarif.Driver{
 				Name:           "tealscan",
-				InformationUri: "",
+				InformationUri: "https://github.com/dragmz/teal",
 				Rules:          []sarif.Rule{},
 			},
 		},
