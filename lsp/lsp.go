@@ -1789,20 +1789,22 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			{
 				kind := "quickfix"
 				for _, v := range res.Versions {
-					cas = append(cas, lspCodeAction{
-						Title: fmt.Sprintf("Update version to %d", v.Version),
-						Kind:  &kind,
-						Command: &lspCommand{
-							Title:   "Update version",
-							Command: "teal.version.update",
-							Arguments: []interface{}{
-								tealUpdateVersion{
-									Uri:     req.Params.TextDocument.Uri,
-									Version: v.Version,
+					if teal.Overlaps(req.Params.Range, v) {
+						cas = append(cas, lspCodeAction{
+							Title: fmt.Sprintf("Update version to %d", v.Version),
+							Kind:  &kind,
+							Command: &lspCommand{
+								Title:   "Update version",
+								Command: "teal.version.update",
+								Arguments: []interface{}{
+									tealUpdateVersion{
+										Uri:     req.Params.TextDocument.Uri,
+										Version: v.Version,
+									},
 								},
 							},
-						},
-					})
+						})
+					}
 				}
 			}
 			return l.success(h.Id, cas)
@@ -1841,21 +1843,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			*kind = 1
 			hs := []lspDocumentHighlight{}
 
-			name := func() string {
-				for _, sym := range res.Symbols {
-					if teal.Overlaps(req.Params.Position, sym) {
-						return sym.Name()
-					}
-				}
-
-				for _, ref := range res.SymbolRefs {
-					if teal.Overlaps(req.Params.Position, ref) {
-						return ref.String()
-					}
-				}
-
-				return ""
-			}()
+			name := res.SymOrRefAt(req.Params.Position)
 
 			for _, sym := range res.Symbols {
 				if sym.Name() == name {

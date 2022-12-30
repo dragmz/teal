@@ -2268,17 +2268,30 @@ func (e *PushBytessExpr) String() string {
 	return fmt.Sprintf("pushbytess %s", strings.Join(ss, " "))
 }
 
-type Bn256AddExpr struct{}
-
-func (e *Bn256AddExpr) String() string {
-	return "bn256_add"
+type EcAddExpr struct {
+	Group EcGroup
 }
 
-func (e *Bn256AddExpr) Cost(b *VmBranch) []int {
-	return []int{70}
+func (e *EcAddExpr) String() string {
+	return fmt.Sprintf("ec_add %d", e.Group)
 }
 
-func (e *Bn256AddExpr) Execute(b *VmBranch) error {
+func (e *EcAddExpr) Cost(b *VmBranch) []int {
+	switch e.Group {
+	case BN254_G1:
+		return []int{10}
+	case BN254_G2:
+		return []int{10}
+	case BLS12_381_G1:
+		return []int{20}
+	case BLS12_381_G2:
+		return []int{20}
+	default:
+		panic("not supported")
+	}
+}
+
+func (e *EcAddExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.pop(VmTypeBytes)
 	b.push(VmValue{T: VmTypeBytes})
@@ -2286,19 +2299,30 @@ func (e *Bn256AddExpr) Execute(b *VmBranch) error {
 	return nil
 }
 
-var Bn256Add = &Bn256AddExpr{}
-
-type Bn256ScalarMulExpr struct{}
-
-func (e *Bn256ScalarMulExpr) String() string {
-	return "bn256_scalar_mul"
+type EcScalarMul struct {
+	Group EcGroup
 }
 
-func (e *Bn256ScalarMulExpr) Cost(b *VmBranch) []int {
-	return []int{970}
+func (e *EcScalarMul) String() string {
+	return fmt.Sprintf("ec_scalar_mul %d", e.Group)
 }
 
-func (e *Bn256ScalarMulExpr) Execute(b *VmBranch) error {
+func (e *EcScalarMul) Cost(b *VmBranch) []int {
+	switch e.Group {
+	case BN254_G1:
+		return []int{100}
+	case BN254_G2:
+		return []int{100}
+	case BLS12_381_G1:
+		return []int{200}
+	case BLS12_381_G2:
+		return []int{200}
+	default:
+		panic("not supported")
+	}
+}
+
+func (e *EcScalarMul) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.pop(VmTypeBytes)
 	b.push(VmValue{T: VmTypeBytes})
@@ -2306,19 +2330,30 @@ func (e *Bn256ScalarMulExpr) Execute(b *VmBranch) error {
 	return nil
 }
 
-var Bn256ScalarMul = &Bn256ScalarMulExpr{}
-
-type Bn256PairingExpr struct{}
-
-func (e *Bn256PairingExpr) String() string {
-	return "bn256_pairing"
+type EcPairingCheckExpr struct {
+	Group EcGroup
 }
 
-func (e *Bn256PairingExpr) Cost(b *VmBranch) []int {
-	return []int{8700}
+func (e *EcPairingCheckExpr) String() string {
+	return fmt.Sprintf("ec_pairing_check %d", e.Group)
 }
 
-func (e *Bn256PairingExpr) Execute(b *VmBranch) error {
+func (e *EcPairingCheckExpr) Cost(b *VmBranch) []int {
+	switch e.Group {
+	case BN254_G1:
+		return []int{1000}
+	case BN254_G2:
+		return []int{1000}
+	case BLS12_381_G1:
+		return []int{2000}
+	case BLS12_381_G2:
+		return []int{2000}
+	default:
+		panic("not supported")
+	}
+}
+
+func (e *EcPairingCheckExpr) Execute(b *VmBranch) error {
 	b.pop(VmTypeBytes)
 	b.pop(VmTypeBytes)
 	b.push(VmValue{T: VmTypeUint64})
@@ -2326,7 +2361,96 @@ func (e *Bn256PairingExpr) Execute(b *VmBranch) error {
 	return nil
 }
 
-var Bn256Pairing = &Bn256PairingExpr{}
+type EcMultiExpExpr struct {
+	Group EcGroup
+}
+
+func (e *EcMultiExpExpr) String() string {
+	return fmt.Sprintf("ec_multi_exp %d", e.Group)
+}
+
+func (e *EcMultiExpExpr) Execute(b *VmBranch) error {
+	b.pop(VmTypeBytes)
+	b.pop(VmTypeBytes)
+	b.push(VmValue{T: VmTypeBytes})
+	b.Line++
+	return nil
+}
+
+func (e *EcMultiExpExpr) Cost(b *VmBranch) []int {
+	switch e.Group {
+	case BN254_G1:
+		return []int{100}
+	case BN254_G2:
+		return []int{100}
+	case BLS12_381_G1:
+		return []int{200}
+	case BLS12_381_G2:
+		return []int{200}
+	default:
+		panic("not supported")
+	}
+}
+
+type EcSubgroupCheckExpr struct {
+	Group EcGroup
+}
+
+func (e *EcSubgroupCheckExpr) String() string {
+	return fmt.Sprintf("ec_subgroup_check %d", e.Group)
+}
+
+func (e *EcSubgroupCheckExpr) Execute(b *VmBranch) error {
+	b.pop(VmTypeBytes)
+	b.push(VmValue{T: VmTypeUint64})
+	b.Line++
+	return nil
+}
+
+func (e *EcSubgroupCheckExpr) Cost(b *VmBranch) []int {
+	switch e.Group {
+	case BN254_G1:
+		return []int{100}
+	case BN254_G2:
+		return []int{100}
+	case BLS12_381_G1:
+		return []int{200}
+	case BLS12_381_G2:
+		return []int{200}
+	default:
+		panic("not supported")
+	}
+}
+
+type EcMapToExpr struct {
+	Group EcGroup
+}
+
+func (e *EcMapToExpr) String() string {
+	return fmt.Sprintf("ec_map_to %d", e.Group)
+}
+
+func (e *EcMapToExpr) Execute(b *VmBranch) error {
+	b.pop(VmTypeBytes)
+	b.push(VmValue{T: VmTypeBytes})
+	b.Line++
+	return nil
+}
+
+func (e *EcMapToExpr) Cost(b *VmBranch) []int {
+	switch e.Group {
+	case BN254_G1:
+		return []int{100}
+	case BN254_G2:
+		return []int{100}
+	case BLS12_381_G1:
+		return []int{200}
+	case BLS12_381_G2:
+		return []int{200}
+	default:
+		panic("not supported")
+	}
+}
 
 type FrameBuryExpr struct {
 	Index int8

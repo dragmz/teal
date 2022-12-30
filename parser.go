@@ -214,6 +214,25 @@ func readGlobalField(v uint64, s string) (GlobalField, bool, error) {
 	return GlobalField(value), false, nil
 }
 
+func readEcGroupField(v uint64, s string) (EcGroup, bool, error) {
+	spec, ok := ecGroupSpecByName[s]
+	if ok {
+		needed := spec.Version()
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
+	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return EcGroup(value), false, nil
+}
+
 func readBase64EncodingField(v uint64, s string) (Base64Encoding, bool, error) {
 	spec, ok := base64EncodingSpecByName[s]
 	if ok {

@@ -38,6 +38,7 @@ const (
 	OpArgTypePragmaName
 	OpArgTypeBase64EncodingField
 	OpArgTypeBlockField
+	OpArgTypeEcGroupField
 )
 
 var OpArgTypes = []NewOpArgType{
@@ -54,6 +55,7 @@ var OpArgTypes = []NewOpArgType{
 	OpArgTypeVrfStandard,
 	OpArgTypeBase64EncodingField,
 	OpArgTypeBlockField,
+	OpArgTypeEcGroupField,
 }
 
 var OpArgVals map[NewOpArgType][]opItemArgVal
@@ -200,6 +202,18 @@ func init() {
 				})
 				vals2[int(spec.field)] = spec.field.String()
 			}
+
+		case OpArgTypeEcGroupField:
+			for name, spec := range ecGroupSpecByName {
+				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
+					Name:    name,
+					Docs:    spec.Note(),
+					Version: spec.Version(),
+				})
+				vals2[int(spec.field)] = spec.field.String()
+			}
+
 		case OpArgTypeBlockField:
 			for name, spec := range blockFieldSpecByName {
 				vals = append(vals, opItemArgVal{
@@ -268,6 +282,8 @@ func (t NewOpArgType) String() string {
 		return "base64 encoding"
 	case OpArgTypeBlockField:
 		return "block field"
+	case OpArgTypeEcGroupField:
+		return "EC group field index"
 	}
 }
 
@@ -442,9 +458,12 @@ var opsList = []opListItem{
 	{"bsqrt", opBytesSqrt},
 	{"divw", opDivw},
 	{"sha3_256", opSHA3_256},
-	{"bn256_add", opBn256Add},
-	{"bn256_scalar_mul", opBn256ScalarMul},
-	{"bn256_pairing", opBn256Pairing},
+	{"ec_add", opEcAdd},
+	{"ec_scalar_mul", opEcScalarMul},
+	{"ec_pairing_check", opEcPairingCheck},
+	{"ec_multi_exp", opEcMultiExp},
+	{"ec_subgroup_check", opEcSubgroupCheck},
+	{"ec_map_to", opEcMapTo},
 	{"b+", opBytesPlus},
 	{"b-", opBytesMinus},
 	{"b/", opBytesDiv},
@@ -497,6 +516,7 @@ type ProcessContext interface {
 	minVersion(v uint64)
 	modeMinVersion(mode ProgramMode, v uint64)
 
+	mustReadEcGroup(name string) EcGroup
 	mustReadBase64Encoding(name string) Base64Encoding
 	mustReadPragma(name string) uint64
 	mustReadAddr(name string) string
@@ -589,6 +609,15 @@ func (c *docContext) mustReadSignature(name string) (v string) {
 	c.arg(opItemArg{
 		Name: name,
 		Type: OpArgTypeSignature,
+	})
+
+	return
+}
+
+func (c *docContext) mustReadEcGroup(name string) (v EcGroup) {
+	c.arg(opItemArg{
+		Name: name,
+		Type: OpArgTypeEcGroupField,
 	})
 
 	return
@@ -1169,6 +1198,21 @@ func (c *parserContext) parseInt8(name string) int8 {
 	return v
 }
 
+func (c *parserContext) parseEcGroup(name string) EcGroup {
+	v, isconst, err := readEcGroupField(c.version, c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse EC group field: %s", name))
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
+	}
+
+	return v
+}
+
 func (c *parserContext) parseBase64Encoding(name string) Base64Encoding {
 	v, isconst, err := readBase64EncodingField(c.version, c.args.Text())
 	if err != nil {
@@ -1368,6 +1412,11 @@ func (c *parserContext) mustReadItxnField(name string) TxnField {
 func (c *parserContext) mustReadTxnaField(name string) TxnField {
 	c.mustReadArg(name)
 	return c.parseTxnField(txnaFieldContext, name)
+}
+
+func (c *parserContext) mustReadEcGroup(name string) EcGroup {
+	c.mustReadArg(name)
+	return c.parseEcGroup(name)
 }
 
 func (c *parserContext) mustReadBase64Encoding(name string) Base64Encoding {
@@ -2204,18 +2253,40 @@ func opSHA3_256(c ProcessContext) {
 	c.minVersion(7)
 	c.emit(Sha3256)
 }
-func opBn256Add(c ProcessContext) {
+func opEcAdd(c ProcessContext) {
 	c.minVersion(9)
-	c.emit(Bn256Add)
+	v := c.mustReadEcGroup("curve")
+	c.emit(&EcAddExpr{Group: v})
 }
-func opBn256ScalarMul(c ProcessContext) {
+func opEcScalarMul(c ProcessContext) {
 	c.minVersion(9)
-	c.emit(Bn256ScalarMul)
+	v := c.mustReadEcGroup("curve")
+	c.emit(&EcScalarMul{Group: v})
 }
-func opBn256Pairing(c ProcessContext) {
+func opEcPairingCheck(c ProcessContext) {
 	c.minVersion(9)
-	c.emit(Bn256Pairing)
+	v := c.mustReadEcGroup("curve")
+	c.emit(&EcPairingCheckExpr{Group: v})
 }
+
+func opEcMultiExp(c ProcessContext) {
+	c.minVersion(9)
+	v := c.mustReadEcGroup("curve")
+	c.emit(&EcMultiExpExpr{Group: v})
+}
+
+func opEcSubgroupCheck(c ProcessContext) {
+	c.minVersion(9)
+	v := c.mustReadEcGroup("curve")
+	c.emit(&EcSubgroupCheckExpr{Group: v})
+}
+
+func opEcMapTo(c ProcessContext) {
+	c.minVersion(9)
+	v := c.mustReadEcGroup("curve")
+	c.emit(&EcMapToExpr{Group: v})
+}
+
 func opBytesPlus(c ProcessContext) {
 	c.minVersion(4)
 	c.emit(BytesPlus)
@@ -2455,8 +2526,27 @@ func (ln Line) ImmAt(pos int) (Token, int, bool) {
 }
 
 type RequiredVersion struct {
-	Line    int
+	Line  int
+	Begin int
+	End   int
+
 	Version uint64
+}
+
+func (v RequiredVersion) StartLine() int {
+	return v.Line
+}
+
+func (v RequiredVersion) EndLine() int {
+	return v.Line
+}
+
+func (v RequiredVersion) StartCharacter() int {
+	return v.Begin
+}
+
+func (v RequiredVersion) EndCharacter() int {
+	return v.End
 }
 
 type ProcessResult struct {
@@ -2720,6 +2810,24 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 	}
 
 	return res
+}
+
+func (r ProcessResult) SymOrRefAt(rg Range) string {
+	for _, sym := range r.Symbols {
+		if Overlaps(rg, sym) {
+			if Overlaps(rg, sym) {
+				return sym.Name()
+			}
+		}
+	}
+
+	for _, ref := range r.SymbolRefs {
+		if Overlaps(rg, ref) {
+			return ref.String()
+		}
+	}
+
+	return ""
 }
 
 func (r ProcessResult) ArgAt(l int, ch int) (opItemArg, int, bool) {
@@ -3142,8 +3250,12 @@ func Process(source string) *ProcessResult {
 							s:     DiagErr,
 						})
 
+						var ln Line = c.args.ts
+
 						vers = append(vers, RequiredVersion{
 							Line:    curr.l,
+							Begin:   ln.Begin(),
+							End:     ln.End(),
 							Version: min,
 						})
 					}

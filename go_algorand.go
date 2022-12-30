@@ -1750,6 +1750,13 @@ func init() {
 		ecdsaCurveSpecByName[s.field.String()] = s
 	}
 
+	equal(len(ecGroupSpecs), len(ecGroupNames))
+	for i, s := range ecGroupSpecs {
+		equal(int(s.field), i)
+		ecGroupNames[s.field] = s.field.String()
+		ecGroupSpecByName[s.field.String()] = s
+	}
+
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))
 	for i, s := range base64EncodingSpecs {
 		equal(int(s.field), i)
@@ -2100,6 +2107,97 @@ func (i EcdsaCurve) String() string {
 	}
 	return _EcdsaCurve_name[_EcdsaCurve_index[i]:_EcdsaCurve_index[i+1]]
 }
+
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[BN254_G1-0]
+	_ = x[BN254_G2-1]
+	_ = x[BLS12_381_G1-2]
+	_ = x[BLS12_381_G2-3]
+	_ = x[invalidEcgroup-4]
+}
+
+const _EcGroup_name = "BN254_G1BN254_G2BLS12_381_G1BLS12_381_G2invalidEcgroup"
+
+var _EcGroup_index = [...]uint8{0, 8, 16, 28, 40, 54}
+
+func (i EcGroup) String() string {
+	if i < 0 || i >= EcGroup(len(_EcGroup_index)-1) {
+		return "EcGroup(" + strconv.FormatInt(int64(i), 10) + ")"
+	}
+	return _EcGroup_name[_EcGroup_index[i]:_EcGroup_index[i+1]]
+}
+
+// Ecgroup is an enum for `ec_` opcodes
+type EcGroup int
+
+const (
+	// BN254_G1 is the G1 group of BN254
+	BN254_G1 EcGroup = iota
+	// BN254_G2 is the G2 group of BN254
+	BN254_G2
+	// BL12_381_G1 specifies the G1 group of BLS 12-381
+	BLS12_381_G1
+	// BL12_381_G2 specifies the G2 group of BLS 12-381
+	BLS12_381_G2
+	invalidEcgroup // compile-time constant for number of fields
+)
+
+var ecGroupNames [invalidEcgroup]string
+
+type ecGroupSpec struct {
+	field EcGroup
+	doc   string
+}
+
+func (fs ecGroupSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs ecGroupSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs ecGroupSpec) OpVersion() uint64 {
+	return pairingVersion
+}
+func (fs ecGroupSpec) Version() uint64 {
+	return pairingVersion
+}
+func (fs ecGroupSpec) Note() string {
+	return fs.doc
+}
+
+var ecGroupSpecs = [...]ecGroupSpec{
+	{BN254_G1, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
+	{BN254_G2, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
+	{BLS12_381_G1, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
+	{BLS12_381_G2, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 48 byte Y"},
+}
+
+func ecGroupSpecByField(c EcGroup) (ecGroupSpec, bool) {
+	if int(c) >= len(ecGroupSpecs) {
+		return ecGroupSpec{}, false
+	}
+	return ecGroupSpecs[c], true
+}
+
+var ecGroupSpecByName = make(ecGroupNameSpecMap, len(ecGroupNames))
+
+type ecGroupNameSpecMap map[string]ecGroupSpec
+
+func (s ecGroupNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// EcGroups collects details about the constants used to describe EcGroups
+var EcGroups = FieldGroup{
+	"EC", "Groups",
+	ecGroupNames[:],
+	ecGroupSpecByName,
+}
+
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
