@@ -30,4 +30,6 @@ type Diagnostic interface {
 
 	String() string
 	Severity() DiagnosticSeverity
+
+	Rule() string
 }

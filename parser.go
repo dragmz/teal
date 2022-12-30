@@ -34,6 +34,10 @@ func (e parseError) Severity() DiagnosticSeverity {
 	return DiagErr
 }
 
+func (e parseError) Rule() string {
+	return "PARSE"
+}
+
 type lintError struct {
 	error
 
@@ -62,6 +66,10 @@ func (e lintError) String() string {
 
 func (e lintError) Severity() DiagnosticSeverity {
 	return e.s
+}
+
+func (e lintError) Rule() string {
+	return "LINT"
 }
 
 func readInt8(s string) (int8, error) {

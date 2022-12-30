@@ -40,12 +40,33 @@ func run(a args) error {
 		Runs:    []sarif.Run{},
 	}
 
+	rules := []sarif.Rule{
+		{
+			Id: "SYNTAX",
+			ShortDescription: sarif.Description{
+				Text: "Syntax checks",
+			},
+		},
+		{
+			Id: "PARSE",
+			ShortDescription: sarif.Description{
+				Text: "Parser checks",
+			},
+		},
+		{
+			Id: "LINT",
+			ShortDescription: sarif.Description{
+				Text: "Linter checks",
+			},
+		},
+	}
+
 	run := sarif.Run{
 		Tool: sarif.Tool{
 			Driver: sarif.Driver{
 				Name:           "tealscan",
 				InformationUri: "https://github.com/dragmz/teal",
-				Rules:          []sarif.Rule{},
+				Rules:          rules,
 			},
 		},
 		Artifacts: []sarif.Artifact{},
@@ -103,7 +124,8 @@ func run(a args) error {
 
 		for i, d := range res.Diagnostics {
 			run.Results = append(run.Results, sarif.Result{
-				Level: ToSarifLevel(d.Severity()),
+				RuleId: d.Rule(),
+				Level:  ToSarifLevel(d.Severity()),
 				Message: sarif.Message{
 					Text: d.String(),
 				},

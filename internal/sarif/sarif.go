@@ -17,7 +17,7 @@ type Result struct {
 	Message   Message          `json:"message"`
 	Locations []ResultLocation `json:"locations"`
 	RuleId    string           `json:"ruleId"`
-	RuleIndex int              `json:"ruleIndex"`
+	RuleIndex *int             `json:"ruleIndex,omitempty"`
 }
 
 type ResultLocation struct {
@@ -63,9 +63,9 @@ type Driver struct {
 
 type Rule struct {
 	Id               string      `json:"id"`
-	ShortDescription Description `json:"shortDescription"`
-	HelpUri          string      `json:"helpUri"`
-	Properties       []Property
+	ShortDescription Description `json:"shortDescription,omitempty"`
+	HelpUri          string      `json:"helpUri,omitempty"`
+	Properties       []Property  `json:"properties,omitempty"`
 }
 
 type Description struct {

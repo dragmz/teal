@@ -151,6 +151,10 @@ func (e lexerError) Severity() DiagnosticSeverity {
 	return DiagErr
 }
 
+func (e lexerError) Rule() string {
+	return "SYNTAX"
+}
+
 func (z *Lexer) readValue() {
 	p, n := utf8.DecodeRune(z.Source[z.i:])
 	if p == '"' {
