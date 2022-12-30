@@ -1,5 +1,0 @@
-#pragma version 9
-
-bn256_add
-bn256_scalar_mul
-bn256_pairing
