@@ -106,3 +106,42 @@ b test_label
 		}
 	}
 }
+
+func TestOverlaps(t *testing.T) {
+	type test struct {
+		a Range
+		b Range
+
+		o bool
+	}
+
+	tests := []test{
+		{testRange{}, testRange{}, true},
+		{testRange{}, testRange{0, 1, 0, 1}, false},
+		{testRange{0, 1, 0, 1}, testRange{0, 1, 0, 1}, true},
+		{testRange{1, 1, 1, 1}, testRange{1, 1, 1, 1}, true},
+		{testRange{1, 1, 1, 2}, testRange{1, 1, 1, 1}, true},
+		{testRange{1, 1, 1, 2}, testRange{1, 2, 1, 2}, true},
+		{testRange{1, 1, 1, 2}, testRange{1, 0, 1, 0}, false},
+		{testRange{1, 1, 1, 2}, testRange{1, 3, 1, 3}, false},
+		{testRange{1, 1, 1, 2}, testRange{0, 1, 1, 1}, true},
+		{testRange{1, 1, 1, 2}, testRange{0, 2, 1, 2}, true},
+		{testRange{1, 1, 1, 2}, testRange{0, 0, 1, 0}, false},
+		{testRange{1, 1, 1, 2}, testRange{0, 3, 1, 3}, false},
+		{testRange{1, 1, 1, 2}, testRange{0, 1, 0, 1}, false},
+		{testRange{1, 1, 1, 2}, testRange{0, 2, 0, 2}, false},
+		{testRange{1, 1, 1, 2}, testRange{0, 0, 0, 0}, false},
+		{testRange{1, 1, 1, 2}, testRange{0, 3, 0, 3}, false},
+		{testRange{1, 1, 1, 2}, testRange{2, 1, 2, 1}, false},
+		{testRange{1, 1, 1, 2}, testRange{2, 2, 2, 2}, false},
+		{testRange{1, 1, 1, 2}, testRange{2, 0, 2, 0}, false},
+		{testRange{1, 1, 1, 2}, testRange{2, 3, 2, 3}, false},
+	}
+
+	for i, test := range tests {
+		o := Overlaps(test.a, test.b)
+		if o != test.o {
+			t.Errorf("unexpected results - test: %d, actual: %t", i, o)
+		}
+	}
+}
