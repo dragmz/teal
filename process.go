@@ -2812,6 +2812,26 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 	return res
 }
 
+func (r ProcessResult) SymByName(name string) []Symbol {
+	var res []Symbol
+	for _, sym := range r.Symbols {
+		if sym.Name() == name {
+			res = append(res, sym)
+		}
+	}
+	return res
+}
+
+func (r ProcessResult) SymRefByName(name string) []Token {
+	var res []Token
+	for _, sym := range r.SymbolRefs {
+		if sym.String() == name {
+			res = append(res, sym)
+		}
+	}
+	return res
+}
+
 func (r ProcessResult) SymOrRefAt(rg Range) string {
 	for _, sym := range r.Symbols {
 		if Overlaps(rg, sym) {

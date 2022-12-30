@@ -1045,22 +1045,21 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				name := args[0].Name
 
 				edits := []lspTextEdit{}
-				for _, sym := range res.Symbols {
-					if sym.Name() == body.Params.Arguments[0].Name {
-						edits = append(edits, lspTextEdit{
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin(),
-								},
-								End: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.End(),
-								},
+
+				for _, sym := range res.SymByName(body.Params.Arguments[0].Name) {
+					edits = append(edits, lspTextEdit{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      sym.Line(),
+								Character: sym.Begin(),
 							},
-							NewText: "",
-						})
-					}
+							End: lspPosition{
+								Line:      sym.Line(),
+								Character: sym.End(),
+							},
+						},
+						NewText: "",
+					})
 				}
 
 				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
@@ -1190,78 +1189,69 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			chs := []lspTextEdit{}
 			for _, edited := range res.SymbolsWithin(req.Params.Position) {
-				for _, sym := range res.Symbols {
-					if sym.Name() == edited.Name() {
-						chs = append(chs, lspTextEdit{
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin(),
-								},
-								End: lspPosition{
-									Line:      sym.Line(),
-									Character: sym.Begin() + len(sym.Name()),
-								},
+				for _, sym := range res.SymByName(edited.Name()) {
+					chs = append(chs, lspTextEdit{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      sym.Line(),
+								Character: sym.Begin(),
 							},
-							NewText: req.Params.NewName,
-						})
-					}
+							End: lspPosition{
+								Line:      sym.Line(),
+								Character: sym.Begin() + len(sym.Name()),
+							},
+						},
+						NewText: req.Params.NewName,
+					})
 				}
-				for _, ref := range res.SymbolRefs {
-					if ref.String() == edited.Name() {
-						chs = append(chs, lspTextEdit{
-							Range: lspRange{
-								Start: lspPosition{
-									Line:      ref.Line(),
-									Character: ref.Begin(),
-								},
-								End: lspPosition{
-									Line:      ref.Line(),
-									Character: ref.End(),
-								},
+				for _, ref := range res.SymRefByName(edited.Name()) {
+					chs = append(chs, lspTextEdit{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      ref.Line(),
+								Character: ref.Begin(),
 							},
-							NewText: req.Params.NewName,
-						})
-					}
+							End: lspPosition{
+								Line:      ref.Line(),
+								Character: ref.End(),
+							},
+						},
+						NewText: req.Params.NewName,
+					})
 				}
 			}
 
-			for _, edited := range res.SymbolRefs {
-				if edited.Line() == req.Params.Position.Line && req.Params.Position.Character >= edited.Begin() && req.Params.Position.Character <= edited.End() {
-					for _, sym := range res.Symbols {
-						if sym.Name() == edited.String() {
-							chs = append(chs, lspTextEdit{
-								Range: lspRange{
-									Start: lspPosition{
-										Line:      sym.Line(),
-										Character: sym.Begin(),
-									},
-									End: lspPosition{
-										Line:      sym.Line(),
-										Character: sym.Begin() + len(sym.Name()),
-									},
-								},
-								NewText: req.Params.NewName,
-							})
-						}
-					}
-					for _, ref := range res.SymbolRefs {
-						if ref.String() == edited.String() {
-							chs = append(chs, lspTextEdit{
-								Range: lspRange{
-									Start: lspPosition{
-										Line:      ref.Line(),
-										Character: ref.Begin(),
-									},
-									End: lspPosition{
-										Line:      ref.Line(),
-										Character: ref.End(),
-									},
-								},
-								NewText: req.Params.NewName,
-							})
-						}
-					}
+			for _, edited := range res.SymbolRefsWithin(req.Params.Position) {
+				for _, sym := range res.SymByName(edited.String()) {
+					chs = append(chs, lspTextEdit{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      sym.Line(),
+								Character: sym.Begin(),
+							},
+							End: lspPosition{
+								Line:      sym.Line(),
+								Character: sym.Begin() + len(sym.Name()),
+							},
+						},
+						NewText: req.Params.NewName,
+					})
+				}
+
+				for _, ref := range res.SymRefByName(edited.String()) {
+					chs = append(chs, lspTextEdit{
+						Range: lspRange{
+							Start: lspPosition{
+								Line:      ref.Line(),
+								Character: ref.Begin(),
+							},
+							End: lspPosition{
+								Line:      ref.Line(),
+								Character: ref.End(),
+							},
+						},
+						NewText: req.Params.NewName,
+					})
 				}
 			}
 
@@ -1845,41 +1835,36 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			name := res.SymOrRefAt(req.Params.Position)
 
-			for _, sym := range res.Symbols {
-				if sym.Name() == name {
-					hs = append(hs, lspDocumentHighlight{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin(),
-							},
-							End: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin() + len(sym.Name()),
-							},
+			for _, sym := range res.SymByName(name) {
+				hs = append(hs, lspDocumentHighlight{
+					Range: lspRange{
+						Start: lspPosition{
+							Line:      sym.Line(),
+							Character: sym.Begin(),
 						},
-						Kind: kind,
-					})
-				}
+						End: lspPosition{
+							Line:      sym.Line(),
+							Character: sym.Begin() + len(sym.Name()),
+						},
+					},
+					Kind: kind,
+				})
 			}
 
-			for _, ref := range res.SymbolRefs {
-				if ref.String() == name {
-					hs = append(hs, lspDocumentHighlight{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      ref.Line(),
-								Character: ref.Begin(),
-							},
-							End: lspPosition{
-								Line:      ref.Line(),
-								Character: ref.End(),
-							},
+			for _, ref := range res.SymRefByName(name) {
+				hs = append(hs, lspDocumentHighlight{
+					Range: lspRange{
+						Start: lspPosition{
+							Line:      ref.Line(),
+							Character: ref.Begin(),
 						},
-						Kind: kind,
-					})
-
-				}
+						End: lspPosition{
+							Line:      ref.Line(),
+							Character: ref.End(),
+						},
+					},
+					Kind: kind,
+				})
 			}
 
 			l.success(h.Id, hs)
