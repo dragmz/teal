@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/dragmz/teal/protocol"
-	"github.com/dragmz/teal/transactions"
+	"github.com/dragmz/teal/internal/protocol"
+	"github.com/dragmz/teal/internal/transactions"
 )
 
 // Copyright (C) 2019-2022 Algorand, Inc.
