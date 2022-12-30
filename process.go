@@ -2815,9 +2815,7 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 func (r ProcessResult) SymOrRefAt(rg Range) string {
 	for _, sym := range r.Symbols {
 		if Overlaps(rg, sym) {
-			if Overlaps(rg, sym) {
-				return sym.Name()
-			}
+			return sym.Name()
 		}
 	}
 
