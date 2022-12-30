@@ -36,6 +36,9 @@ jobs:
     - name: Build tealsp darwin/arm64
       run: env GOOS=darwin GOARCH=arm64 go build -o tealsp_darwin_arm64 cmd/tealsp/main.go
       
+    - name: Build tealsarif linux/x64
+      run: env GOOS=linux GOARCH=amd64 go build -o tealsarif_linux_x64 cmd/tealsarif/main.go
+      
     - name: Prepare version file
       run: echo $GITHUB_SHA > version
 
@@ -44,5 +47,5 @@ jobs:
       with:
         allowUpdates: true
         tag: dev
-        artifacts: "tealsp_win32_x64.exe,tealsp_linux_x64,tealsp_darwin_x64,tealsp_darwin_arm64,version"
+        artifacts: "tealsp_win32_x64.exe,tealsp_linux_x64,tealsp_darwin_x64,tealsp_darwin_arm64,tealsarif_linux_x64,version"
         prerelease: true
