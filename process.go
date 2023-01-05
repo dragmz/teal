@@ -3249,6 +3249,7 @@ func Process(source string) *ProcessResult {
 						min = info.SigVersion
 					}
 
+					// TODO: the mode / version check rules need refactoring (into linter?)
 					if min == 0 {
 						c.diag = append(c.diag, lintError{
 							error: errors.Errorf("opcode not available in the current mode: %s", c.mode),
@@ -3256,6 +3257,7 @@ func Process(source string) *ProcessResult {
 							b:     curr.b,
 							e:     curr.e,
 							s:     DiagErr,
+							r:     OpCodeAvailabilityInModeRuleInstance.Id(),
 						})
 					}
 
@@ -3266,6 +3268,7 @@ func Process(source string) *ProcessResult {
 							b:     curr.b,
 							e:     curr.e,
 							s:     DiagErr,
+							r:     OpCodeVersionCompatibilityCheckRuleInstance.Id(),
 						})
 
 						var ln Line = c.args.ts
@@ -3305,6 +3308,7 @@ func Process(source string) *ProcessResult {
 			b:     ln.Begin(),
 			e:     ln.End(),
 			s:     le.Severity(),
+			r:     le.Rule(),
 		})
 	}
 

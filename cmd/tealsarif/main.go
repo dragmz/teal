@@ -53,12 +53,15 @@ func run(a args) error {
 				Text: "Parser checks",
 			},
 		},
-		{
-			Id: "LINT",
+	}
+
+	for _, r := range teal.LintRules {
+		rules = append(rules, sarif.Rule{
+			Id: r.Id(),
 			ShortDescription: sarif.Description{
-				Text: "Linter checks",
+				Text: r.Desc(),
 			},
-		},
+		})
 	}
 
 	run := sarif.Run{

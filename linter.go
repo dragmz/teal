@@ -38,6 +38,7 @@ type LineError interface {
 	error
 	Line() int
 	Severity() DiagnosticSeverity
+	Rule() string
 }
 
 type Linter struct {
@@ -50,6 +51,7 @@ type Linter struct {
 type DuplicateLabelError struct {
 	l    int
 	name string
+	rule string
 }
 
 func (e DuplicateLabelError) Line() int {
@@ -64,9 +66,14 @@ func (e DuplicateLabelError) Severity() DiagnosticSeverity {
 	return DiagErr
 }
 
+func (e DuplicateLabelError) Rule() string {
+	return e.rule
+}
+
 type UnusedLabelError struct {
 	l    int
 	name string
+	rule string
 }
 
 func (e *UnusedLabelError) Line() int {
@@ -81,8 +88,13 @@ func (e UnusedLabelError) Severity() DiagnosticSeverity {
 	return DiagWarn
 }
 
+func (e UnusedLabelError) Rule() string {
+	return e.rule
+}
+
 type UnreachableCodeError struct {
-	l int
+	l    int
+	rule string
 }
 
 func (e UnreachableCodeError) Line() int {
@@ -97,8 +109,13 @@ func (e UnreachableCodeError) Severity() DiagnosticSeverity {
 	return DiagWarn
 }
 
+func (e UnreachableCodeError) Rule() string {
+	return e.rule
+}
+
 type BJustBeforeLabelError struct {
-	l int
+	l    int
+	rule string
 }
 
 func (e BJustBeforeLabelError) Line() int {
@@ -113,8 +130,13 @@ func (e BJustBeforeLabelError) Severity() DiagnosticSeverity {
 	return DiagWarn
 }
 
+func (e BJustBeforeLabelError) Rule() string {
+	return e.rule
+}
+
 type EmptyLoopError struct {
-	l int
+	l    int
+	rule string
 }
 
 func (e EmptyLoopError) Line() int {
@@ -129,9 +151,14 @@ func (e EmptyLoopError) Severity() DiagnosticSeverity {
 	return DiagWarn
 }
 
+func (e EmptyLoopError) Rule() string {
+	return e.rule
+}
+
 type MissingLabelError struct {
 	l    int
 	name string
+	rule string
 }
 
 func (e MissingLabelError) Line() int {
@@ -146,8 +173,13 @@ func (e MissingLabelError) Severity() DiagnosticSeverity {
 	return DiagErr
 }
 
+func (e MissingLabelError) Rule() string {
+	return e.rule
+}
+
 type InfiniteLoopError struct {
-	l int
+	l    int
+	rule string
 }
 
 func (e InfiniteLoopError) Line() int {
@@ -162,8 +194,13 @@ func (e InfiniteLoopError) Severity() DiagnosticSeverity {
 	return DiagErr
 }
 
+func (e InfiniteLoopError) Rule() string {
+	return e.rule
+}
+
 type PragmaVersionAfterInstrError struct {
-	l int
+	l    int
+	rule string
 }
 
 func (e PragmaVersionAfterInstrError) Line() int {
@@ -176,6 +213,10 @@ func (e PragmaVersionAfterInstrError) Error() string {
 
 func (e PragmaVersionAfterInstrError) Severity() DiagnosticSeverity {
 	return DiagErr
+}
+
+func (e PragmaVersionAfterInstrError) Rule() string {
+	return e.rule
 }
 
 func (l *Linter) getLabelsUsers() map[string][]int {
@@ -206,19 +247,94 @@ func (l *Linter) getAllLabels() map[string][]int {
 	return all
 }
 
-func (l *Linter) checkUnusedLabels() {
+func (l *Linter) canEscape(from, to int) bool {
+	labels := l.getAllLabels()
+
+	for i := from; i <= to; i++ {
+		switch op := l.l[i].(type) {
+		case usesLabels:
+			for _, lbl := range op.Labels() {
+				for _, idx := range labels[lbl.Name] {
+					if idx < from || idx > to {
+						// TODO: check if the target label block is escapable
+						return true
+					}
+				}
+			}
+		case Terminator:
+			return true
+		}
+	}
+
+	return false
+}
+
+type LintRule interface {
+	Id() string
+	Desc() string
+}
+
+type runnableRule interface {
+	Run(l *Linter)
+}
+
+type DuplicateLabelsRule struct {
+}
+
+func (r DuplicateLabelsRule) Id() string {
+	return "LINT0001"
+}
+
+func (r DuplicateLabelsRule) Desc() string {
+	return "Checks for duplicate labels in a single TEAL source file"
+}
+
+func (r DuplicateLabelsRule) Run(l *Linter) {
+	labels := l.getAllLabels()
+	for name, lines := range labels {
+		if len(lines) > 1 {
+			for _, line := range lines {
+				l.errs = append(l.errs, DuplicateLabelError{l: line, name: name, rule: r.Id()})
+			}
+		}
+	}
+}
+
+type UnusedLabelsRule struct {
+}
+
+func (r UnusedLabelsRule) Id() string {
+	return "LINT0002"
+}
+
+func (r UnusedLabelsRule) Desc() string {
+	return "Checks for labels that are never referenced in the code"
+}
+
+func (r UnusedLabelsRule) Run(l *Linter) {
 	used := l.getLabelsUsers()
 	for name, lines := range l.getAllLabels() {
 		if len(used[name]) == 0 {
 			for _, line := range lines {
-				l.errs = append(l.errs, &UnusedLabelError{l: line, name: name})
+				l.errs = append(l.errs, &UnusedLabelError{l: line, name: name, rule: r.Id()})
 				l.reds = append(l.reds, &RedundantLabelLine{line: line, name: name})
 			}
 		}
 	}
 }
 
-func (l *Linter) checkOpsAfterUnconditionalBranch() {
+type OpsAfterUnconditionalBranchRule struct {
+}
+
+func (r OpsAfterUnconditionalBranchRule) Id() string {
+	return "LINT0003"
+}
+
+func (r OpsAfterUnconditionalBranchRule) Desc() string {
+	return "Checks for ops after an unconditional branch call"
+}
+
+func (r OpsAfterUnconditionalBranchRule) Run(l *Linter) {
 	used := l.getLabelsUsers()
 
 	for i := 0; i < len(l.l); i++ {
@@ -244,14 +360,25 @@ func (l *Linter) checkOpsAfterUnconditionalBranch() {
 					}
 				case Nop:
 				default:
-					l.errs = append(l.errs, UnreachableCodeError{i})
+					l.errs = append(l.errs, UnreachableCodeError{l: i, rule: r.Id()})
 				}
 			}
 		}
 	}
 }
 
-func (l *Linter) checkBranchJustBeforeLabel() {
+type CheckBranchJustBeforeLabelRule struct {
+}
+
+func (r CheckBranchJustBeforeLabelRule) Id() string {
+	return "LINT0004"
+}
+
+func (r CheckBranchJustBeforeLabelRule) Desc() string {
+	return "Checks for redundant branch calls that are placed just before their target labels"
+}
+
+func (r CheckBranchJustBeforeLabelRule) Run(l *Linter) {
 	for i, o := range l.l {
 		func() {
 			if i >= len(l.l)-1 {
@@ -275,7 +402,7 @@ func (l *Linter) checkBranchJustBeforeLabel() {
 						switch n := n.(type) {
 						case *LabelExpr:
 							if n.Name == o.Label.Name {
-								l.errs = append(l.errs, BJustBeforeLabelError{l: i})
+								l.errs = append(l.errs, BJustBeforeLabelError{l: i, rule: r.Id()})
 								l.reds = append(l.reds, RedundantBLine{line: i})
 								return
 							}
@@ -292,7 +419,17 @@ func (l *Linter) checkBranchJustBeforeLabel() {
 	}
 }
 
-func (l *Linter) checkLoops() {
+type CheckLoopsRule struct{}
+
+func (r CheckLoopsRule) Id() string {
+	return "LINT0005"
+}
+
+func (r CheckLoopsRule) Desc() string {
+	return "Checks infinite loops presence"
+}
+
+func (r CheckLoopsRule) Run(l *Linter) {
 	used := l.getLabelsUsers()
 	all := l.getAllLabels()
 
@@ -300,7 +437,7 @@ func (l *Linter) checkLoops() {
 		_, ok := all[name]
 		if !ok {
 			for _, user := range users {
-				l.errs = append(l.errs, MissingLabelError{l: user, name: name})
+				l.errs = append(l.errs, MissingLabelError{l: user, name: name, rule: r.Id()})
 			}
 		}
 	}
@@ -331,7 +468,7 @@ func (l *Linter) checkLoops() {
 						case *LabelExpr:
 							if n.Name == o.Label.Name {
 								if !l.canEscape(j, i) {
-									l.errs = append(l.errs, InfiniteLoopError{l: i})
+									l.errs = append(l.errs, InfiniteLoopError{l: i, rule: r.Id()})
 								}
 								return
 							}
@@ -345,47 +482,25 @@ func (l *Linter) checkLoops() {
 	}
 }
 
-func (l *Linter) canEscape(from, to int) bool {
-	labels := l.getAllLabels()
+type CheckPragmaRule struct{}
 
-	for i := from; i <= to; i++ {
-		switch op := l.l[i].(type) {
-		case usesLabels:
-			for _, lbl := range op.Labels() {
-				for _, idx := range labels[lbl.Name] {
-					if idx < from || idx > to {
-						// TODO: check if the target label block is escapable
-						return true
-					}
-				}
-			}
-		case Terminator:
-			return true
-		}
-	}
-
-	return false
+func (r CheckPragmaRule) Id() string {
+	return "LINT0006"
 }
 
-func (l *Linter) checkDuplicatedLabels() {
-	labels := l.getAllLabels()
-	for name, lines := range labels {
-		if len(lines) > 1 {
-			for _, line := range lines {
-				l.errs = append(l.errs, DuplicateLabelError{l: line, name: name})
-			}
-		}
-	}
+func (r CheckPragmaRule) Desc() string {
+	return "Checks proper #pragma usage"
 }
 
-func (l *Linter) checkPragma() {
+func (r CheckPragmaRule) Run(l *Linter) {
 	var prev Op
 	for i, op := range l.l {
 		switch op := op.(type) {
 		case *PragmaExpr:
 			if prev != nil {
 				l.errs = append(l.errs, PragmaVersionAfterInstrError{
-					l: i,
+					l:    i,
+					rule: r.Id(),
 				})
 			}
 			prev = op
@@ -396,11 +511,50 @@ func (l *Linter) checkPragma() {
 	}
 }
 
+type OpCodeAvailabilityInModeRule struct {
+}
+
+func (r OpCodeAvailabilityInModeRule) Id() string {
+	return "LINT0007"
+}
+
+func (r OpCodeAvailabilityInModeRule) Desc() string {
+	return "Checks opcode availability in the current mode (app or logicsig)"
+}
+
+var OpCodeAvailabilityInModeRuleInstance = OpCodeAvailabilityInModeRule{}
+
+type OpCodeVersionCompatibilityCheckRule struct {
+}
+
+func (r OpCodeVersionCompatibilityCheckRule) Id() string {
+	return "LINT0008"
+}
+
+func (r OpCodeVersionCompatibilityCheckRule) Desc() string {
+	return "Checks opcode is available in the current version"
+}
+
+var OpCodeVersionCompatibilityCheckRuleInstance = OpCodeVersionCompatibilityCheckRule{}
+
+var LintRules []LintRule
+
+func init() {
+	LintRules = append(LintRules, DuplicateLabelsRule{})
+	LintRules = append(LintRules, UnusedLabelsRule{})
+	LintRules = append(LintRules, OpsAfterUnconditionalBranchRule{})
+	LintRules = append(LintRules, CheckBranchJustBeforeLabelRule{})
+	LintRules = append(LintRules, CheckLoopsRule{})
+	LintRules = append(LintRules, CheckPragmaRule{})
+	LintRules = append(LintRules, OpCodeAvailabilityInModeRuleInstance)
+	LintRules = append(LintRules, OpCodeVersionCompatibilityCheckRuleInstance)
+}
+
 func (l *Linter) Lint() {
-	l.checkDuplicatedLabels()
-	l.checkUnusedLabels()
-	l.checkOpsAfterUnconditionalBranch()
-	l.checkBranchJustBeforeLabel()
-	l.checkLoops()
-	l.checkPragma()
+	for _, r := range LintRules {
+		switch r := r.(type) {
+		case runnableRule:
+			r.Run(l)
+		}
+	}
 }

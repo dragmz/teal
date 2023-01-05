@@ -46,6 +46,8 @@ type lintError struct {
 	e int
 
 	s DiagnosticSeverity
+
+	r string
 }
 
 func (e lintError) Line() int {
@@ -69,7 +71,7 @@ func (e lintError) Severity() DiagnosticSeverity {
 }
 
 func (e lintError) Rule() string {
-	return "LINT"
+	return e.r
 }
 
 func readInt8(s string) (int8, error) {
