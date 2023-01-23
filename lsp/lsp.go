@@ -298,10 +298,53 @@ type tealConfig struct {
 	LensRefs       bool
 }
 
+type lspCompletionCompletionItemClientCapabilities struct {
+	SnippetSupport          *bool `json:"snippetSupport,omitempty"`
+	CommitCharactersSupport *bool `json:"commitCharactersSupport,omitempty"`
+}
+
+type lspCompletionTagSupportClientCapabilities struct {
+	ValueSet []int `json:"valueSet,omitempty"`
+}
+
+type lspCompletionInsertTextModeSupportClientCapabilities struct {
+	ValueSet []int `json:"valueSet,omitempty"`
+}
+
+type lspCompletionClientCapabilities struct {
+	DynamicRegistration   *bool                                                 `json:"dynamicRegistration,omitempty"`
+	CompletionItem        *lspCompletionCompletionItemClientCapabilities        `json:"completionItem,omitempty"`
+	DocumentationFormat   []string                                              `json:"documentationFormat,omitempty"`
+	DeprecatedSupport     *bool                                                 `json:"deprecatedSupport,omitempty"`
+	PreselectSupport      *bool                                                 `json:"preselectSupport,omitempty"`
+	TagSupport            *lspCompletionTagSupportClientCapabilities            `json:"tagSupport,omitempty"`
+	InsertReplaceSupport  *bool                                                 `json:"insertReplaceSupport,omitempty"`
+	ResolveSupport        []string                                              `json:"resolveSupport,omitempty"`
+	InsertTextModeSupport *lspCompletionInsertTextModeSupportClientCapabilities `json:"insertTextModeSupport,omitempty"`
+	LabelDetailsSupport   *bool                                                 `json:"labelDetailsSupport,omitempty"`
+}
+
+type lspTextDocumentCompletionListClientCapabilities struct {
+	ItemDefaults []string `json:"itemDefaults,omitempty"`
+}
+
+type lspTextDocumentClientCapabilities struct {
+	Completion         *lspCompletionClientCapabilities                 `json:"completion"`
+	CompletionItemKind []int                                            `json:"completionItemKind,omitempty"`
+	ContextSupport     *bool                                            `json:"contextSupport,omitempty"`
+	InsertTextMode     *int                                             `json:"insertTextMode,omitempty"`
+	CompletionList     *lspTextDocumentCompletionListClientCapabilities `json:"completionList,omitempty"`
+}
+
+type lspClientCapabilities struct {
+	TextDocument *lspTextDocumentClientCapabilities `json:"textDocument,omitempty"`
+}
+
 type lspInitializeRequestParams struct {
 	ProcessId             int                        `json:"id"`
 	ClientInfo            *lspInitializeClientInfo   `json:"clientInfo"`
 	InitializationOptions *tealInitializationOptions `json:"initializationOptions,omitempty"`
+	Capabilities          lspClientCapabilities      `json:"capabilities"`
 }
 
 type lspDidOpenTextDocument struct {
