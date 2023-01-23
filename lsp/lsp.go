@@ -791,32 +791,6 @@ func (l *lsp) notifyDiagnostics(uri string, lds []lspDiagnostic) error {
 	})
 }
 
-func (l *lsp) doDiagnostic(doc *lspDoc) []lspDiagnostic {
-	res := doc.Results()
-
-	lds := []lspDiagnostic{}
-	for _, d := range res.Diagnostics {
-		sev := int(d.Severity())
-
-		lds = append(lds, lspDiagnostic{
-			Range: lspRange{
-				Start: lspPosition{
-					Line:      d.Line(),
-					Character: d.Begin(),
-				},
-				End: lspPosition{
-					Line:      d.Line(),
-					Character: d.End(),
-				},
-			},
-			Severity: &sev,
-			Message:  d.String(),
-		})
-	}
-
-	return lds
-}
-
 func (l *lsp) prepare(uri string) (*lspDoc, *teal.ProcessResult, error) {
 	doc := l.docs[uri]
 	if doc == nil {
@@ -1048,19 +1022,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				edits := []lspTextEdit{}
 
 				for _, sym := range res.SymByName(body.Params.Arguments[0].Name) {
-					edits = append(edits, lspTextEdit{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin(),
-							},
-							End: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.End(),
-							},
-						},
-						NewText: "",
-					})
+					edits = append(edits, prepareRemoveSymbolEdit(sym))
 				}
 
 				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
@@ -1095,7 +1057,6 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				}
 
 				name := args[0].Name
-				s := fmt.Sprintf("\r\n%s:\r\n", name)
 
 				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
 					Label: fmt.Sprintf("Create label: %s", name),
@@ -1106,19 +1067,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 									Uri: args[0].Uri,
 								},
 								Edits: []lspTextEdit{
-									{
-										Range: lspRange{
-											Start: lspPosition{
-												Line:      len(res.Lines),
-												Character: 0,
-											},
-											End: lspPosition{
-												Line:      len(res.Lines),
-												Character: len(s),
-											},
-										},
-										NewText: s,
-									},
+									prepareCreateSymbolEdit(len(res.Lines), name),
 								},
 							},
 						},
@@ -1189,70 +1138,24 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			chs := []lspTextEdit{}
+
 			for _, edited := range res.SymbolsWithin(req.Params.Position) {
 				for _, sym := range res.SymByName(edited.Name()) {
-					chs = append(chs, lspTextEdit{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin(),
-							},
-							End: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin() + len(sym.Name()),
-							},
-						},
-						NewText: req.Params.NewName,
-					})
+					chs = append(chs, prepareRenameSymbolEdit(sym, req.Params.NewName))
 				}
+
 				for _, ref := range res.SymRefByName(edited.Name()) {
-					chs = append(chs, lspTextEdit{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      ref.Line(),
-								Character: ref.Begin(),
-							},
-							End: lspPosition{
-								Line:      ref.Line(),
-								Character: ref.End(),
-							},
-						},
-						NewText: req.Params.NewName,
-					})
+					chs = append(chs, prepareRenameSymbolRefEdit(ref, req.Params.NewName))
 				}
 			}
 
 			for _, edited := range res.SymbolRefsWithin(req.Params.Position) {
 				for _, sym := range res.SymByName(edited.String()) {
-					chs = append(chs, lspTextEdit{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin(),
-							},
-							End: lspPosition{
-								Line:      sym.Line(),
-								Character: sym.Begin() + len(sym.Name()),
-							},
-						},
-						NewText: req.Params.NewName,
-					})
+					chs = append(chs, prepareRenameSymbolEdit(sym, req.Params.NewName))
 				}
 
 				for _, ref := range res.SymRefByName(edited.String()) {
-					chs = append(chs, lspTextEdit{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      ref.Line(),
-								Character: ref.Begin(),
-							},
-							End: lspPosition{
-								Line:      ref.Line(),
-								Character: ref.End(),
-							},
-						},
-						NewText: req.Params.NewName,
-					})
+					chs = append(chs, prepareRenameSymbolRefEdit(ref, req.Params.NewName))
 				}
 			}
 
@@ -1588,21 +1491,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			formatted := tealfmt.Format(strings.NewReader(doc.s))
 
-			return l.success(h.Id, []lspTextEdit{
-				{
-					Range: lspRange{
-						Start: lspPosition{
-							Line:      0,
-							Character: 0,
-						},
-						End: lspPosition{
-							Line:      len(res.Lines),
-							Character: 0,
-						},
-					},
-					NewText: formatted,
-				},
-			})
+			return l.success(h.Id, prepareReplaceAllTextEdit(len(res.Lines), formatted))
 
 		case "textDocument/signatureHelp":
 			req, err := read[lspSignatureHelpRequest](b)
@@ -1809,7 +1698,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			var ds []lspDiagnostic
 			if doc != nil {
-				ds = l.doDiagnostic(doc)
+				ds = prepareDiagnostics(doc.Results())
 			} else {
 				ds = []lspDiagnostic{}
 			}
@@ -1830,42 +1719,16 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			kind := new(int)
-			*kind = 1
 			hs := []lspDocumentHighlight{}
 
 			name := res.SymOrRefAt(req.Params.Position)
 
 			for _, sym := range res.SymByName(name) {
-				hs = append(hs, lspDocumentHighlight{
-					Range: lspRange{
-						Start: lspPosition{
-							Line:      sym.Line(),
-							Character: sym.Begin(),
-						},
-						End: lspPosition{
-							Line:      sym.Line(),
-							Character: sym.Begin() + len(sym.Name()),
-						},
-					},
-					Kind: kind,
-				})
+				hs = append(hs, prepareSymbolHighlight(sym))
 			}
 
 			for _, ref := range res.SymRefByName(name) {
-				hs = append(hs, lspDocumentHighlight{
-					Range: lspRange{
-						Start: lspPosition{
-							Line:      ref.Line(),
-							Character: ref.Begin(),
-						},
-						End: lspPosition{
-							Line:      ref.Line(),
-							Character: ref.End(),
-						},
-					},
-					Kind: kind,
-				})
+				hs = append(hs, prepareSymbolRefHighlight(ref))
 			}
 
 			l.success(h.Id, hs)
@@ -1882,22 +1745,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			syms := []lspDocumentSymbol{}
 			for _, s := range res.Symbols {
-				r := lspRange{
-					Start: lspPosition{
-						Line:      s.Line(),
-						Character: s.Begin(),
-					},
-					End: lspPosition{
-						Line:      s.Line(),
-						Character: s.End(),
-					},
-				}
-				syms = append(syms, lspDocumentSymbol{
-					Name:           s.Name(),
-					Kind:           lspSymbolKindMethod,
-					Range:          r,
-					SelectionRange: r,
-				})
+				syms = append(syms, prepareSymbol(s))
 			}
 
 			return l.success(h.Id, syms)
@@ -1916,88 +1764,40 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			st := teal.SemanticTokens{}
 
 			for _, m := range res.Macros {
-				st = append(st, teal.SemanticToken{
-					Line:      m.Line(),
-					Index:     m.Begin(),
-					Length:    m.End() - m.Begin(),
-					Type:      semanticTokenMacro,
-					Modifiers: 0,
-				})
+				st = append(st, prepareMacroSemToken(m))
 			}
 
 			for _, op := range res.Ops {
 				if op.Type() == teal.TokenValue {
-					st = append(st, teal.SemanticToken{
-						Line:      op.Line(),
-						Index:     op.Begin(),
-						Length:    op.End() - op.Begin(),
-						Type:      semanticTokenKeyword,
-						Modifiers: 0,
-					})
+					st = append(st, prepareOpSemToken(op))
 				}
 			}
 
 			for _, v := range res.Numbers {
-				st = append(st, teal.SemanticToken{
-					Line:      v.Line(),
-					Index:     v.Begin(),
-					Length:    v.End() - v.Begin(),
-					Type:      semanticTokenNumber,
-					Modifiers: 0,
-				})
+				st = append(st, prepareNumberSemToken(v))
 			}
 
 			for _, v := range res.Strings {
-				st = append(st, teal.SemanticToken{
-					Line:      v.Line(),
-					Index:     v.Begin(),
-					Length:    v.End() - v.Begin(),
-					Type:      semanticTokenString,
-					Modifiers: 0,
-				})
+				st = append(st, prepareStringSemToken(v))
 			}
 
 			for _, v := range res.Keywords {
-				st = append(st, teal.SemanticToken{
-					Line:      v.Line(),
-					Index:     v.Begin(),
-					Length:    v.End() - v.Begin(),
-					Type:      semanticTokenKeyword,
-					Modifiers: 0,
-				})
+				st = append(st, prepareKeywordSemToken(v))
 			}
 
 			for _, t := range res.Tokens {
 				switch t.Type() {
 				case teal.TokenComment:
-					st = append(st, teal.SemanticToken{
-						Line:      t.Line(),
-						Index:     t.Begin(),
-						Length:    t.End() - t.Begin(),
-						Type:      semanticTokenComment,
-						Modifiers: 0,
-					})
+					st = append(st, prepareCommentSemToken(t))
 				}
 			}
 
 			for _, s := range res.Symbols {
-				st = append(st, teal.SemanticToken{
-					Line:      s.Line(),
-					Index:     s.Begin(),
-					Length:    s.End() - s.Begin(),
-					Type:      semanticTokenMethod,
-					Modifiers: 0,
-				})
+				st = append(st, prepareSymbolSemToken(s))
 			}
 
 			for _, s := range res.SymbolRefs {
-				st = append(st, teal.SemanticToken{
-					Line:      s.Line(),
-					Index:     s.Begin(),
-					Length:    s.End() - s.Begin(),
-					Type:      semanticTokenString,
-					Modifiers: 0,
-				})
+				st = append(st, prepareSymbolRefSemToken(s))
 			}
 
 			data := st.Encode()
@@ -2114,6 +1914,249 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 	}
 
 	return nil
+}
+
+func prepareReplaceAllTextEdit(lines int, formatted string) lspTextEdit {
+	return lspTextEdit{
+		Range: lspRange{
+			Start: lspPosition{
+				Line:      0,
+				Character: 0,
+			},
+			End: lspPosition{
+				Line:      lines,
+				Character: 0,
+			},
+		},
+		NewText: formatted,
+	}
+}
+
+func prepareRenameSymbolRefEdit(ref teal.Token, newName string) lspTextEdit {
+	return lspTextEdit{
+		Range: lspRange{
+			Start: lspPosition{
+				Line:      ref.Line(),
+				Character: ref.Begin(),
+			},
+			End: lspPosition{
+				Line:      ref.Line(),
+				Character: ref.End(),
+			},
+		},
+		NewText: newName,
+	}
+}
+
+func prepareRenameSymbolEdit(sym teal.Symbol, newName string) lspTextEdit {
+	return lspTextEdit{
+		Range: lspRange{
+			Start: lspPosition{
+				Line:      sym.Line(),
+				Character: sym.Begin(),
+			},
+			End: lspPosition{
+				Line:      sym.Line(),
+				Character: sym.Begin() + len(sym.Name()),
+			},
+		},
+		NewText: newName,
+	}
+}
+
+func prepareCreateSymbolEdit(lines int, name string) lspTextEdit {
+	s := fmt.Sprintf("\r\n%s:\r\n", name)
+
+	return lspTextEdit{
+		Range: lspRange{
+			Start: lspPosition{
+				Line:      lines,
+				Character: 0,
+			},
+			End: lspPosition{
+				Line:      lines,
+				Character: len(s),
+			},
+		},
+		NewText: s,
+	}
+}
+
+func prepareRemoveSymbolEdit(sym teal.Symbol) lspTextEdit {
+	return lspTextEdit{
+		Range: lspRange{
+			Start: lspPosition{
+				Line:      sym.Line(),
+				Character: sym.Begin(),
+			},
+			End: lspPosition{
+				Line:      sym.Line(),
+				Character: sym.End(),
+			},
+		},
+		NewText: "",
+	}
+}
+
+func prepareSymbolRefSemToken(s teal.Token) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      s.Line(),
+		Index:     s.Begin(),
+		Length:    s.End() - s.Begin(),
+		Type:      semanticTokenString,
+		Modifiers: 0,
+	}
+}
+
+func prepareSymbolSemToken(s teal.Symbol) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      s.Line(),
+		Index:     s.Begin(),
+		Length:    s.End() - s.Begin(),
+		Type:      semanticTokenMethod,
+		Modifiers: 0,
+	}
+}
+
+func prepareCommentSemToken(t teal.Token) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      t.Line(),
+		Index:     t.Begin(),
+		Length:    t.End() - t.Begin(),
+		Type:      semanticTokenComment,
+		Modifiers: 0,
+	}
+}
+
+func prepareKeywordSemToken(v teal.Token) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      v.Line(),
+		Index:     v.Begin(),
+		Length:    v.End() - v.Begin(),
+		Type:      semanticTokenKeyword,
+		Modifiers: 0,
+	}
+}
+
+func prepareStringSemToken(v teal.Token) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      v.Line(),
+		Index:     v.Begin(),
+		Length:    v.End() - v.Begin(),
+		Type:      semanticTokenString,
+		Modifiers: 0,
+	}
+}
+
+func prepareNumberSemToken(v teal.Token) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      v.Line(),
+		Index:     v.Begin(),
+		Length:    v.End() - v.Begin(),
+		Type:      semanticTokenNumber,
+		Modifiers: 0,
+	}
+}
+
+func prepareOpSemToken(op teal.Token) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      op.Line(),
+		Index:     op.Begin(),
+		Length:    op.End() - op.Begin(),
+		Type:      semanticTokenKeyword,
+		Modifiers: 0,
+	}
+}
+
+func prepareMacroSemToken(m teal.Token) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      m.Line(),
+		Index:     m.Begin(),
+		Length:    m.End() - m.Begin(),
+		Type:      semanticTokenMacro,
+		Modifiers: 0,
+	}
+}
+
+func prepareSymbol(s teal.Symbol) lspDocumentSymbol {
+	r := lspRange{
+		Start: lspPosition{
+			Line:      s.Line(),
+			Character: s.Begin(),
+		},
+		End: lspPosition{
+			Line:      s.Line(),
+			Character: s.End(),
+		},
+	}
+
+	ds := lspDocumentSymbol{
+		Name:           s.Name(),
+		Kind:           lspSymbolKindMethod,
+		Range:          r,
+		SelectionRange: r,
+	}
+
+	return ds
+}
+
+func prepareSymbolRefHighlight(ref teal.Token) lspDocumentHighlight {
+	return lspDocumentHighlight{
+		Range: lspRange{
+			Start: lspPosition{
+				Line:      ref.Line(),
+				Character: ref.Begin(),
+			},
+			End: lspPosition{
+				Line:      ref.Line(),
+				Character: ref.End(),
+			},
+		},
+		Kind: &symbolHighlightKind,
+	}
+}
+
+var symbolHighlightKind = 1
+
+func prepareSymbolHighlight(sym teal.Symbol) lspDocumentHighlight {
+	return lspDocumentHighlight{
+		Range: lspRange{
+			Start: lspPosition{
+				Line:      sym.Line(),
+				Character: sym.Begin(),
+			},
+			End: lspPosition{
+				Line:      sym.Line(),
+				Character: sym.Begin() + len(sym.Name()),
+			},
+		},
+		Kind: &symbolHighlightKind,
+	}
+}
+
+func prepareDiagnostics(res *teal.ProcessResult) []lspDiagnostic {
+	lds := []lspDiagnostic{}
+
+	for _, d := range res.Diagnostics {
+		sev := int(d.Severity())
+
+		lds = append(lds, lspDiagnostic{
+			Range: lspRange{
+				Start: lspPosition{
+					Line:      d.Line(),
+					Character: d.Begin(),
+				},
+				End: lspPosition{
+					Line:      d.Line(),
+					Character: d.End(),
+				},
+			},
+			Severity: &sev,
+			Message:  d.String(),
+		})
+	}
+
+	return lds
 }
 
 func prepareRemoveLineEdit(line int) lspTextEdit {
