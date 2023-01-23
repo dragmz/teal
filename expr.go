@@ -1446,7 +1446,7 @@ func (e *BoxExtractExpr) Execute(b *VmBranch) error {
 }
 
 type PragmaExpr struct {
-	Version uint8
+	Version uint64
 }
 
 func (e *PragmaExpr) IsNop() {}

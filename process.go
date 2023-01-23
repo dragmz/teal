@@ -590,7 +590,7 @@ func (c *docContext) mustReadPragma(name string) (v uint64) {
 
 	c.arg(opItemArg{
 		Name: name,
-		Type: OpArgTypeUint8,
+		Type: OpArgTypeUint64,
 	})
 
 	return
@@ -1571,7 +1571,7 @@ var typeTxField = []interface{}{}
 
 func opPragma(c ProcessContext) {
 	version := c.mustReadPragma("version")
-	c.emit(&PragmaExpr{Version: uint8(version)})
+	c.emit(&PragmaExpr{Version: version})
 }
 
 func opAddr(c ProcessContext) {
@@ -2400,11 +2400,11 @@ func opGitxn(c ProcessContext) {
 func opGitxna(c ProcessContext) {
 	c.modeMinVersion(ModeSig, 0)
 	c.modeMinVersion(ModeApp, 6)
-	t := c.mustReadInt("t")
+	t := c.mustReadUint8("t")
 	f := c.mustReadTxnaField("f")
 	i := c.mustReadUint8("i")
 
-	c.emit(&GitxnaExpr{Group: uint8(t), Field: f, Index: uint8(i)})
+	c.emit(&GitxnaExpr{Group: t, Field: f, Index: uint8(i)})
 
 }
 func opBoxCreate(c ProcessContext) {
