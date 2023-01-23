@@ -938,37 +938,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 				res := doc.Results()
 
-				var edits []lspTextEdit
-
-				if res.VersionToken != nil {
-					edits = append(edits, lspTextEdit{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      res.VersionToken.StartLine(),
-								Character: res.VersionToken.StartCharacter(),
-							},
-							End: lspPosition{
-								Line:      res.VersionToken.EndLine(),
-								Character: res.VersionToken.EndCharacter(),
-							},
-						},
-						NewText: fmt.Sprintf("%d", arg.Version),
-					})
-				} else {
-					edits = append(edits, lspTextEdit{
-						Range: lspRange{
-							Start: lspPosition{
-								Line:      0,
-								Character: 0,
-							},
-							End: lspPosition{
-								Line:      0,
-								Character: 0,
-							},
-						},
-						NewText: fmt.Sprintf("#pragma version %d\r\n", arg.Version),
-					})
-
+				edits := []lspTextEdit{
+					prepareVersionEdit(res.VersionToken, arg.Version),
 				}
 
 				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
@@ -2156,6 +2127,38 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 	}
 
 	return nil
+}
+
+func prepareVersionEdit(rg teal.Range, version uint64) lspTextEdit {
+	if rg != nil {
+		return lspTextEdit{
+			Range: lspRange{
+				Start: lspPosition{
+					Line:      rg.StartLine(),
+					Character: rg.StartCharacter(),
+				},
+				End: lspPosition{
+					Line:      rg.EndLine(),
+					Character: rg.EndCharacter(),
+				},
+			},
+			NewText: fmt.Sprintf("%d", version),
+		}
+	} else {
+		return lspTextEdit{
+			Range: lspRange{
+				Start: lspPosition{
+					Line:      0,
+					Character: 0,
+				},
+				End: lspPosition{
+					Line:      0,
+					Character: 0,
+				},
+			},
+			NewText: fmt.Sprintf("#pragma version %d\r\n", version),
+		}
+	}
 }
 
 func (l *lsp) write(v interface{}) error {
