@@ -58,3 +58,12 @@ func TestPrepareVersionEditForNil(t *testing.T) {
 		assert.Equal(t, ts.rg, e.Range, name)
 	}
 }
+
+func TestPrepareRemoveLineEdit(t *testing.T) {
+	e := prepareRemoveLineEdit(123)
+	assert.Equal(t, "", e.NewText)
+	assert.Equal(t, lspRange{
+		Start: lspPosition{Line: 123},
+		End:   lspPosition{Line: 124},
+	}, e.Range)
+}
