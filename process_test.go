@@ -176,3 +176,21 @@ func TestInlayHints(t *testing.T) {
 		assert.Equal(t, "01", ihs.Decoded[0].Value, name)
 	}
 }
+
+func TestRefCounts(t *testing.T) {
+	res := Process("b a\nb a\nb a\na:")
+	assert.Equal(t, 3, res.RefCounts["a"])
+}
+
+func TestVersion(t *testing.T) {
+	res := Process("#pragma version 8")
+	assert.Equal(t, uint64(8), res.Version)
+}
+
+func TestRequiredVersion(t *testing.T) {
+	res := Process("box_create")
+	assert.Len(t, res.Versions, 1)
+
+	v := res.Versions[0]
+	assert.Equal(t, uint64(8), v.Version)
+}

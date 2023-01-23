@@ -1011,8 +1011,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 				line := args[0].Line
 
-				edits := []lspTextEdit{}
-				edits = append(edits, prepareRemoveLineEdit(line))
+				edits := []lspTextEdit{prepareRemoveLineEdit(line)}
 
 				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
 					Label: "Remove line",
