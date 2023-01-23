@@ -1,6 +1,10 @@
 package teal
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestImmLexer(t *testing.T) {
 	type test struct {
@@ -116,8 +120,8 @@ func TestImmLexer(t *testing.T) {
 			t.Error(err)
 		}
 
-		if len(args) != len(ts.o) {
-			t.Error("unepxected number of args")
+		if !assert.Len(t, args, len(ts.o)) {
+			return
 		}
 
 		for i, targs := range ts.o {
@@ -133,34 +137,18 @@ func TestImmLexer(t *testing.T) {
 			for j, ta := range targs.r {
 				ra := a.r[j]
 
-				if ta.kind != ra.kind {
-					t.Error("unexpected array arg kind")
-				}
+				assert.Equal(t, ta.kind, ra.kind)
+				assert.Equal(t, ta.t, ra.t)
+				assert.Equal(t, ta.n, ra.n)
 
-				if ta.t != ra.t {
-					t.Error("unexpected array arg type")
-				}
-
-				if ta.n != ra.n {
-					t.Error("unexpected array arg name")
-				}
-
-				if ta.sub == nil && ra.sub != nil {
-					t.Error("ta != ra != nil")
+				if ta.sub == nil {
+					assert.Equal(t, ta.sub, ra.sub)
 				}
 
 				if ta.sub != nil {
-					if ta.kind != ra.kind {
-						t.Error("ta kind != ra.kind")
-					}
-
-					if ta.n != ra.n {
-						t.Error("ta.n != ra.n")
-					}
-
-					if ta.t != ra.t {
-						t.Error("ta.t != ra.t")
-					}
+					assert.Equal(t, ta.kind, ra.kind)
+					assert.Equal(t, ta.n, ra.n)
+					assert.Equal(t, ta.t, ra.t)
 				}
 			}
 		}

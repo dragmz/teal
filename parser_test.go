@@ -5,6 +5,8 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDocs(t *testing.T) {
@@ -51,19 +53,15 @@ func TestParser(t *testing.T) {
 			}
 
 			bs, err := os.ReadFile(path.Join(test.Path, f.Name()))
-			if err != nil {
-				t.Fatal(err)
+			if !assert.NoError(t, err) {
+				return
 			}
 
 			res := Process(string(bs))
 			if test.Clean {
-				for _, d := range res.Diagnostics {
-					t.Errorf("failed to parse - file: %s, error: %s", f.Name(), d)
-				}
+				assert.Empty(t, res.Diagnostics)
 			} else {
-				if len(res.Diagnostics) == 0 {
-					t.Errorf("expected errors but got none: %s, file: %s", test.Path, f.Name())
-				}
+				assert.NotEmpty(t, res.Diagnostics)
 			}
 		}
 	}

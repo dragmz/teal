@@ -1,7 +1,10 @@
 package teal
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testRange struct {
@@ -28,7 +31,26 @@ func (r testRange) EndCharacter() int {
 }
 
 func TestProcessEmpty(t *testing.T) {
-	Process("")
+	res := Process("")
+
+	assert.Equal(t, ProgramMode(ModeApp), res.Mode)
+	assert.Equal(t, uint64(1), res.Version)
+
+	assert.Equal(t, 0, len(res.Diagnostics))
+	assert.Equal(t, 0, len(res.Keywords))
+	assert.Equal(t, 0, len(res.Lines))
+	assert.Equal(t, 0, len(res.Listing))
+	assert.Equal(t, 0, len(res.Macros))
+	assert.Equal(t, 0, len(res.MissRefs))
+	assert.Equal(t, 0, len(res.Numbers))
+	assert.Equal(t, 0, len(res.Ops))
+	assert.Equal(t, 0, len(res.Redundants))
+	assert.Equal(t, 0, len(res.RefCounts))
+	assert.Equal(t, 0, len(res.Strings))
+	assert.Equal(t, 0, len(res.SymbolRefs))
+	assert.Equal(t, 0, len(res.Symbols))
+	assert.Equal(t, 0, len(res.Tokens))
+	assert.Equal(t, 0, len(res.Versions))
 }
 
 func TestRedundantLabelLine(t *testing.T) {
@@ -40,13 +62,8 @@ func TestRedundantLabelLine(t *testing.T) {
 
 	r := res.Redundants[0]
 
-	if r.Line() != 0 {
-		t.Error("line mismatch")
-	}
-
-	if r.String() != "Remove label 'test_label'" {
-		t.Error("title mismatch")
-	}
+	assert.Equal(t, 0, r.Line())
+	assert.Equal(t, "Remove label 'test_label'", r.String())
 }
 
 func TestRedundantBCallLine(t *testing.T) {
@@ -58,13 +75,8 @@ func TestRedundantBCallLine(t *testing.T) {
 
 	r := res.Redundants[0]
 
-	if r.Line() != 0 {
-		t.Error("line mismatch")
-	}
-
-	if r.String() != "Remove b call" {
-		t.Error("title mismatch")
-	}
+	assert.Equal(t, 0, r.Line())
+	assert.Equal(t, "Remove b call", r.String())
 }
 
 func TestIntArgVals(t *testing.T) {
@@ -101,9 +113,7 @@ b test_label
 
 	for i, test := range tests {
 		name := res.SymOrRefAt(test.i)
-		if name != test.o {
-			t.Errorf("unexpected name - test: %d, actual: %s, expected: %s", i, name, test.o)
-		}
+		assert.Equal(t, test.o, name, fmt.Sprintf("test #%d", i))
 	}
 }
 
@@ -116,18 +126,22 @@ func TestOverlaps(t *testing.T) {
 	}
 
 	tests := []test{
+		{testRange{1, 1, 1, 2}, testRange{0, 3, 1, 3}, true},
+
+		{testRange{1, 1, 1, 2}, testRange{0, 0, 1, 0}, false},
+		{testRange{1, 1, 1, 2}, testRange{0, 2, 1, 2}, true},
+
+		{testRange{1, 1, 1, 2}, testRange{1, 0, 1, 0}, false},
+		{testRange{0, 5, 0, 11}, testRange{0, 0, 1, 0}, true},
+
 		{testRange{}, testRange{}, true},
 		{testRange{}, testRange{0, 1, 0, 1}, false},
 		{testRange{0, 1, 0, 1}, testRange{0, 1, 0, 1}, true},
 		{testRange{1, 1, 1, 1}, testRange{1, 1, 1, 1}, true},
 		{testRange{1, 1, 1, 2}, testRange{1, 1, 1, 1}, true},
 		{testRange{1, 1, 1, 2}, testRange{1, 2, 1, 2}, true},
-		{testRange{1, 1, 1, 2}, testRange{1, 0, 1, 0}, false},
 		{testRange{1, 1, 1, 2}, testRange{1, 3, 1, 3}, false},
 		{testRange{1, 1, 1, 2}, testRange{0, 1, 1, 1}, true},
-		{testRange{1, 1, 1, 2}, testRange{0, 2, 1, 2}, true},
-		{testRange{1, 1, 1, 2}, testRange{0, 0, 1, 0}, false},
-		{testRange{1, 1, 1, 2}, testRange{0, 3, 1, 3}, false},
 		{testRange{1, 1, 1, 2}, testRange{0, 1, 0, 1}, false},
 		{testRange{1, 1, 1, 2}, testRange{0, 2, 0, 2}, false},
 		{testRange{1, 1, 1, 2}, testRange{0, 0, 0, 0}, false},
@@ -140,8 +154,16 @@ func TestOverlaps(t *testing.T) {
 
 	for i, test := range tests {
 		o := Overlaps(test.a, test.b)
-		if o != test.o {
-			t.Errorf("unexpected results - test: %d, actual: %t", i, o)
-		}
+		assert.Equal(t, test.o, o, fmt.Sprintf("test #%d", i))
 	}
+}
+
+func TestInlayHints(t *testing.T) {
+	res := Process("byte 0x3031\n")
+	ihs := res.InlayHints(testRange{0, 0, 1, 0})
+
+	if !assert.Equal(t, 1, len(ihs.Decoded)) {
+		return
+	}
+	assert.Equal(t, "01", ihs.Decoded[0].Value)
 }
