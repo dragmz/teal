@@ -159,11 +159,20 @@ func TestOverlaps(t *testing.T) {
 }
 
 func TestInlayHints(t *testing.T) {
-	res := Process("byte 0x3031\n")
-	ihs := res.InlayHints(testRange{0, 0, 1, 0})
-
-	if !assert.Equal(t, 1, len(ihs.Decoded)) {
-		return
+	tests := []string{
+		"byte 0x3031",
+		"byte 0x3031\n",
 	}
-	assert.Equal(t, "01", ihs.Decoded[0].Value)
+
+	for i, ts := range tests {
+		name := fmt.Sprintf("test #%d", i)
+
+		res := Process(ts)
+		ihs := res.InlayHints(testRange{0, 0, 1, 0})
+
+		if !assert.Equal(t, 1, len(ihs.Decoded), name) {
+			return
+		}
+		assert.Equal(t, "01", ihs.Decoded[0].Value, name)
+	}
 }
