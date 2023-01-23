@@ -2114,7 +2114,6 @@ func opAssetHoldingGet(c ProcessContext) {
 	c.modeMinVersion(ModeSig, 0)
 	c.modeMinVersion(ModeApp, 2)
 	f := c.mustReadAssetHoldingField("f")
-	// TODO report semantics
 
 	c.emit(&AssetHoldingGetExpr{Field: f})
 }
@@ -3215,7 +3214,7 @@ func Process(source string) *ProcessResult {
 				lsyms = append(lsyms, &labelSymbol{
 					n:    name,
 					l:    t.l,
-					b:    t.b, // TODO: what about whitespaces before label name?
+					b:    t.b,
 					e:    t.e,
 					docs: strings.Join(c.comments, "\n"),
 				})
