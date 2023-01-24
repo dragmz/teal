@@ -922,7 +922,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						DocumentChanges: []lspTextDocumentEdit{
 							{
 								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
-									Uri: args[0].Uri,
+									Uri: arg.Uri,
 								},
 								Edits: edits,
 							},
@@ -941,15 +941,18 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				if len(args) != 1 {
 					return errors.New("unexpected number of args")
 				}
-				doc := l.docs[args[0].Uri]
+
+				arg := args[0]
+
+				doc := l.docs[arg.Uri]
 				if doc == nil {
 					return errors.New("doc not found")
 				}
 
 				edits := []lspTextEdit{
 					{
-						Range:   args[0].Range,
-						NewText: args[0].Value,
+						Range:   arg.Range,
+						NewText: arg.Value,
 					},
 				}
 
@@ -959,7 +962,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						DocumentChanges: []lspTextDocumentEdit{
 							{
 								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
-									Uri: args[0].Uri,
+									Uri: arg.Uri,
 								},
 								Edits: edits,
 							},
@@ -978,12 +981,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					return errors.New("unexpected number of args")
 				}
 
-				doc := l.docs[args[0].Uri]
+				arg := args[0]
+
+				doc := l.docs[arg.Uri]
 				if doc == nil {
 					return errors.New("doc not found")
 				}
 
-				line := args[0].Line
+				line := arg.Line
 
 				edits := []lspTextEdit{prepareRemoveLineEdit(line)}
 
@@ -993,7 +998,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						DocumentChanges: []lspTextDocumentEdit{
 							{
 								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
-									Uri: args[0].Uri,
+									Uri: arg.Uri,
 								},
 								Edits: edits,
 							},
@@ -1012,12 +1017,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					return errors.New("unexpected number of args")
 				}
 
-				_, res, err := l.prepare(args[0].Uri)
+				arg := args[0]
+
+				_, res, err := l.prepare(arg.Uri)
 				if err != nil {
 					return err
 				}
 
-				name := args[0].Name
+				name := arg.Name
 
 				edits := []lspTextEdit{}
 
@@ -1031,7 +1038,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						DocumentChanges: []lspTextDocumentEdit{
 							{
 								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
-									Uri: args[0].Uri,
+									Uri: arg.Uri,
 								},
 								Edits: edits,
 							},
@@ -1051,12 +1058,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					return errors.New("unexpected number of args")
 				}
 
-				_, res, err := l.prepare(args[0].Uri)
+				arg := args[0]
+
+				_, res, err := l.prepare(arg.Uri)
 				if err != nil {
 					return err
 				}
 
-				name := args[0].Name
+				name := arg.Name
 
 				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
 					Label: fmt.Sprintf("Create label: %s", name),
@@ -1064,7 +1073,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						DocumentChanges: []lspTextDocumentEdit{
 							{
 								TextDocument: lspOptionalVersionedTextDocumentIdentifier{
-									Uri: args[0].Uri,
+									Uri: arg.Uri,
 								},
 								Edits: []lspTextEdit{
 									prepareCreateSymbolEdit(len(res.Lines), name),
