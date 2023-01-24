@@ -1491,7 +1491,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			formatted := tealfmt.Format(strings.NewReader(doc.s))
 
-			return l.success(h.Id, prepareReplaceAllTextEdit(len(res.Lines), formatted))
+			return l.success(h.Id, []lspTextEdit{prepareReplaceAllTextEdit(len(res.Lines), formatted)})
 
 		case "textDocument/signatureHelp":
 			req, err := read[lspSignatureHelpRequest](b)
