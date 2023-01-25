@@ -7,7 +7,7 @@ func TestCostly(t *testing.T) {
 	txn Sender
 	base64_decode StdEncoding`)
 
-	vm := NewVm(res)
+	vm, _ := NewVm(res)
 	vm.Run()
 }
 
@@ -32,7 +32,7 @@ func BenchmarkVm(b *testing.B) {
 	`)
 
 	for i := 0; i < b.N; i++ {
-		vm := NewVm(res)
+		vm, _ := NewVm(res)
 		vm.Run()
 	}
 }
@@ -42,7 +42,7 @@ func BenchmarkInfiniteLoop(b *testing.B) {
 	b main`)
 
 	for i := 0; i < b.N; i++ {
-		vm := NewVm(res)
+		vm, _ := NewVm(res)
 		vm.Run()
 	}
 }

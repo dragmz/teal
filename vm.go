@@ -334,7 +334,9 @@ func (v *Vm) updateBreakpoints(br *VmBranch) {
 	}
 }
 
-func NewVm(res *ProcessResult) *Vm {
+type VmOptions func(v *Vm) error
+
+func NewVm(res *ProcessResult, opts ...VmOptions) (*Vm, error) {
 	syms := map[string]int{}
 
 	for i, op := range res.Listing {
@@ -348,6 +350,13 @@ func NewVm(res *ProcessResult) *Vm {
 		Process:   res,
 		Triggered: map[int][]int{},
 		syms:      syms,
+	}
+
+	for _, opt := range opts {
+		err := opt(v)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to apply opt")
+		}
 	}
 
 	b := &VmBranch{
@@ -364,7 +373,7 @@ func NewVm(res *ProcessResult) *Vm {
 
 	v.skipNops()
 
-	return v
+	return v, nil
 }
 
 func (v *Vm) skipNops() {

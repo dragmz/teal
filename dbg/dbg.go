@@ -351,8 +351,13 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 
 			res := teal.Process(src)
 
+			tvm, err := teal.NewVm(res)
+			if err != nil {
+				return err
+			}
+
 			l.vm = &dbgVm{
-				tvm:  teal.NewVm(res),
+				tvm:  tvm,
 				name: lreq.Arguments.Program,
 				path: lreq.Arguments.Program,
 			}

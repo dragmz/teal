@@ -20,7 +20,10 @@ func run(a args) error {
 
 	res := teal.Process(string(bs))
 
-	vm := teal.NewVm(res)
+	vm, err := teal.NewVm(res)
+	if err != nil {
+		return errors.Wrap(err, "failed to create vm")
+	}
 
 	vm.Run()
 	return nil
