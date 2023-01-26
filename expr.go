@@ -3350,10 +3350,10 @@ func (e *Dup2Expr) String() string {
 func (e *Dup2Expr) Execute(b *VmBranch) error {
 	v1 := b.pop(VmTypeAny)
 	v2 := b.pop(VmTypeAny)
-	b.push(v1)
 	b.push(v2)
 	b.push(v1)
 	b.push(v2)
+	b.push(v1)
 	b.Line++
 	return nil
 }
