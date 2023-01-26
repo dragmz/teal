@@ -1,6 +1,7 @@
 package teal
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +14,8 @@ const (
 	ExitLine = -1
 	ExitName = "(exited)"
 )
+
+type vmPause struct{}
 
 type VmFrame struct {
 	Return     int
@@ -43,6 +46,35 @@ func (v VmValue) Lengths() []int {
 	default:
 		return []int{}
 	}
+}
+
+func (v VmValue) Matches(other VmValue) bool {
+	if v.T == VmTypeAny || other.T == VmTypeAny {
+		return true
+	}
+
+	if v.T != other.T {
+		return false
+	}
+
+	if v.src == nil || other.src == nil {
+		return true
+	}
+
+	switch v := v.src.(type) {
+	case vmUint64Const:
+		switch other := other.src.(type) {
+		case vmUint64Const:
+			return v.v == other.v
+		}
+	case vmByteConst:
+		switch other := other.src.(type) {
+		case vmByteConst:
+			return bytes.Equal(v.v, other.v)
+		}
+	}
+
+	return false
 }
 
 type vmUint64Const struct {
@@ -164,7 +196,7 @@ type vmStack struct {
 }
 
 func (b *VmBranch) skipNops() bool {
-	if b.Line == ExitLine {
+	if b.exited {
 		return false
 	}
 
@@ -214,9 +246,15 @@ func (b *VmBranch) peek(index int) VmValue {
 	return b.Stack.Items[len(b.Stack.Items)-1-index]
 }
 
+func (b *VmBranch) raise(err error) {
+	b.vm.Error = err
+	b.exited = true
+	panic(vmPause{})
+}
+
 func (b *VmBranch) pop(t VmDataType) VmValue {
 	if len(b.Stack.Items) == 0 {
-		panic(errors.Errorf("empty stack - expected: %s", t))
+		b.raise(errors.Errorf("empty stack - expected: %s", t))
 	}
 
 	v := b.Stack.Items[len(b.Stack.Items)-1]
@@ -227,7 +265,7 @@ func (b *VmBranch) pop(t VmDataType) VmValue {
 		case VmTypeAny:
 		default:
 			if v.T != t {
-				panic(fmt.Sprintf("unexpected data type on stack - expected: %s, got: %s", t, v.T))
+				b.raise(errors.Errorf("unexpected data type on stack - expected: %s, got: %s", t, v.T))
 			}
 		}
 	}
@@ -246,7 +284,8 @@ type VmBranch struct {
 
 	vm *Vm
 
-	Line int
+	Line   int
+	exited bool
 
 	Stack *vmStack
 
@@ -259,10 +298,15 @@ type VmBranch struct {
 }
 
 func (b *VmBranch) fork(target string) {
+	ln, err := b.vm.find(target)
+	if err != nil {
+		b.raise(err)
+	}
+
 	nb := &VmBranch{
 		Id:     b.vm.Id,
 		vm:     b.vm,
-		Line:   b.vm.find(target),
+		Line:   ln,
 		Stack:  b.Stack.clone(),
 		Budget: b.Budget,
 		Name:   target,
@@ -276,17 +320,27 @@ func (b *VmBranch) fork(target string) {
 }
 
 func (b *VmBranch) jump(target string) {
-	b.Line = b.vm.find(target)
+	ln, err := b.vm.find(target)
+	if err != nil {
+		b.raise(err)
+	}
+
+	b.Line = ln
 }
 
 func (b *VmBranch) call(target string) {
+	ln, err := b.vm.find(target)
+	if err != nil {
+		b.raise(err)
+	}
+
 	b.Frames = append(b.Frames, VmFrame{Return: b.Line, NumArgs: 0, NumReturns: 0, p: uint8(len(b.Stack.Items)), Name: b.Name})
-	b.Line = b.vm.find(target)
+	b.Line = ln
 }
 
 func (b *VmBranch) exit() {
-	b.Line = ExitLine
 	b.Name = ExitName
+	b.exited = true
 }
 
 type VmScratch struct {
@@ -312,18 +366,21 @@ type Vm struct {
 	Breakpoints []VmBreakpoint
 	Triggered   map[int][]int
 
+	Visited map[int]bool
+
 	Trace string
 
-	Error any
+	Error        error
+	BreakOnError bool
 }
 
-func (v *Vm) find(target string) int {
+func (v *Vm) find(target string) (int, error) {
 	ln, ok := v.syms[target]
 	if !ok {
-		return -1
+		return 0, errors.Errorf("target label not found: '%s'", target)
 	}
 
-	return ln
+	return ln, nil
 }
 
 func (v *Vm) updateBreakpoints(br *VmBranch) {
@@ -347,9 +404,11 @@ func NewVm(res *ProcessResult, opts ...VmOptions) (*Vm, error) {
 	}
 
 	v := &Vm{
-		Process:   res,
-		Triggered: map[int][]int{},
-		syms:      syms,
+		Process:      res,
+		Triggered:    map[int][]int{},
+		syms:         syms,
+		Visited:      map[int]bool{},
+		BreakOnError: true,
 	}
 
 	for _, opt := range opts {
@@ -382,7 +441,7 @@ func (v *Vm) skipNops() {
 	for len(v.Branches) > v.Current {
 		b := v.Branches[v.Current]
 
-		if b.Line == ExitLine {
+		if b.exited {
 			v.Current++
 			if v.Current == len(v.Branches) {
 				v.Current = 0
@@ -407,8 +466,10 @@ func (v *Vm) skipNops() {
 func (v *Vm) Switch(id int) {
 	for i, b := range v.Branches {
 		if b.Id == id {
-			v.Current = i
-			v.Branch = b
+			if !b.exited {
+				v.Current = i
+				v.Branch = b
+			}
 			break
 		}
 	}
@@ -440,8 +501,9 @@ func (v *Vm) Step() {
 	defer func() {
 		switch e := recover().(type) {
 		case nil:
+		case vmPause:
 		default:
-			v.Error = e
+			panic(e)
 		}
 	}()
 
@@ -490,6 +552,8 @@ func (v *Vm) Step() {
 				cb.Budget -= cost
 				cb.Trace = append(cb.Trace, op)
 
+				v.Visited[cb.Line] = true
+
 				switch op := op.(type) {
 				case vmOp:
 					op.Execute(cb)
@@ -508,7 +572,8 @@ func (v *Vm) Step() {
 }
 
 func (v *Vm) Run() {
-	for v.Branch != nil && v.Error == nil {
+	v.Error = nil
+	for v.Branch != nil && (!v.BreakOnError || v.Error == nil) {
 		v.Step()
 
 		if len(v.Triggered) > 0 {

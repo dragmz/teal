@@ -3,6 +3,7 @@ package teal
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -1462,9 +1463,20 @@ type BnzExpr struct {
 func (e *BnzExpr) IsBranch() {}
 
 func (e *BnzExpr) Execute(b *VmBranch) error {
-	b.pop(VmTypeUint64)
-	b.fork(e.Label.Name)
-	b.Line++
+	v := b.pop(VmTypeUint64)
+
+	switch v := v.src.(type) {
+	case vmUint64Const:
+		if v.v != 0 {
+			b.jump(e.Label.Name)
+		} else {
+			b.Line++
+		}
+	default:
+		b.fork(e.Label.Name)
+		b.Line++
+	}
+
 	return nil
 }
 
@@ -1483,9 +1495,20 @@ type BzExpr struct {
 func (e *BzExpr) IsBranch() {}
 
 func (e *BzExpr) Execute(b *VmBranch) error {
-	b.pop(VmTypeUint64)
-	b.fork(e.Label.Name)
-	b.Line++
+	v := b.pop(VmTypeUint64)
+
+	switch v := v.src.(type) {
+	case vmUint64Const:
+		if v.v == 0 {
+			b.jump(e.Label.Name)
+		} else {
+			b.Line++
+		}
+	default:
+		b.fork(e.Label.Name)
+		b.Line++
+	}
+
 	return nil
 }
 
@@ -1682,7 +1705,6 @@ type ReturnExpr struct {
 }
 
 func (e *ReturnExpr) Execute(b *VmBranch) error {
-	b.pop(VmTypeUint64)
 	b.exit()
 	return nil
 }
@@ -1700,13 +1722,31 @@ type SwitchExpr struct {
 func (e *SwitchExpr) IsBranch() {}
 
 func (e *SwitchExpr) Execute(b *VmBranch) error {
-	b.pop(VmTypeUint64)
+	v := b.pop(VmTypeUint64)
 
-	for _, t := range e.Targets {
-		b.fork(t.Name)
+	var match bool
+
+	switch v := v.src.(type) {
+	case vmUint64Const:
+		if v.v >= uint64(len(e.Targets)) {
+			b.Line++
+		} else {
+			b.jump(e.Targets[v.v].Name)
+		}
+	default:
+		for _, t := range e.Targets {
+			if !match {
+				b.jump(t.Name)
+				match = true
+			} else {
+				b.fork(t.Name)
+			}
+		}
 	}
 
-	b.Line++
+	if !match {
+		b.Line++
+	}
 
 	return nil
 }
@@ -1743,17 +1783,31 @@ type MatchExpr struct {
 func (e *MatchExpr) IsBranch() {}
 
 func (e *MatchExpr) Execute(b *VmBranch) error {
+	v := b.pop(VmTypeAny)
+
+	var vs []VmValue
 	for range e.Targets {
-		b.pop(VmTypeAny)
+		vs = append(vs, b.pop(VmTypeAny))
 	}
 
-	b.pop(VmTypeAny)
+	match := false
 
-	for _, t := range e.Targets {
-		b.fork(t.Name)
+	for i, ev := range vs {
+		if v.Matches(ev) {
+			t := e.Targets[len(e.Targets)-i-1]
+
+			if !match {
+				b.jump(t.Name)
+				match = true
+			} else {
+				b.fork(t.Name)
+			}
+		}
 	}
 
-	b.Line++
+	if !match {
+		b.Line++
+	}
 
 	return nil
 }
@@ -1815,8 +1869,18 @@ func (e *AssertExpr) String() string {
 }
 
 func (e *AssertExpr) Execute(b *VmBranch) error {
-	b.pop(VmTypeUint64)
-	b.Line++
+	v := b.pop(VmTypeUint64)
+
+	switch v := v.src.(type) {
+	case vmUint64Const:
+		if v.v == 0 {
+			b.raise(errors.New("assertion failed"))
+		} else {
+			b.Line++
+		}
+	default:
+		b.Line++
+	}
 	return nil
 }
 

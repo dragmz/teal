@@ -24,45 +24,35 @@ func TestDocs(t *testing.T) {
 	}
 }
 
-func TestParser(t *testing.T) {
-	type test struct {
-		Path  string
-		Clean bool
+func testParser(t *testing.T, dir string, clean bool) {
+	fs, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	tests := []test{
-		{
-			Path:  filepath.Join("examples", "ok"),
-			Clean: true,
-		},
-		{
-			Path:  filepath.Join("examples", "err"),
-			Clean: false,
-		},
-	}
-
-	for _, test := range tests {
-		fs, err := os.ReadDir(test.Path)
-		if err != nil {
-			t.Fatal(err)
+	for _, f := range fs {
+		if path.Ext(f.Name()) != ".teal" {
+			continue
 		}
 
-		for _, f := range fs {
-			if path.Ext(f.Name()) != ".teal" {
-				continue
-			}
+		bs, err := os.ReadFile(path.Join(dir, f.Name()))
+		if !assert.NoError(t, err) {
+			return
+		}
 
-			bs, err := os.ReadFile(path.Join(test.Path, f.Name()))
-			if !assert.NoError(t, err) {
-				return
-			}
-
-			res := Process(string(bs))
-			if test.Clean {
-				assert.Empty(t, res.Diagnostics)
-			} else {
-				assert.NotEmpty(t, res.Diagnostics)
-			}
+		res := Process(string(bs))
+		if clean {
+			assert.Empty(t, res.Diagnostics)
+		} else {
+			assert.NotEmpty(t, res.Diagnostics)
 		}
 	}
+}
+
+func TestParserOk(t *testing.T) {
+	testParser(t, filepath.Join("examples", "ok"), true)
+}
+
+func TestParserErr(t *testing.T) {
+	testParser(t, filepath.Join("examples", "err"), false)
 }

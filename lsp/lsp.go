@@ -1187,11 +1187,6 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			ls := []lspInlineValueText{}
 
-			ls = append(ls, lspInlineValueText{
-				Range: req.Params.Range,
-				Text:  "Debugger Test",
-			})
-
 			return l.success(h.Id, ls)
 
 		case "textDocument/codeLens":
