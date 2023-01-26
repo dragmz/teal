@@ -194,3 +194,13 @@ func TestRequiredVersion(t *testing.T) {
 	v := res.Versions[0]
 	assert.Equal(t, uint64(8), v.Version)
 }
+
+func TestInvalidByteInt(t *testing.T) {
+	res := Process(`#pragma version 8
+	byte \"test\"int 123
+	int 1
+	int 2`)
+
+	assert.Len(t, res.Lines, 4)
+	assert.Len(t, res.Listing, 4)
+}
