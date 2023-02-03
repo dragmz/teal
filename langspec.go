@@ -12,20 +12,9 @@ import (
 )
 
 type LangOp struct {
-	Opcode  byte
-	Name    string
-	Args    string `json:",omitempty"`
-	Returns string `json:",omitempty"`
-	Size    int
-
-	ArgEnum      []string `json:",omitempty"`
-	ArgEnumTypes string   `json:",omitempty"`
-
-	Doc           string
-	DocExtra      string `json:",omitempty"`
-	ImmediateNote string `json:",omitempty"`
-	Version       int
-	Groups        []string
+	Name     string
+	Doc      string
+	DocExtra string `json:",omitempty"`
 }
 
 //go:embed specs/langspec_v1.json
@@ -55,17 +44,19 @@ var BuiltInLangSpecV8 string
 //go:embed specs/langspec_v9.json
 var BuiltInLangSpecV9 string
 
-var BuiltInLangSpecs = []string{
-	BuiltInLangSpecV1,
-	BuiltInLangSpecV2,
-	BuiltInLangSpecV3,
-	BuiltInLangSpecV4,
-	BuiltInLangSpecV5,
-	BuiltInLangSpecV6,
-	BuiltInLangSpecV7,
-	BuiltInLangSpecV8,
-	BuiltInLangSpecV9,
+var BuiltInLangSpecs = []LangSpec{
+	mustReadLangSpec(BuiltInLangSpecV1),
+	mustReadLangSpec(BuiltInLangSpecV2),
+	mustReadLangSpec(BuiltInLangSpecV3),
+	mustReadLangSpec(BuiltInLangSpecV4),
+	mustReadLangSpec(BuiltInLangSpecV5),
+	mustReadLangSpec(BuiltInLangSpecV6),
+	mustReadLangSpec(BuiltInLangSpecV7),
+	mustReadLangSpec(BuiltInLangSpecV8),
+	mustReadLangSpec(BuiltInLangSpecV9),
 }
+
+var LatestLangSpec = BuiltInLangSpecs[len(BuiltInLangSpecs)-1]
 
 //go:embed langspec.json
 var BuiltInLangSpecJson string
@@ -92,6 +83,15 @@ func readLangSpec(r io.Reader) (LangSpec, error) {
 	err := d.Decode(&spec)
 
 	return spec, err
+}
+
+func mustReadLangSpec(specJson string) LangSpec {
+	spec, err := readLangSpec(strings.NewReader(specJson))
+	if err != nil {
+		panic(err)
+	}
+
+	return spec
 }
 
 type immArgKind uint8

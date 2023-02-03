@@ -1448,9 +1448,31 @@ func (d opItems) Get(c OpContext) (opItem, bool) {
 	return item, ok
 }
 
-var Ops = func() *opItems {
+var versionedLangOpsByName = func() map[int]map[string]LangOp {
+	res := map[int]map[string]LangOp{}
+
+	for i, s := range BuiltInLangSpecs {
+		curr := map[string]LangOp{}
+
+		for _, op := range s.Ops {
+			curr[op.Name] = op
+		}
+
+		res[i+1] = curr
+	}
+
+	return res
+}()
+
+var Ops = func(spec LangSpec) *opItems {
 	d := &opItems{
 		Items: map[string]opItem{},
+	}
+
+	opsByName := map[string]LangOp{}
+
+	for _, op := range spec.Ops {
+		opsByName[op.Name] = op
 	}
 
 	for _, info := range opsList {
@@ -1462,8 +1484,13 @@ var Ops = func() *opItems {
 
 		info.Parse(c)
 
-		doc := opDocByName[info.Name]
-		extra := opDocExtras[info.Name]
+		var doc string
+		var extra string
+
+		if langOp, ok := opsByName[info.Name]; ok {
+			doc = langOp.Doc
+			extra = langOp.DocExtra
+		}
 
 		full := doc
 		if extra != "" {
@@ -1545,7 +1572,7 @@ var Ops = func() *opItems {
 	}
 
 	return d
-}()
+}(LatestLangSpec)
 
 type processFunc func(c ProcessContext)
 
