@@ -28,6 +28,45 @@ type LangOp struct {
 	Groups        []string
 }
 
+//go:embed specs/langspec_v1.json
+var BuiltInLangSpecV1 string
+
+//go:embed specs/langspec_v2.json
+var BuiltInLangSpecV2 string
+
+//go:embed specs/langspec_v3.json
+var BuiltInLangSpecV3 string
+
+//go:embed specs/langspec_v4.json
+var BuiltInLangSpecV4 string
+
+//go:embed specs/langspec_v5.json
+var BuiltInLangSpecV5 string
+
+//go:embed specs/langspec_v6.json
+var BuiltInLangSpecV6 string
+
+//go:embed specs/langspec_v7.json
+var BuiltInLangSpecV7 string
+
+//go:embed specs/langspec_v8.json
+var BuiltInLangSpecV8 string
+
+//go:embed specs/langspec_v9.json
+var BuiltInLangSpecV9 string
+
+var BuiltInLangSpecs = []string{
+	BuiltInLangSpecV1,
+	BuiltInLangSpecV2,
+	BuiltInLangSpecV3,
+	BuiltInLangSpecV4,
+	BuiltInLangSpecV5,
+	BuiltInLangSpecV6,
+	BuiltInLangSpecV7,
+	BuiltInLangSpecV8,
+	BuiltInLangSpecV9,
+}
+
 //go:embed langspec.json
 var BuiltInLangSpecJson string
 
