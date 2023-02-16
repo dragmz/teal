@@ -1448,11 +1448,11 @@ func (d opItems) Get(c OpContext) (opItem, bool) {
 	return item, ok
 }
 
-var versionedLangOpsByName = func() map[int]map[string]LangOp {
-	res := map[int]map[string]LangOp{}
+var versionedLangOpsByName = func() map[int]map[string]LangSpecOp {
+	res := map[int]map[string]LangSpecOp{}
 
 	for i, s := range BuiltInLangSpecs {
-		curr := map[string]LangOp{}
+		curr := map[string]LangSpecOp{}
 
 		for _, op := range s.Ops {
 			curr[op.Name] = op
@@ -1469,7 +1469,7 @@ var Ops = func(spec LangSpec) *opItems {
 		Items: map[string]opItem{},
 	}
 
-	opsByName := map[string]LangOp{}
+	opsByName := map[string]LangSpecOp{}
 
 	for _, op := range spec.Ops {
 		opsByName[op.Name] = op
