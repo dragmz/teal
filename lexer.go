@@ -8,7 +8,8 @@ import (
 type TokenType string
 
 const (
-	TokenEol = "EOL"
+	TokenEol       = "EOL"
+	TokenSemicolon = ";"
 
 	TokenValue = "Value" // value
 
@@ -23,6 +24,17 @@ type Token struct {
 	e int // end
 
 	t TokenType
+}
+
+func (t Token) IsSeparator() bool {
+	switch t.t {
+	case TokenEol:
+		return true
+	case TokenSemicolon:
+		return true
+	}
+
+	return false
 }
 
 func (t Token) StartLine() int {
@@ -117,6 +129,7 @@ func isTerminating(c rune) bool {
 	case '\n':
 	case ' ':
 	case '\t':
+	case ';':
 	default:
 		return false
 	}
@@ -271,7 +284,7 @@ func (z *Lexer) readComment() {
 	}
 }
 
-func (z *Lexer) readEol() {
+func (z *Lexer) readSeparator() {
 	for {
 		if z.i == len(z.Source) {
 			z.emit(TokenEol)
@@ -279,7 +292,8 @@ func (z *Lexer) readEol() {
 		}
 
 		c, n := utf8.DecodeRune(z.Source[z.i:])
-		if c == '\r' {
+		switch c {
+		case '\r':
 			z.inc(n)
 			if z.i < len(z.Source) {
 				c2, n2 := utf8.DecodeRune(z.Source[z.i:])
@@ -289,11 +303,13 @@ func (z *Lexer) readEol() {
 			}
 			z.emit(TokenEol)
 			return
-		}
-
-		if c == '\n' {
+		case '\n':
 			z.inc(n)
 			z.emit(TokenEol)
+			return
+		case ';':
+			z.inc(n)
+			z.emit(TokenSemicolon)
 			return
 		}
 
@@ -314,8 +330,8 @@ func (z *Lexer) readTokens() {
 
 		if c == '/' && nc == '/' {
 			z.readComment()
-		} else if c == '\n' || c == '\r' {
-			z.readEol()
+		} else if c == '\n' || c == '\r' || c == ';' {
+			z.readSeparator()
 		} else {
 			z.readValue()
 		}

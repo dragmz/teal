@@ -204,3 +204,9 @@ func TestInvalidByteInt(t *testing.T) {
 	assert.Len(t, res.Lines, 4)
 	assert.Len(t, res.Listing, 4)
 }
+
+func TestSemicolon(t *testing.T) {
+	res := Process("int 1; int 2")
+	assert.Len(t, res.Lines, 1)
+	assert.Len(t, res.Lines[0], 5)
+}
