@@ -210,3 +210,8 @@ func TestSemicolon(t *testing.T) {
 	assert.Len(t, res.Lines, 1)
 	assert.Len(t, res.Lines[0], 5)
 }
+
+func TestGithubIssueVsCodeTeal3Regression(t *testing.T) {
+	Process(`int 1 /
+	b a`)
+}
