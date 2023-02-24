@@ -912,8 +912,12 @@ func (c *parserContext) modeMinVersion(mode ProgramMode, v uint64) {
 }
 
 func (c *parserContext) failAt(l int, b int, e int, err error) {
-	c.diag = append(c.diag, parseError{l: l, b: b, e: e, error: err})
+	c.errorAt(l, b, e, err)
 	panic(recoverable{})
+}
+
+func (c *parserContext) errorAt(l int, b int, e int, err error) {
+	c.diag = append(c.diag, parseError{l: l, b: b, e: e, error: err})
 }
 
 func (c *parserContext) failToken(t Token, err error) {
@@ -3281,9 +3285,11 @@ func Process(source string) *ProcessResult {
 					}
 
 					info.Parse(c)
+
 					if c.args.i < len(c.args.ts) {
 						if c.args.Scan() {
-							c.failCurr(errors.Errorf("too many values"))
+							t := c.args.Curr()
+							c.errorAt(t.l, t.b, t.e, errors.Errorf("too many values"))
 						}
 					}
 				} else {
