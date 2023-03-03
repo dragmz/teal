@@ -208,7 +208,24 @@ func TestInvalidByteInt(t *testing.T) {
 func TestSemicolon(t *testing.T) {
 	res := Process("int 1; int 2")
 	assert.Len(t, res.Lines, 1)
-	assert.Len(t, res.Lines[0], 5)
+
+	assert.Len(t, res.Lines[0].Subs, 2)
+	assert.Len(t, res.Lines[0].Subs[0].Tokens, 2)
+	assert.Len(t, res.Lines[0].Subs[1].Tokens, 2)
+
+	assert.Len(t, res.Lines[0].Tokens, 5)
+}
+
+func TestMultiSemicolon(t *testing.T) {
+	res := Process(";;;")
+	assert.Len(t, res.Lines, 1)
+
+	assert.Len(t, res.Lines[0].Subs, 3)
+	assert.Len(t, res.Lines[0].Subs[0].Tokens, 0)
+	assert.Len(t, res.Lines[0].Subs[1].Tokens, 0)
+	assert.Len(t, res.Lines[0].Subs[2].Tokens, 0)
+
+	assert.Len(t, res.Lines[0].Tokens, 3)
 }
 
 func TestGithubIssueVsCodeTeal3Regression(t *testing.T) {

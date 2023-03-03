@@ -1298,13 +1298,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			mode := tealCompletionArg
 
-			if len(ln) == 0 {
+			if len(ln.Tokens) == 0 {
 				mode = tealCompletionOp
 			} else {
-				if len(ln) > 0 {
-					if req.Params.Position.Character <= ln[0].End() {
+				if len(ln.Tokens) > 0 {
+					if req.Params.Position.Character <= ln.Tokens[0].End() {
 						mode = tealCompletionOp
-						prefix = ln[0].String()
+						prefix = ln.Tokens[0].String()
 					}
 				}
 			}

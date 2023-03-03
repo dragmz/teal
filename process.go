@@ -2496,28 +2496,35 @@ func opBlock(c ProcessContext) {
 	c.emit(&BlockExpr{Field: f})
 }
 
-type Line []Token
+type Subline struct {
+	Tokens []Token
+}
+
+type Line struct {
+	Tokens []Token
+	Subs   []Subline
+}
 
 func (ln Line) Begin() int {
-	switch len(ln) {
+	switch len(ln.Tokens) {
 	case 0:
 		return 0
 	default:
-		return ln[0].b
+		return ln.Tokens[0].b
 	}
 }
 
 func (ln Line) End() int {
-	switch len(ln) {
+	switch len(ln.Tokens) {
 	case 0:
 		return 0
 	default:
-		return ln[len(ln)-1].e
+		return ln.Tokens[len(ln.Tokens)-1].e
 	}
 }
 
 func (ln Line) ImmAt(pos int) (Token, int, bool) {
-	for idx, tok := range ln {
+	for idx, tok := range ln.Tokens {
 		if idx > 0 {
 			if pos >= tok.Begin() && pos <= tok.End() {
 				return tok, idx - 1, true
@@ -2696,11 +2703,11 @@ func (r ProcessResult) InlayHints(rg Range) InlayHints {
 		var ok bool
 		var spec opItem
 
-		if len(ln) > 0 {
-			spec, ok = r.getOp(ln[0].String())
+		if len(ln.Tokens) > 0 {
+			spec, ok = r.getOp(ln.Tokens[0].String())
 		}
 
-		for i, tok := range ln {
+		for i, tok := range ln.Tokens {
 			if !Overlaps(tok, rg) {
 				continue
 			}
@@ -2860,14 +2867,14 @@ func (r ProcessResult) ArgAt(l int, ch int) (opItemArg, int, bool) {
 
 	ln := r.Lines[l]
 
-	curr := len(ln) - 1
+	curr := len(ln.Tokens) - 1
 
 	_, idx, ok := ln.ImmAt(ch)
 	if ok {
 		curr = idx
 	}
 
-	op := ln[0]
+	op := ln.Tokens[0]
 	info, ok := Ops.Get(OpContext{
 		Name:    op.String(),
 		Version: r.Version,
@@ -2914,20 +2921,20 @@ func (r ProcessResult) DocAt(l int, ch int) string {
 
 	ln := r.Lines[l]
 
-	for i, t := range ln {
-		if t.b > ch || t.End() < ch {
+	for i, tok := range ln.Tokens {
+		if tok.b > ch || tok.End() < ch {
 			continue
 		}
 
 		if i == 0 {
-			info, ok := r.getOp(t.String())
+			info, ok := r.getOp(tok.String())
 			if ok {
 				return info.FullDoc
 			}
 		} else {
 			tok, idx, ok := ln.ImmAt(ch)
 			if ok {
-				info, ok := r.getOp(ln[0].String())
+				info, ok := r.getOp(ln.Tokens[0].String())
 				if ok {
 					if len(info.Args) > 0 && idx >= len(info.Args) && info.Args[len(info.Args)-1].Array {
 						idx = len(info.Args) - 1
@@ -3159,28 +3166,48 @@ func Process(source string) *ProcessResult {
 				k--
 			}
 
-			lines = append(lines, ts[p:k])
+			lines = append(lines, Line{
+				Tokens: ts[p:k],
+			})
 			p = j
 		}
 	}
 
 	for li, l := range lines {
-		for i := 1; i < len(l); i++ {
-			t := l[i]
-			if t.Type() == TokenComment {
-				lines[li] = l[:i]
+		sf := 0
+
+		for i := 0; i < len(l.Tokens); i++ {
+			t := l.Tokens[i]
+			switch t.Type() {
+			case TokenSemicolon:
+				l.Subs = append(l.Subs, Subline{
+					Tokens: l.Tokens[sf:i],
+				})
+				sf = i + 1
+			case TokenComment:
+				l.Tokens = l.Tokens[:i]
+				l.Subs = append(l.Subs, Subline{
+					Tokens: l.Tokens[sf:i],
+				})
+				sf = i
 			}
 		}
+
+		if sf < len(l.Tokens) {
+			l.Subs = append(l.Subs, Subline{
+				Tokens: l.Tokens[sf:len(l.Tokens)],
+			})
+		}
+		lines[li] = l
 	}
 
-	var lts []Line
 	var ops []Token
 	var lsyms []*labelSymbol
 	var vers []RequiredVersion
 
 	for line, l := range lines {
 		c.line = line
-		c.args = &arguments{ts: l}
+		c.args = &arguments{ts: l.Tokens}
 		func() {
 			defer func() {
 				switch v := recover().(type) {
@@ -3274,7 +3301,9 @@ func Process(source string) *ProcessResult {
 							r:     OpCodeVersionCompatibilityCheckRuleInstance.Id(),
 						})
 
-						var ln Line = c.args.ts
+						var ln Line = Line{
+							Tokens: c.args.ts,
+						}
 
 						vers = append(vers, RequiredVersion{
 							Line:    curr.l,
@@ -3298,15 +3327,13 @@ func Process(source string) *ProcessResult {
 				return
 			}
 		}()
-
-		lts = append(lts, c.args.ts)
 	}
 
 	l := &Linter{l: c.ops}
 	l.Lint()
 
 	for _, le := range l.errs {
-		ln := lts[le.Line()]
+		ln := lines[le.Line()]
 		c.diag = append(c.diag, lintError{
 			error: le,
 			l:     le.Line(),
@@ -3353,7 +3380,7 @@ func Process(source string) *ProcessResult {
 		Symbols:      syms,
 		SymbolRefs:   c.refs,
 		Tokens:       ts,
-		Lines:        lts,
+		Lines:        lines,
 		Listing:      c.ops,
 		Ops:          ops,
 		Numbers:      c.nums,
