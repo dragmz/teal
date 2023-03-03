@@ -413,6 +413,12 @@ type tealRemoveLineCommandArgs struct {
 	Line int    `json:"line"`
 }
 
+type tealRemoveCallCommandArgs struct {
+	Uri     string `json:"uri"`
+	Line    int    `json:"line"`
+	Subline int    `json:"subline"`
+}
+
 type lspWorkspaceExecuteCommandHeader struct {
 	Command string `json:"command"`
 }
@@ -969,8 +975,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						},
 					},
 				})
-			case "teal.line.remove":
-				var body lspWorkspaceExecuteCommandBody[[]tealRemoveLineCommandArgs]
+			case "teal.call.remove":
+				var body lspWorkspaceExecuteCommandBody[[]tealRemoveCallCommandArgs]
 				err := readInto(b, &body)
 				if err != nil {
 					return err
@@ -988,12 +994,15 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					return errors.New("doc not found")
 				}
 
-				line := arg.Line
+				res := doc.Results()
 
-				edits := []lspTextEdit{prepareRemoveLineEdit(line)}
+				line := arg.Line
+				subline := arg.Subline
+
+				edits := []lspTextEdit{prepareRemoveSublineEdit(res, line, subline)}
 
 				return l.request("workspace/applyEdit", lspWorkspaceApplyEditRequestParams{
-					Label: "Remove line",
+					Label: "Remove call",
 					Edit: lspWorkspaceEdit{
 						DocumentChanges: []lspTextDocumentEdit{
 							{
@@ -1578,11 +1587,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						Kind:  &kind,
 						Command: &lspCommand{
 							Title:   title,
-							Command: "teal.line.remove",
+							Command: "teal.call.remove",
 							Arguments: []interface{}{
-								tealRemoveLineCommandArgs{
-									Uri:  req.Params.TextDocument.Uri,
-									Line: red.Line(),
+								tealRemoveCallCommandArgs{
+									Uri:     req.Params.TextDocument.Uri,
+									Line:    red.Line(),
+									Subline: red.Subline(),
 								},
 							},
 						},
@@ -1892,7 +1902,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							"teal.label.create",
 							"teal.label.remove",
 							"teal.value.replace",
-							"teal.line.remove",
+							"teal.call.remove",
 							"teal.version.update",
 						},
 					},
@@ -2173,6 +2183,25 @@ func prepareRemoveLineEdit(line int) lspTextEdit {
 			End: lspPosition{
 				Line:      line + 1,
 				Character: 0,
+			},
+		},
+		NewText: "",
+	}
+}
+
+func prepareRemoveSublineEdit(res *teal.ProcessResult, line int, subline int) lspTextEdit {
+	b := res.Lines[line].SublineBegin(subline)
+	e := res.Lines[line].SublineEnd(subline)
+
+	return lspTextEdit{
+		Range: lspRange{
+			Start: lspPosition{
+				Line:      line,
+				Character: b,
+			},
+			End: lspPosition{
+				Line:      line,
+				Character: e,
 			},
 		},
 		NewText: "",

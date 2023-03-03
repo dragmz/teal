@@ -42,9 +42,9 @@ func testParser(t *testing.T, dir string, clean bool) {
 
 		res := Process(string(bs))
 		if clean {
-			assert.Empty(t, res.Diagnostics)
+			assert.Empty(t, res.Diagnostics, f.Name())
 		} else {
-			assert.NotEmpty(t, res.Diagnostics)
+			assert.NotEmpty(t, res.Diagnostics, f.Name())
 		}
 	}
 }
