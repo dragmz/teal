@@ -4,18 +4,36 @@ import (
 	"fmt"
 )
 
+type position struct {
+	l int
+	s int
+}
+
+func (p position) Before(other position) bool {
+	return p.l < other.l || (p.l == other.l && p.s < other.s)
+}
+
+func (p position) After(other position) bool {
+	return p.l > other.l || (p.l == other.l && p.s > other.s)
+}
+
 type RedundantLine interface {
 	Line() int
+	Subline() int
 	String() string
 }
 
 type RedundantLabelLine struct {
-	line int
+	p    position
 	name string
 }
 
 func (l RedundantLabelLine) Line() int {
-	return l.line
+	return l.p.l
+}
+
+func (l RedundantLabelLine) Subline() int {
+	return l.p.s
 }
 
 func (l RedundantLabelLine) String() string {
@@ -23,11 +41,15 @@ func (l RedundantLabelLine) String() string {
 }
 
 type RedundantBLine struct {
-	line int
+	p position
 }
 
 func (l RedundantBLine) Line() int {
-	return l.line
+	return l.p.l
+}
+
+func (l RedundantBLine) Subline() int {
+	return l.p.s
 }
 
 func (l RedundantBLine) String() string {
@@ -37,25 +59,62 @@ func (l RedundantBLine) String() string {
 type LineError interface {
 	error
 	Line() int
+	Subline() int
 	Severity() DiagnosticSeverity
 	Rule() string
 }
 
 type Linter struct {
-	l Listing
+	l [][]Op
 
 	errs []LineError
 	reds []RedundantLine
 }
 
+func (l *Linter) forEachForward(line, sub int, cb func(line int, sub int) bool) {
+	first := true
+	for i := line; i < len(l.l); i++ {
+		if first {
+			first = false
+		} else {
+			sub = 0
+		}
+		for j := sub; j < len(l.l[i]); j++ {
+			if !cb(i, j) {
+				return
+			}
+		}
+	}
+}
+
+func (l *Linter) forEachBackward(line, sub int, cb func(int, int) bool) {
+	first := true
+	for i := line; i >= 0; i-- {
+		if first {
+			first = false
+		} else {
+			sub = len(l.l[i]) - 1
+		}
+		for j := sub; j >= 0; j-- {
+			if !cb(i, j) {
+				return
+			}
+		}
+	}
+}
+
 type DuplicateLabelError struct {
-	l    int
+	p    position
 	name string
 	rule string
 }
 
 func (e DuplicateLabelError) Line() int {
-	return e.l
+	return e.p.l
+}
+
+func (e DuplicateLabelError) Subline() int {
+	return e.p.s
 }
 
 func (e DuplicateLabelError) Error() string {
@@ -71,13 +130,17 @@ func (e DuplicateLabelError) Rule() string {
 }
 
 type UnusedLabelError struct {
-	l    int
+	p    position
 	name string
 	rule string
 }
 
 func (e *UnusedLabelError) Line() int {
-	return e.l
+	return e.p.l
+}
+
+func (e *UnusedLabelError) Subline() int {
+	return e.p.s
 }
 
 func (e UnusedLabelError) Error() string {
@@ -93,12 +156,16 @@ func (e UnusedLabelError) Rule() string {
 }
 
 type UnreachableCodeError struct {
-	l    int
+	p    position
 	rule string
 }
 
 func (e UnreachableCodeError) Line() int {
-	return e.l
+	return e.p.l
+}
+
+func (e UnreachableCodeError) Subline() int {
+	return e.p.s
 }
 
 func (e UnreachableCodeError) Error() string {
@@ -114,12 +181,16 @@ func (e UnreachableCodeError) Rule() string {
 }
 
 type BJustBeforeLabelError struct {
-	l    int
+	p    position
 	rule string
 }
 
 func (e BJustBeforeLabelError) Line() int {
-	return e.l
+	return e.p.l
+}
+
+func (e BJustBeforeLabelError) Subline() int {
+	return e.p.s
 }
 
 func (e BJustBeforeLabelError) Error() string {
@@ -156,13 +227,17 @@ func (e EmptyLoopError) Rule() string {
 }
 
 type MissingLabelError struct {
-	l    int
+	p    position
 	name string
 	rule string
 }
 
 func (e MissingLabelError) Line() int {
-	return e.l
+	return e.p.l
+}
+
+func (e MissingLabelError) Subline() int {
+	return e.p.s
 }
 
 func (e MissingLabelError) Error() string {
@@ -178,12 +253,16 @@ func (e MissingLabelError) Rule() string {
 }
 
 type InfiniteLoopError struct {
-	l    int
+	p    position
 	rule string
 }
 
 func (e InfiniteLoopError) Line() int {
-	return e.l
+	return e.p.l
+}
+
+func (e InfiniteLoopError) Subline() int {
+	return e.p.s
 }
 
 func (e InfiniteLoopError) Error() string {
@@ -199,12 +278,16 @@ func (e InfiniteLoopError) Rule() string {
 }
 
 type PragmaVersionAfterInstrError struct {
-	l    int
+	p    position
 	rule string
 }
 
 func (e PragmaVersionAfterInstrError) Line() int {
-	return e.l
+	return e.p.l
+}
+
+func (e PragmaVersionAfterInstrError) Subline() int {
+	return e.p.s
 }
 
 func (e PragmaVersionAfterInstrError) Error() string {
@@ -219,14 +302,16 @@ func (e PragmaVersionAfterInstrError) Rule() string {
 	return e.rule
 }
 
-func (l *Linter) getLabelsUsers() map[string][]int {
-	used := map[string][]int{}
+func (l *Linter) getLabelsUsers() map[string][]position {
+	used := map[string][]position{}
 
-	for i, o := range l.l {
-		switch o2 := o.(type) {
-		case usesLabels:
-			for _, l := range o2.Labels() {
-				used[l.Name] = append(used[l.Name], i)
+	for i, lo := range l.l {
+		for j, o := range lo {
+			switch o2 := o.(type) {
+			case usesLabels:
+				for _, l := range o2.Labels() {
+					used[l.Name] = append(used[l.Name], position{l: i, s: j})
+				}
 			}
 		}
 	}
@@ -234,39 +319,52 @@ func (l *Linter) getLabelsUsers() map[string][]int {
 	return used
 }
 
-func (l *Linter) getAllLabels() map[string][]int {
-	all := map[string][]int{}
+func (l *Linter) getAllLabels() map[string][]position {
+	all := map[string][]position{}
 
-	for i, o := range l.l {
-		switch o := o.(type) {
-		case *LabelExpr:
-			all[o.Name] = append(all[o.Name], i)
+	for i, lo := range l.l {
+		for j, o := range lo {
+			switch o := o.(type) {
+			case *LabelExpr:
+				all[o.Name] = append(all[o.Name], position{l: i, s: j})
+			}
 		}
 	}
 
 	return all
 }
 
-func (l *Linter) canEscape(from, to int) bool {
+func (l *Linter) canEscape(from, to position) bool {
 	labels := l.getAllLabels()
 
-	for i := from; i <= to; i++ {
-		switch op := l.l[i].(type) {
+	result := false
+	l.forEachForward(from.l, from.s, func(i, j int) bool {
+		if to.l == i && to.s == j {
+			return false
+		}
+
+		op := l.l[i][j]
+
+		switch op := op.(type) {
 		case usesLabels:
 			for _, lbl := range op.Labels() {
 				for _, idx := range labels[lbl.Name] {
-					if idx < from || idx > to {
+					if idx.Before(from) || idx.After(to) {
 						// TODO: check if the target label block is escapable
-						return true
+						result = true
+						return false
 					}
 				}
 			}
 		case Terminator:
-			return true
+			result = true
+			return false
 		}
-	}
 
-	return false
+		return true
+	})
+
+	return result
 }
 
 type LintRule interface {
@@ -291,10 +389,10 @@ func (r DuplicateLabelsRule) Desc() string {
 
 func (r DuplicateLabelsRule) Run(l *Linter) {
 	labels := l.getAllLabels()
-	for name, lines := range labels {
-		if len(lines) > 1 {
-			for _, line := range lines {
-				l.errs = append(l.errs, DuplicateLabelError{l: line, name: name, rule: r.Id()})
+	for name, positions := range labels {
+		if len(positions) > 1 {
+			for _, pos := range positions {
+				l.errs = append(l.errs, DuplicateLabelError{p: pos, name: name, rule: r.Id()})
 			}
 		}
 	}
@@ -313,11 +411,11 @@ func (r UnusedLabelsRule) Desc() string {
 
 func (r UnusedLabelsRule) Run(l *Linter) {
 	used := l.getLabelsUsers()
-	for name, lines := range l.getAllLabels() {
+	for name, positions := range l.getAllLabels() {
 		if len(used[name]) == 0 {
-			for _, line := range lines {
-				l.errs = append(l.errs, &UnusedLabelError{l: line, name: name, rule: r.Id()})
-				l.reds = append(l.reds, &RedundantLabelLine{line: line, name: name})
+			for _, p := range positions {
+				l.errs = append(l.errs, &UnusedLabelError{p: p, name: name, rule: r.Id()})
+				l.reds = append(l.reds, &RedundantLabelLine{p: p, name: name})
 			}
 		}
 	}
@@ -337,34 +435,37 @@ func (r OpsAfterUnconditionalBranchRule) Desc() string {
 func (r OpsAfterUnconditionalBranchRule) Run(l *Linter) {
 	used := l.getLabelsUsers()
 
-	for i := 0; i < len(l.l); i++ {
-		o := l.l[i]
-		unused := false
+	l.forEachForward(0, 0, func(i, j int) bool {
+		o := l.l[i][j]
+
+		check := false
 		switch o.(type) {
 		case *BExpr:
-			unused = true
+			check = true
 		case *ReturnExpr:
-			unused = true
+			check = true
 		case *ErrExpr:
-			unused = true
+			check = true
 		}
 
-		if unused {
-		loop:
-			for i = i + 1; i < len(l.l); i++ {
-				o2 := l.l[i]
+		if check {
+			l.forEachForward(i, j+1, func(i2, j2 int) bool {
+				o2 := l.l[i2][j2]
 				switch o2 := o2.(type) {
 				case *LabelExpr:
 					if len(used[o2.Name]) > 0 {
-						break loop
+						return false
 					}
 				case Nop:
 				default:
-					l.errs = append(l.errs, UnreachableCodeError{l: i, rule: r.Id()})
+					l.errs = append(l.errs, UnreachableCodeError{p: position{l: i2, s: j2}, rule: r.Id()})
 				}
-			}
+				return true
+			})
 		}
-	}
+
+		return true
+	})
 }
 
 type CheckBranchJustBeforeLabelRule struct {
@@ -379,44 +480,29 @@ func (r CheckBranchJustBeforeLabelRule) Desc() string {
 }
 
 func (r CheckBranchJustBeforeLabelRule) Run(l *Linter) {
-	for i, o := range l.l {
-		func() {
-			if i >= len(l.l)-1 {
-				return
-			}
-
-			switch o := o.(type) {
-			case *BExpr:
-				j := i + 1
-
-				func() {
-				loop:
-					for {
-						if j >= len(l.l) {
-							break
-						}
-
-						n := l.l[j]
-						j += 1
-
-						switch n := n.(type) {
-						case *LabelExpr:
-							if n.Name == o.Label.Name {
-								l.errs = append(l.errs, BJustBeforeLabelError{l: i, rule: r.Id()})
-								l.reds = append(l.reds, RedundantBLine{line: i})
-								return
-							}
-							break loop
-						case Nop:
-						default:
-							break loop
-						}
+	l.forEachForward(0, 0, func(i, j int) bool {
+		o := l.l[i][j]
+		switch o := o.(type) {
+		case *BExpr:
+			l.forEachForward(i, j+1, func(i2, j2 int) bool {
+				o2 := l.l[i2][j2]
+				switch o2 := o2.(type) {
+				case *LabelExpr:
+					if o2.Name == o.Label.Name {
+						l.errs = append(l.errs, BJustBeforeLabelError{p: position{l: i, s: j}, rule: r.Id()})
+						l.reds = append(l.reds, RedundantBLine{p: position{l: i, s: j}})
+						return true
 					}
-				}()
-			default:
-			}
-		}()
-	}
+					return false
+				case Nop:
+				default:
+					return false
+				}
+				return true
+			})
+		}
+		return true
+	})
 }
 
 type CheckLoopsRule struct{}
@@ -437,49 +523,31 @@ func (r CheckLoopsRule) Run(l *Linter) {
 		_, ok := all[name]
 		if !ok {
 			for _, user := range users {
-				l.errs = append(l.errs, MissingLabelError{l: user, name: name, rule: r.Id()})
+				l.errs = append(l.errs, MissingLabelError{p: user, name: name, rule: r.Id()})
 			}
 		}
 	}
 
-	for i, o := range l.l {
-		if i == 0 {
-			continue
-		}
-
-		func() {
-			if i == 0 {
-				return
-			}
-
-			switch o := o.(type) {
-			case *BExpr:
-				j := i - 1
-
-				func() {
-					for {
-						if j < 0 {
-							break
+	l.forEachForward(0, 0, func(i, j int) bool {
+		o := l.l[i][j]
+		switch o := o.(type) {
+		case *BExpr:
+			l.forEachBackward(i, j-1, func(i2, j2 int) bool {
+				o2 := l.l[i2][j2]
+				switch o2 := o2.(type) {
+				case *LabelExpr:
+					if o2.Name == o.Label.Name {
+						if !l.canEscape(position{l: i2, s: j2}, position{l: i, s: j}) {
+							l.errs = append(l.errs, InfiniteLoopError{p: position{l: i, s: j}, rule: r.Id()})
 						}
-
-						n := l.l[j]
-
-						switch n := n.(type) {
-						case *LabelExpr:
-							if n.Name == o.Label.Name {
-								if !l.canEscape(j, i) {
-									l.errs = append(l.errs, InfiniteLoopError{l: i, rule: r.Id()})
-								}
-								return
-							}
-						}
-						j -= 1
 					}
-				}()
-			default:
-			}
-		}()
-	}
+				}
+				return true
+			})
+		}
+		return true
+	})
+
 }
 
 type CheckPragmaRule struct{}
@@ -494,19 +562,21 @@ func (r CheckPragmaRule) Desc() string {
 
 func (r CheckPragmaRule) Run(l *Linter) {
 	var prev Op
-	for i, op := range l.l {
-		switch op := op.(type) {
-		case *PragmaExpr:
-			if prev != nil {
-				l.errs = append(l.errs, PragmaVersionAfterInstrError{
-					l:    i,
-					rule: r.Id(),
-				})
+	for i, ops := range l.l {
+		for j, op := range ops {
+			switch op := op.(type) {
+			case *PragmaExpr:
+				if prev != nil {
+					l.errs = append(l.errs, PragmaVersionAfterInstrError{
+						p:    position{l: i, s: j},
+						rule: r.Id(),
+					})
+				}
+				prev = op
+			case Nop:
+			default:
+				prev = op
 			}
-			prev = op
-		case Nop:
-		default:
-			prev = op
 		}
 	}
 }

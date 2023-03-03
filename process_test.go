@@ -56,9 +56,7 @@ func TestProcessEmpty(t *testing.T) {
 func TestRedundantLabelLine(t *testing.T) {
 	res := Process("test_label:")
 
-	if len(res.Redundants) != 1 {
-		t.Error("len mismatch")
-	}
+	assert.Len(t, res.Redundants, 1)
 
 	r := res.Redundants[0]
 
@@ -231,4 +229,20 @@ func TestMultiSemicolon(t *testing.T) {
 func TestGithubIssueVsCodeTeal3Regression(t *testing.T) {
 	Process(`int 1 /
 	b a`)
+}
+
+func TestBranchToSameLine(t *testing.T) {
+	Process("a:;b a")
+}
+
+func TestInfiniteLoopLinting(t *testing.T) {
+	res := Process(`#pragma version 8
+	l1:
+	b l1
+	l2:
+	b l2`)
+
+	assert.Len(t, res.Diagnostics, 2)
+	assert.Equal(t, res.Diagnostics[0].Line(), 2)
+	assert.Equal(t, res.Diagnostics[1].Line(), 4)
 }

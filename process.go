@@ -856,10 +856,16 @@ type Call struct {
 	Line int
 }
 
+type LineOp struct {
+	Line int
+	Op   Op
+}
+
 type parserContext struct {
 	mode    ProgramMode
 	version uint64
 
+	lops [][]Op
 	ops  []Op
 	args *arguments
 	diag []Diagnostic
@@ -875,7 +881,7 @@ type parserContext struct {
 	refc   map[string]int
 
 	// current state
-	line     int
+	line     []Op
 	label    *LabelExpr
 	comments []string
 }
@@ -885,7 +891,7 @@ func (c *parserContext) comment(text string) {
 }
 
 func (c *parserContext) emit(op Op) {
-	c.ops = append(c.ops, op)
+	c.line = append(c.line, op)
 
 	switch op := op.(type) {
 	case usesLabels:
@@ -2505,6 +2511,26 @@ type Line struct {
 	Subs   []Subline
 }
 
+func (ln Line) SublineBegin(i int) int {
+	for j := i; j >= 0; j-- {
+		s := ln.Subs[j]
+		if len(s.Tokens) > 0 {
+			return s.Tokens[0].b
+		}
+	}
+	return 0
+}
+
+func (ln Line) SublineEnd(i int) int {
+	for j := i; j >= 0; j-- {
+		s := ln.Subs[j]
+		if len(s.Tokens) > 0 {
+			return s.Tokens[len(s.Tokens)-1].e
+		}
+	}
+	return 0
+}
+
 func (ln Line) Begin() int {
 	switch len(ln.Tokens) {
 	case 0:
@@ -2573,7 +2599,7 @@ type ProcessResult struct {
 	SymbolRefs []Token
 
 	Tokens  []Token
-	Listing Listing
+	Listing []Op
 	Lines   []Line
 
 	Ops []Token
@@ -3143,6 +3169,7 @@ func Process(source string) *ProcessResult {
 	c := &parserContext{
 		version: 1,
 		ops:     []Op{},
+		lops:    [][]Op{},
 		mode:    ModeApp,
 		protos:  map[string]*ProtoExpr{},
 		refc:    map[string]int{},
@@ -3205,140 +3232,146 @@ func Process(source string) *ProcessResult {
 	var lsyms []*labelSymbol
 	var vers []RequiredVersion
 
-	for line, l := range lines {
-		c.line = line
-		c.args = &arguments{ts: l.Tokens}
-		func() {
-			defer func() {
-				switch v := recover().(type) {
-				case recoverable:
-					c.emit(Empty) // consider replacing with Raw string expr
-				case nil:
-				default:
-					fmt.Printf("unrecoverable: %v", v)
-					panic(v)
-				}
-			}()
+	for _, l := range lines {
+		c.line = []Op{}
 
-			if !c.args.Scan() {
-				c.emit(Empty)
-				return
-			}
+		for _, sl := range l.Subs {
+			c.args = &arguments{ts: sl.Tokens}
+			func() {
+				defer func() {
+					switch v := recover().(type) {
+					case recoverable:
+						c.emit(Empty) // consider replacing with Raw string expr
+					case nil:
+					default:
+						fmt.Printf("unrecoverable: %v", v)
+						panic(v)
+					}
+				}()
 
-			if c.args.Curr().Type() == TokenComment {
-				if strings.TrimSpace(c.args.Curr().String()) == "#pragma mode logicsig" {
-					c.mode = ModeSig
-				} else {
-					c.comment(c.args.Curr().String())
-				}
-				c.emit(Empty)
-				return
-			} else if strings.HasSuffix(c.args.Text(), ":") {
-				name := c.args.Text()
-				name = name[:len(name)-1]
-				if len(name) == 0 {
-					c.failCurr(errors.New("missing label name"))
+				if !c.args.Scan() {
+					c.emit(Empty)
 					return
 				}
 
-				t := c.args.Curr()
-				lsyms = append(lsyms, &labelSymbol{
-					n:    name,
-					l:    t.l,
-					b:    t.b,
-					e:    t.e,
-					docs: strings.Join(c.comments, "\n"),
-				})
-
-				c.emit(&LabelExpr{Name: name})
-				c.comments = nil
-
-				return
-			}
-
-			name := c.args.Text()
-			switch c.args.Text() {
-			case "":
-				c.emit(Empty)
-			case "#pragma":
-				opPragma(c)
-			default:
-				info, ok := Ops.Get(OpContext{
-					Name:    name,
-					Version: c.version,
-				})
-				if ok {
-					curr := c.args.Curr()
-					ops = append(ops, curr)
-
-					var min uint64
-					switch c.mode {
-					case ModeApp:
-						min = info.AppVersion
-					case ModeSig:
-						min = info.SigVersion
+				if c.args.Curr().Type() == TokenComment {
+					if strings.TrimSpace(c.args.Curr().String()) == "#pragma mode logicsig" {
+						c.mode = ModeSig
+					} else {
+						c.comment(c.args.Curr().String())
+					}
+					c.emit(Empty)
+					return
+				} else if strings.HasSuffix(c.args.Text(), ":") {
+					name := c.args.Text()
+					name = name[:len(name)-1]
+					if len(name) == 0 {
+						c.failCurr(errors.New("missing label name"))
+						return
 					}
 
-					// TODO: the mode / version check rules need refactoring (into linter?)
-					if min == 0 {
-						c.diag = append(c.diag, lintError{
-							error: errors.Errorf("opcode not available in the current mode: %s", c.mode),
-							l:     curr.l,
-							b:     curr.b,
-							e:     curr.e,
-							s:     DiagErr,
-							r:     OpCodeAvailabilityInModeRuleInstance.Id(),
-						})
-					}
+					t := c.args.Curr()
+					lsyms = append(lsyms, &labelSymbol{
+						n:    name,
+						l:    t.l,
+						b:    t.b,
+						e:    t.e,
+						docs: strings.Join(c.comments, "\n"),
+					})
 
-					if min > c.version {
-						c.diag = append(c.diag, lintError{
-							error: errors.Errorf("opcode requires version >= %d (current: %d)", min, c.version),
-							l:     curr.l,
-							b:     curr.b,
-							e:     curr.e,
-							s:     DiagErr,
-							r:     OpCodeVersionCompatibilityCheckRuleInstance.Id(),
-						})
+					c.emit(&LabelExpr{Name: name})
+					c.comments = nil
 
-						var ln Line = Line{
-							Tokens: c.args.ts,
-						}
-
-						vers = append(vers, RequiredVersion{
-							Line:    curr.l,
-							Begin:   ln.Begin(),
-							End:     ln.End(),
-							Version: min,
-						})
-					}
-
-					info.Parse(c)
-
-					if c.args.i < len(c.args.ts) {
-						if c.args.Scan() {
-							t := c.args.Curr()
-							c.errorAt(t.l, t.b, t.e, errors.Errorf("too many values"))
-						}
-					}
-				} else {
-					c.failCurr(errors.Errorf("unknown opcode: %s", c.args.Text()))
+					return
 				}
-				return
-			}
-		}()
+
+				name := c.args.Text()
+				switch c.args.Text() {
+				case "":
+					c.emit(Empty)
+				case "#pragma":
+					opPragma(c)
+				default:
+					info, ok := Ops.Get(OpContext{
+						Name:    name,
+						Version: c.version,
+					})
+					if ok {
+						curr := c.args.Curr()
+						ops = append(ops, curr)
+
+						var min uint64
+						switch c.mode {
+						case ModeApp:
+							min = info.AppVersion
+						case ModeSig:
+							min = info.SigVersion
+						}
+
+						// TODO: the mode / version check rules need refactoring (into linter?)
+						if min == 0 {
+							c.diag = append(c.diag, lintError{
+								error: errors.Errorf("opcode not available in the current mode: %s", c.mode),
+								l:     curr.l,
+								b:     curr.b,
+								e:     curr.e,
+								s:     DiagErr,
+								r:     OpCodeAvailabilityInModeRuleInstance.Id(),
+							})
+						}
+
+						if min > c.version {
+							c.diag = append(c.diag, lintError{
+								error: errors.Errorf("opcode requires version >= %d (current: %d)", min, c.version),
+								l:     curr.l,
+								b:     curr.b,
+								e:     curr.e,
+								s:     DiagErr,
+								r:     OpCodeVersionCompatibilityCheckRuleInstance.Id(),
+							})
+
+							var ln Line = Line{
+								Tokens: c.args.ts,
+							}
+
+							vers = append(vers, RequiredVersion{
+								Line:    curr.l,
+								Begin:   ln.Begin(),
+								End:     ln.End(),
+								Version: min,
+							})
+						}
+
+						info.Parse(c)
+
+						if c.args.i < len(c.args.ts) {
+							if c.args.Scan() {
+								t := c.args.Curr()
+								c.errorAt(t.l, t.b, t.e, errors.Errorf("too many values"))
+							}
+						}
+					} else {
+						c.failCurr(errors.Errorf("unknown opcode: %s", c.args.Text()))
+					}
+					return
+				}
+			}()
+		}
+
+		c.ops = append(c.ops, c.line...)
+		c.lops = append(c.lops, c.line)
 	}
 
-	l := &Linter{l: c.ops}
-	l.Lint()
+	linter := &Linter{l: c.lops}
+	linter.Lint()
 
-	for _, le := range l.errs {
+	for _, le := range linter.errs {
 		ln := lines[le.Line()]
 		c.diag = append(c.diag, lintError{
 			error: le,
 			l:     le.Line(),
-			b:     ln.Begin(),
-			e:     ln.End(),
+			b:     ln.SublineBegin(le.Subline()),
+			e:     ln.SublineEnd(le.Subline()),
 			s:     le.Severity(),
 			r:     le.Rule(),
 		})
@@ -3387,7 +3420,7 @@ func Process(source string) *ProcessResult {
 		Strings:      c.strs,
 		Keywords:     c.keys,
 		Macros:       c.mcrs,
-		Redundants:   l.reds,
+		Redundants:   linter.reds,
 		Versions:     vers,
 		RefCounts:    c.refc,
 	}

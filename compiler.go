@@ -210,13 +210,6 @@ func mergeLabels(l Listing) Listing {
 	return res
 }
 
-func (l Listing) Lint() []LineError {
-	lnt := &Linter{l: l}
-	lnt.Lint()
-
-	return lnt.errs
-}
-
 func (l Listing) Reconstruct() Program {
 	var p Program
 	for _, op := range l {
