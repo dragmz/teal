@@ -36,6 +36,7 @@ const (
 	OpArgTypeSignature
 	OpArgTypeAddr
 	OpArgTypePragmaName
+	OpArgTypeDefineName
 	OpArgTypeBase64EncodingField
 	OpArgTypeBlockField
 	OpArgTypeEcGroupField
@@ -278,6 +279,8 @@ func (t NewOpArgType) String() string {
 		return "address"
 	case OpArgTypePragmaName:
 		return "pragma name"
+	case OpArgTypeDefineName:
+		return "define name"
 	case OpArgTypeBase64EncodingField:
 		return "base64 encoding"
 	case OpArgTypeBlockField:
@@ -516,6 +519,7 @@ type ProcessContext interface {
 	minVersion(v uint64)
 	modeMinVersion(mode ProgramMode, v uint64)
 
+	mustReadDefine() string
 	mustReadEcGroup(name string) EcGroup
 	mustReadBase64Encoding(name string) Base64Encoding
 	mustReadPragma(name string) uint64
@@ -580,6 +584,16 @@ func (c *docContext) modeMinVersion(mode ProgramMode, v uint64) {
 	case ModeApp:
 		c.appVersion = v
 	}
+}
+
+func (c *docContext) mustReadDefine() (v string) {
+	c.arg(opItemArg{
+		Name: "name",
+		Type: OpArgTypeDefineName,
+	})
+	// TODO tokens
+
+	return
 }
 
 func (c *docContext) mustReadPragma(name string) (v uint64) {
@@ -880,10 +894,13 @@ type parserContext struct {
 	protos map[string]*ProtoExpr
 	refc   map[string]int
 
+	defines map[string]bool
+
 	// current state
 	line     []Op
 	label    *LabelExpr
 	comments []string
+	merge    bool
 }
 
 func (c *parserContext) comment(text string) {
@@ -936,6 +953,18 @@ func (c *parserContext) failCurr(err error) {
 
 func (c *parserContext) failPrev(err error) {
 	c.failToken(c.args.Prev(), err)
+}
+
+func (c *parserContext) mustReadDefine() string {
+	c.mcrs = append(c.mcrs, c.args.Curr())
+
+	name := c.mustRead("name")
+
+	c.defines[name] = true
+	c.refs = append(c.refs, c.args.Curr())
+	c.merge = true
+
+	return name
 }
 
 func (c *parserContext) mustReadArg(name string) {
@@ -1092,6 +1121,7 @@ func (c *parserContext) mustReadGlobalField(name string) GlobalField {
 
 func (c *parserContext) mustReadLabel(name string) string {
 	c.mustReadArg(name)
+	// TODO: validate label name
 	c.refs = append(c.refs, c.args.Curr())
 	return c.args.Text()
 }
@@ -1582,6 +1612,12 @@ var typeTxField = []interface{}{}
 func opPragma(c ProcessContext) {
 	version := c.mustReadPragma("version")
 	c.emit(&PragmaExpr{Version: version})
+}
+
+func opDefine(c ProcessContext) {
+	name := c.mustReadDefine()
+	// TODO: read tokens
+	c.emit(&DefineExpr{Name: name})
 }
 
 func opAddr(c ProcessContext) {
@@ -3173,6 +3209,7 @@ func Process(source string) *ProcessResult {
 		mode:    ModeApp,
 		protos:  map[string]*ProtoExpr{},
 		refc:    map[string]int{},
+		defines: map[string]bool{},
 	}
 
 	var ts []Token
@@ -3234,8 +3271,11 @@ func Process(source string) *ProcessResult {
 
 	for _, l := range lines {
 		c.line = []Op{}
+		c.merge = false
 
-		for _, sl := range l.Subs {
+		for si := 0; si < len(l.Subs); si++ {
+			sl := l.Subs[si]
+
 			c.args = &arguments{ts: sl.Tokens}
 			func() {
 				defer func() {
@@ -3291,6 +3331,8 @@ func Process(source string) *ProcessResult {
 					c.emit(Empty)
 				case "#pragma":
 					opPragma(c)
+				case "#define":
+					opDefine(c)
 				default:
 					info, ok := Ops.Get(OpContext{
 						Name:    name,
@@ -3351,11 +3393,25 @@ func Process(source string) *ProcessResult {
 							}
 						}
 					} else {
-						c.failCurr(errors.Errorf("unknown opcode: %s", c.args.Text()))
+						if c.defines[c.args.Text()] {
+							c.refs = append(c.refs, c.args.Curr())
+						} else {
+							c.failCurr(errors.Errorf("unknown opcode: %s", c.args.Text()))
+						}
 					}
 					return
 				}
 			}()
+
+			if c.merge {
+				ts := l.Subs[si].Tokens
+				for i := si + 1; i < len(l.Subs); i++ {
+					ts = append(ts, l.Subs[i].Tokens...)
+				}
+
+				l.Subs[si].Tokens = ts
+				l.Subs = l.Subs[:si]
+			}
 		}
 
 		c.ops = append(c.ops, c.line...)

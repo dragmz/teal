@@ -1446,6 +1446,17 @@ func (e *BoxExtractExpr) Execute(b *VmBranch) error {
 	return nil
 }
 
+type DefineExpr struct {
+	Name string
+}
+
+func (e *DefineExpr) String() string {
+	// TODO
+	return ""
+}
+
+func (e *DefineExpr) IsNop() {}
+
 type PragmaExpr struct {
 	Version uint64
 }
