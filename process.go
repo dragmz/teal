@@ -2617,8 +2617,8 @@ func (ln Line) End() int {
 	}
 }
 
-func (ln Line) ImmAt(pos int) (Token, int, bool) {
-	for idx, tok := range ln.Tokens {
+func (sln Subline) ImmAt(pos int) (Token, int, bool) {
+	for idx, tok := range sln.Tokens {
 		if idx > 0 {
 			if pos >= tok.Begin() && pos <= tok.End() {
 				return tok, idx - 1, true
@@ -2961,15 +2961,16 @@ func (r ProcessResult) ArgAt(l int, ch int) (opItemArg, int, bool) {
 	}
 
 	ln := r.Lines[l]
+	sln := ln.SublineByIndex(ch)
 
-	curr := len(ln.Tokens) - 1
+	curr := len(sln.Tokens) - 1
 
-	_, idx, ok := ln.ImmAt(ch)
+	_, idx, ok := sln.ImmAt(ch)
 	if ok {
 		curr = idx
 	}
 
-	op := ln.Tokens[0]
+	op := sln.Tokens[0]
 	info, ok := Ops.Get(OpContext{
 		Name:    op.String(),
 		Version: r.Version,
@@ -3015,8 +3016,9 @@ func (r ProcessResult) DocAt(l int, ch int) string {
 	}
 
 	ln := r.Lines[l]
+	sln := ln.SublineByIndex(ch)
 
-	for i, tok := range ln.Tokens {
+	for i, tok := range sln.Tokens {
 		if tok.b > ch || tok.End() < ch {
 			continue
 		}
@@ -3027,9 +3029,9 @@ func (r ProcessResult) DocAt(l int, ch int) string {
 				return info.FullDoc
 			}
 		} else {
-			tok, idx, ok := ln.ImmAt(ch)
+			tok, idx, ok := sln.ImmAt(ch)
 			if ok {
-				info, ok := r.getOp(ln.Tokens[0].String())
+				info, ok := r.getOp(sln.Tokens[0].String())
 				if ok {
 					if len(info.Args) > 0 && idx >= len(info.Args) && info.Args[len(info.Args)-1].Array {
 						idx = len(info.Args) - 1
@@ -3290,7 +3292,7 @@ func Process(source string) *ProcessResult {
 			}
 		}
 
-		if sf < len(l.Tokens) {
+		if sf <= len(l.Tokens) {
 			l.Subs = append(l.Subs, Subline{
 				Tokens: l.Tokens[sf:len(l.Tokens)],
 			})
@@ -3408,7 +3410,7 @@ func Process(source string) *ProcessResult {
 								r:     OpCodeVersionCompatibilityCheckRuleInstance.Id(),
 							})
 
-							var ln Line = Line{
+							var ln = Line{
 								Tokens: c.args.ts,
 							}
 

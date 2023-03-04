@@ -214,14 +214,20 @@ func TestSemicolon(t *testing.T) {
 	assert.Len(t, res.Lines[0].Tokens, 5)
 }
 
+func TestSemicolonEmptySubs(t *testing.T) {
+	res := Process("int 1;")
+	assert.Len(t, res.Lines[0].Subs, 2)
+}
+
 func TestMultiSemicolon(t *testing.T) {
 	res := Process(";;;")
 	assert.Len(t, res.Lines, 1)
 
-	assert.Len(t, res.Lines[0].Subs, 3)
+	assert.Len(t, res.Lines[0].Subs, 4)
 	assert.Len(t, res.Lines[0].Subs[0].Tokens, 0)
 	assert.Len(t, res.Lines[0].Subs[1].Tokens, 0)
 	assert.Len(t, res.Lines[0].Subs[2].Tokens, 0)
+	assert.Len(t, res.Lines[0].Subs[3].Tokens, 0)
 
 	assert.Len(t, res.Lines[0].Tokens, 3)
 }
