@@ -897,10 +897,11 @@ type parserContext struct {
 	defines map[string]bool
 
 	// current state
-	line     []Op
+	lintline []Op // current line ops for linting; may differ from actual ops (e.g. due to no linting for #define)
+	line     []Op // current line ops
 	label    *LabelExpr
 	comments []string
-	merge    bool
+	end      bool // end of op flag
 }
 
 func (c *parserContext) comment(text string) {
@@ -962,7 +963,9 @@ func (c *parserContext) mustReadDefine() string {
 
 	c.defines[name] = true
 	c.refs = append(c.refs, c.args.Curr())
-	c.merge = true
+
+	c.end = true
+	c.lintline = c.line
 
 	return name
 }
@@ -3269,9 +3272,12 @@ func Process(source string) *ProcessResult {
 	var lsyms []*labelSymbol
 	var vers []RequiredVersion
 
-	for _, l := range lines {
+	for li := 0; li < len(lines); li++ {
+		l := lines[li]
+
+		c.lintline = nil
 		c.line = []Op{}
-		c.merge = false
+		c.end = false
 
 		for si := 0; si < len(l.Subs); si++ {
 			sl := l.Subs[si]
@@ -3403,19 +3409,24 @@ func Process(source string) *ProcessResult {
 				}
 			}()
 
-			if c.merge {
-				ts := l.Subs[si].Tokens
-				for i := si + 1; i < len(l.Subs); i++ {
-					ts = append(ts, l.Subs[i].Tokens...)
+			if c.end {
+				sub := Subline{
+					Tokens: l.Subs[si].Tokens[c.args.i:],
 				}
 
-				l.Subs[si].Tokens = ts
-				l.Subs = l.Subs[:si]
+				l.Subs = append(append(l.Subs[:si], sub), l.Subs[si:]...)
+				lines[li] = l
+
+				c.end = false
 			}
 		}
 
+		if c.lintline == nil {
+			c.lintline = c.line
+		}
+
 		c.ops = append(c.ops, c.line...)
-		c.lops = append(c.lops, c.line)
+		c.lops = append(c.lops, c.lintline)
 	}
 
 	linter := &Linter{l: c.lops}

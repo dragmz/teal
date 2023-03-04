@@ -248,5 +248,7 @@ func TestInfiniteLoopLinting(t *testing.T) {
 }
 
 func TestDefine(t *testing.T) {
-	Process("#define test123 int 1; int 2")
+	res := Process(`#pragma version 8;
+	#define test123 b a`)
+	assert.Len(t, res.Diagnostics, 0)
 }
