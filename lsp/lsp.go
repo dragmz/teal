@@ -1301,19 +1301,21 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				ln = res.Lines[req.Params.Position.Line]
 			}
 
+			sln := ln.SublineByIndex(req.Params.Position.Character)
+
 			ccs := []lspCompletionItem{}
 
 			var prefix string
 
 			mode := tealCompletionArg
 
-			if len(ln.Tokens) == 0 {
+			if len(sln.Tokens) == 0 {
 				mode = tealCompletionOp
 			} else {
-				if len(ln.Tokens) > 0 {
-					if req.Params.Position.Character <= ln.Tokens[0].End() {
+				if len(sln.Tokens) > 0 {
+					if req.Params.Position.Character <= sln.Tokens[0].End() {
 						mode = tealCompletionOp
-						prefix = ln.Tokens[0].String()
+						prefix = sln.Tokens[0].String()
 					}
 				}
 			}

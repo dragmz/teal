@@ -879,10 +879,11 @@ type parserContext struct {
 	mode    ProgramMode
 	version uint64
 
-	lops [][]Op
-	ops  []Op
-	args *arguments
-	diag []Diagnostic
+	lintlops [][]Op
+	ops      []Op
+	lops     [][]Op
+	args     *arguments
+	diag     []Diagnostic
 
 	nums []Token
 	strs []Token
@@ -2570,6 +2571,34 @@ func (ln Line) SublineEnd(i int) int {
 	return 0
 }
 
+func (ln Line) SublineByIndex(i int) Subline {
+	if len(ln.Subs) == 0 {
+		return Subline{}
+	}
+
+	fb := ln.SublineBegin(0)
+	if i <= fb {
+		return ln.Subs[0]
+	}
+
+	le := ln.SublineEnd(len(ln.Subs) - 1)
+	if i >= le {
+		return ln.Subs[len(ln.Subs)-1]
+	}
+
+	for sli, sub := range ln.Subs {
+		// TODO: optimize this
+		b := ln.SublineBegin(sli)
+		e := ln.SublineEnd(sli)
+
+		if i >= b && i <= e {
+			return sub
+		}
+	}
+
+	return Subline{}
+}
+
 func (ln Line) Begin() int {
 	switch len(ln.Tokens) {
 	case 0:
@@ -2637,9 +2666,10 @@ type ProcessResult struct {
 	Symbols    []Symbol
 	SymbolRefs []Token
 
-	Tokens  []Token
-	Listing []Op
-	Lines   []Line
+	Tokens     []Token
+	Listing    []Op
+	Sublisting [][]Op
+	Lines      []Line
 
 	Ops []Token
 
@@ -3206,13 +3236,13 @@ func readTokens(source string) ([]Token, []Diagnostic) {
 
 func Process(source string) *ProcessResult {
 	c := &parserContext{
-		version: 1,
-		ops:     []Op{},
-		lops:    [][]Op{},
-		mode:    ModeApp,
-		protos:  map[string]*ProtoExpr{},
-		refc:    map[string]int{},
-		defines: map[string]bool{},
+		version:  1,
+		ops:      []Op{},
+		lintlops: [][]Op{},
+		mode:     ModeApp,
+		protos:   map[string]*ProtoExpr{},
+		refc:     map[string]int{},
+		defines:  map[string]bool{},
 	}
 
 	var ts []Token
@@ -3426,10 +3456,11 @@ func Process(source string) *ProcessResult {
 		}
 
 		c.ops = append(c.ops, c.line...)
-		c.lops = append(c.lops, c.lintline)
+		c.lops = append(c.lops, c.line)
+		c.lintlops = append(c.lintlops, c.lintline)
 	}
 
-	linter := &Linter{l: c.lops}
+	linter := &Linter{l: c.lintlops}
 	linter.Lint()
 
 	for _, le := range linter.errs {
@@ -3482,6 +3513,7 @@ func Process(source string) *ProcessResult {
 		Tokens:       ts,
 		Lines:        lines,
 		Listing:      c.ops,
+		Sublisting:   c.lops,
 		Ops:          ops,
 		Numbers:      c.nums,
 		Strings:      c.strs,
