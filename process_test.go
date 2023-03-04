@@ -246,3 +246,7 @@ func TestInfiniteLoopLinting(t *testing.T) {
 	assert.Equal(t, res.Diagnostics[0].Line(), 2)
 	assert.Equal(t, res.Diagnostics[1].Line(), 4)
 }
+
+func TestDefine(t *testing.T) {
+	Process("#define test123 int 1; int 2")
+}
