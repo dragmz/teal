@@ -1389,6 +1389,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					InsertTextFormat: snippetFormat,
 				})
 
+				for name := range res.Defines {
+					ccs = append(ccs, lspCompletionItem{
+						Label:      name,
+						Kind:       operator,
+						InsertText: name,
+					})
+				}
+
 				for name, info := range teal.Ops.Items {
 					if info.AppVersion <= res.Version && strings.HasPrefix(name, prefix) {
 						var insert string

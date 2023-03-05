@@ -2681,6 +2681,7 @@ type ProcessResult struct {
 	Redundants []RedundantLine
 
 	RefCounts map[string]int
+	Defines   map[string]bool
 }
 
 func (r ProcessResult) SymbolsForRefWithin(rg Range) []Symbol {
@@ -3524,6 +3525,7 @@ func Process(source string) *ProcessResult {
 		Redundants:   linter.reds,
 		Versions:     vers,
 		RefCounts:    c.refc,
+		Defines:      c.defines,
 	}
 
 	return result
