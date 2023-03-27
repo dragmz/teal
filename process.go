@@ -3237,20 +3237,7 @@ func readTokens(source string) ([]Token, []Diagnostic) {
 	return ts, diags
 }
 
-func Process(source string) *ProcessResult {
-	c := &parserContext{
-		version:  1,
-		ops:      []Op{},
-		lintlops: [][]Op{},
-		mode:     ModeApp,
-		protos:   map[string]*ProtoExpr{},
-		refc:     map[string]int{},
-		defines:  map[string]bool{},
-	}
-
-	var ts []Token
-	ts, c.diag = readTokens(source)
-
+func readLines(ts []Token) []Line {
 	lines := []Line{}
 
 	p := 0
@@ -3273,6 +3260,10 @@ func Process(source string) *ProcessResult {
 		}
 	}
 
+	return lines
+}
+
+func prepareLines(lines []Line) {
 	for li, l := range lines {
 		sf := 0
 
@@ -3300,6 +3291,24 @@ func Process(source string) *ProcessResult {
 		}
 		lines[li] = l
 	}
+}
+
+func Process(source string) *ProcessResult {
+	c := &parserContext{
+		version:  1,
+		ops:      []Op{},
+		lintlops: [][]Op{},
+		mode:     ModeApp,
+		protos:   map[string]*ProtoExpr{},
+		refc:     map[string]int{},
+		defines:  map[string]bool{},
+	}
+
+	var ts []Token
+	ts, c.diag = readTokens(source)
+
+	lines := readLines(ts)
+	prepareLines(lines)
 
 	var ops []Token
 	var lsyms []*labelSymbol
