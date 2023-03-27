@@ -3315,13 +3315,12 @@ func Process(source string) *ProcessResult {
 	var vers []RequiredVersion
 
 	for li := 0; li < len(lines); li++ {
-		l := lines[li]
-
 		c.lintline = nil
 		c.line = []Op{}
 		c.end = false
 
-		for si := 0; si < len(l.Subs); si++ {
+		for si := 0; si < len(lines[li].Subs); si++ {
+			l := lines[li]
 			sl := l.Subs[si]
 
 			c.args = &arguments{ts: sl.Tokens}
@@ -3456,7 +3455,7 @@ func Process(source string) *ProcessResult {
 					Tokens: l.Subs[si].Tokens[c.args.i:],
 				}
 
-				l.Subs = append(append(l.Subs[:si], sub), l.Subs[si:]...)
+				l.Subs = append(l.Subs[:si], sub)
 				lines[li] = l
 
 				c.end = false
