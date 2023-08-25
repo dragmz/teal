@@ -46,6 +46,20 @@ const boxVersion = 8 // box_*
 
 const anyImmediates = -1
 
+func addExtra(original string, extra string) string {
+	if len(original) == 0 {
+		return extra
+	}
+	if len(extra) == 0 {
+		return original
+	}
+	sep := ". "
+	if original[len(original)-1] == '.' {
+		sep = " "
+	}
+	return original + sep + extra
+}
+
 // short description of every op
 var opDocByName = map[string]string{
 	"err":                 "Fail immediately.",
@@ -58,9 +72,13 @@ var opDocByName = map[string]string{
 	"ecdsa_verify":        "for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}",
 	"ecdsa_pk_decompress": "decompress pubkey A into components X, Y",
 	"ecdsa_pk_recover":    "for (data A, recovery id B, signature C, D) recover a public key",
-	"bn256_add":           "for (curve points A and B) return the curve point A + B",
-	"bn256_scalar_mul":    "for (curve point A, scalar K) return the curve point KA",
-	"bn256_pairing":       "for (points in G1 group G1s, points in G2 group G2s), return whether they are paired => {0 or 1}",
+
+	"ec_add":              "for curve points A and B, return the curve point A + B",
+	"ec_scalar_mul":       "for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B.",
+	"ec_pairing_check":    "1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0",
+	"ec_multi_scalar_mul": "for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn",
+	"ec_subgroup_check":   "1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all.",
+	"ec_map_to":           "maps field element A to group G",
 
 	"+":       "A plus B. Fail on overflow.",
 	"-":       "A minus B. Fail if B > A.",
@@ -246,55 +264,70 @@ var opDocExtras = map[string]string{
 	"ecdsa_verify":        "The 32 byte Y-component of a public key is the last element on the stack, preceded by X-component of a pubkey, preceded by S and R components of a signature, preceded by the data that is fifth element on the stack. All values are big-endian encoded. The signed data must be 32 bytes long, and signatures in lower-S form are only accepted.",
 	"ecdsa_pk_decompress": "The 33 byte public key in a compressed form to be decompressed into X and Y (top) components. All values are big-endian encoded.",
 	"ecdsa_pk_recover":    "S (top) and R elements of a signature, recovery id and data (bottom) are expected on the stack and used to deriver a public key. All values are big-endian encoded. The signed data must be 32 bytes long.",
-	"bn256_add":           "A, B are curve points in G1 group. Each point consists of (X, Y) where X and Y are 256 bit integers, big-endian encoded. The encoded point is 64 bytes from concatenation of 32 byte X and 32 byte Y.",
-	"bn256_scalar_mul":    "A is a curve point in G1 Group and encoded as described in `bn256_add`. Scalar K is a big-endian encoded big integer that has no padding zeros.",
-	"bn256_pairing":       "G1s are encoded by the concatenation of encoded G1 points, as described in `bn256_add`. G2s are encoded by the concatenation of encoded G2 points. Each G2 is in form (XA0+i*XA1, YA0+i*YA1) and encoded by big-endian field element XA0, XA1, YA0 and YA1 in sequence.",
-	"bnz":                 "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
-	"bz":                  "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
-	"b":                   "See `bnz` for details on how branches work. `b` always jumps to the offset.",
-	"callsub":             "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.",
-	"proto":               "Fails unless the last instruction executed was a `callsub`.",
-	"retsub":              "If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.",
-	"intcblock":           "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script.",
-	"bytecblock":          "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script.",
-	"*":                   "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
-	"+":                   "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
-	"/":                   "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
-	"bitlen":              "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
-	"divw":                "The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.",
-	"divmodw":             "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
-	"gtxn":                "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
-	"gtxns":               "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
-	"gload":               "`gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.",
-	"gloads":              "`gloads` fails unless the requested transaction is an ApplicationCall and A < GroupIndex.",
-	"gaid":                "`gaid` fails unless the requested transaction created an asset or application and T < GroupIndex.",
-	"gaids":               "`gaids` fails unless the requested transaction created an asset or application and A < GroupIndex.",
-	"btoi":                "`btoi` fails if the input is longer than 8 bytes.",
-	"concat":              "`concat` fails if the result would be greater than 4096 bytes.",
-	"pushbytes":           "pushbytes args are not added to the bytecblock during assembly processes",
-	"pushbytess":          "pushbytess args are not added to the bytecblock during assembly processes",
-	"pushint":             "pushint args are not added to the intcblock during assembly processes",
-	"pushints":            "pushints args are not added to the intcblock during assembly processes",
-	"getbit":              "see explanation of bit ordering in setbit",
-	"setbit":              "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
-	"balance":             "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
-	"min_balance":         "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
-	"app_opted_in":        "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
-	"app_local_get":       "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
-	"app_local_get_ex":    "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
-	"app_global_get_ex":   "params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
-	"app_global_get":      "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
-	"app_local_put":       "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.",
-	"app_local_del":       "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
-	"app_global_del":      "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
-	"asset_holding_get":   "params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
-	"asset_params_get":    "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
-	"app_params_get":      "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
-	"log":                 "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
-	"itxn_begin":          "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.",
-	"itxn_next":           "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
-	"itxn_field":          "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
-	"itxn_submit":         "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
+
+	"ec_add": "A and B are curve points in affine representation: field element X concatenated with field element Y. " +
+		"Field element `Z` is encoded as follows.\n" +
+		"For the base field elements (Fp), `Z` is encoded as a big-endian number and must be lower than the field modulus.\n" +
+		"For the quadratic field extension (Fp2), `Z` is encoded as the concatenation of the individual encoding of the coefficients. " +
+		"For an Fp2 element of the form `Z = Z0 + Z1 i`, where `i` is a formal quadratic non-residue, the encoding of Z is the concatenation of the encoding of `Z0` and `Z1` in this order. (`Z0` and `Z1` must be less than the field modulus).\n\n" +
+		"The point at infinity is encoded as `(X,Y) = (0,0)`.\n" +
+		"Groups G1 and G2 are denoted additively.\n\n" +
+		"Fails if A or B is not in G.\n" +
+		"A and/or B are allowed to be the point at infinity.\n" +
+		"Does _not_ check if A and B are in the main prime-order subgroup.",
+
+	"ec_scalar_mul":       "A is a curve point encoded and checked as described in `ec_add`. Scalar B is interpreted as a big-endian unsigned integer. Fails if B exceeds 32 bytes.",
+	"ec_pairing_check":    "A and B are concatenated points, encoded and checked as described in `ec_add`. A contains points of the group G, B contains points of the associated group (G2 if G is G1, and vice versa). Fails if A and B have a different number of points, or if any point is not in its described group or outside the main prime-order subgroup - a stronger condition than other opcodes. AVM values are limited to 4096 bytes, so `ec_pairing_check` is limited by the size of the points in the groups being operated upon.",
+	"ec_multi_scalar_mul": "A is a list of concatenated points, encoded and checked as described in `ec_add`. B is a list of concatenated scalars which, unlike ec_scalar_mul, must all be exactly 32 bytes long.\nThe name `ec_multi_scalar_mul` was chosen to reflect common usage, but a more consistent name would be `ec_multi_scalar_mul`. AVM values are limited to 4096 bytes, so `ec_multi_scalar_mul` is limited by the size of the points in the group being operated upon.",
+	"ec_map_to": "BN254 points are mapped by the SVDW map. BLS12-381 points are mapped by the SSWU map.\n" +
+		"G1 element inputs are base field elements and G2 element inputs are quadratic field elements, with nearly the same encoding rules (for field elements) as defined in `ec_add`. There is one difference of encoding rule: G1 element inputs do not need to be 0-padded if they fit in less than 32 bytes for BN254 and less than 48 bytes for BLS12-381. (As usual, the empty byte array represents 0.) G2 elements inputs need to be always have the required size.",
+
+	"bnz":               "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Starting at v4, the offset is treated as a signed 16 bit integer allowing for backward branches and looping. In prior version (v1 to v3), branch offsets are limited to forward branches only, 0-0x7fff.\n\nAt v2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before v2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)",
+	"bz":                "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.",
+	"b":                 "See `bnz` for details on how branches work. `b` always jumps to the offset.",
+	"callsub":           "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.",
+	"proto":             "Fails unless the last instruction executed was a `callsub`.",
+	"retsub":            "If the current frame was prepared by `proto A R`, `retsub` will remove the 'A' arguments from the stack, move the `R` return values down, and pop any stack locations above the relocated return values.",
+	"intcblock":         "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script.",
+	"bytecblock":        "`bytecblock` loads the following program bytes into an array of byte-array constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script.",
+	"*":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`.",
+	"+":                 "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.",
+	"/":                 "`divmodw` is available to divide the two-element values produced by `mulw` and `addw`.",
+	"bitlen":            "bitlen interprets arrays as big-endian integers, unlike setbit/getbit",
+	"divw":              "The notation A,B indicates that A and B are interpreted as a uint128 value, with A as the high uint64 and B the low.",
+	"divmodw":           "The notation J,K indicates that two uint64 values J and K are interpreted as a uint128 value, with J as the high uint64 and K the low.",
+	"gtxn":              "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.",
+	"gtxns":             "for notes on transaction fields available, see `txn`. If top of stack is _i_, `gtxns field` is equivalent to `gtxn _i_ field`. gtxns exists so that _i_ can be calculated, often based on the index of the current transaction.",
+	"gload":             "`gload` fails unless the requested transaction is an ApplicationCall and T < GroupIndex.",
+	"gloads":            "`gloads` fails unless the requested transaction is an ApplicationCall and A < GroupIndex.",
+	"gaid":              "`gaid` fails unless the requested transaction created an asset or application and T < GroupIndex.",
+	"gaids":             "`gaids` fails unless the requested transaction created an asset or application and A < GroupIndex.",
+	"btoi":              "`btoi` fails if the input is longer than 8 bytes.",
+	"concat":            "`concat` fails if the result would be greater than 4096 bytes.",
+	"pushbytes":         "pushbytes args are not added to the bytecblock during assembly processes",
+	"pushbytess":        "pushbytess args are not added to the bytecblock during assembly processes",
+	"pushint":           "pushint args are not added to the intcblock during assembly processes",
+	"pushints":          "pushints args are not added to the intcblock during assembly processes",
+	"getbit":            "see explanation of bit ordering in setbit",
+	"setbit":            "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
+	"balance":           "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+	"min_balance":       "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: value.",
+	"app_opted_in":      "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset). Return: 1 if opted in and 0 otherwise.",
+	"app_local_get":     "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
+	"app_local_get_ex":  "params: Txn.Accounts offset (or, since v4, an _available_ account address), _available_ application id (or, since v4, a Txn.ForeignApps offset), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
+	"app_global_get_ex": "params: Txn.ForeignApps offset (or, since v4, an _available_ application id), state key. Return: did_exist flag (top of the stack, 1 if the application and key existed and 0 otherwise), value. The value is zero (of type uint64) if the key does not exist.",
+	"app_global_get":    "params: state key. Return: value. The value is zero (of type uint64) if the key does not exist.",
+	"app_local_put":     "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key, value.",
+	"app_local_del":     "params: Txn.Accounts offset (or, since v4, an _available_ account address), state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)",
+	"app_global_del":    "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)",
+	"asset_holding_get": "params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
+	"asset_params_get":  "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.",
+	"app_params_get":    "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.",
+	"log":               "`log` fails if called more than MaxLogCalls times in a program, or if the sum of logged bytes exceeds 1024 bytes.",
+	"itxn_begin":        "`itxn_begin` initializes Sender to the application address; Fee to the minimum allowable, taking into account MinTxnFee and credit from overpaying in earlier transactions; FirstValid/LastValid to the values in the invoking transaction, and all other fields to zero or empty values.",
+	"itxn_next":         "`itxn_next` initializes the transaction exactly as `itxn_begin` does",
+	"itxn_field":        "`itxn_field` fails if A is of the wrong type for F, including a byte array of the wrong size for use as an address when F is an address field. `itxn_field` also fails if A is an account, asset, or app that is not _available_, or an attempt is made extend an array field beyond the limit imposed by consensus parameters. (Addresses set into asset params of acfg transactions need not be _available_.)",
+	"itxn_submit":       "`itxn_submit` resets the current transaction so that it can not be resubmitted. A new `itxn_begin` is required to prepare another inner transaction.",
 
 	"base64_decode": "*Warning*: Usage should be restricted to very rare use cases. In almost all cases, smart contracts should directly handle non-encoded byte-strings.	This opcode should only be used in cases where base64 is the only available option, e.g. interoperability with a third-party that only signs base64 strings.\n\n Decodes A using the base64 encoding E. Specify the encoding with an immediate arg either as URL and Filename Safe (`URLEncoding`) or Standard (`StdEncoding`). See [RFC 4648 sections 4 and 5](https://rfc-editor.org/rfc/rfc4648.html#section-4). It is assumed that the encoding ends with the exact number of `=` padding characters as required by the RFC. When padding occurs, any unused pad bits in the encoding must be set to zero or the decoding will fail. The special cases of `\\n` and `\\r` are allowed but completely ignored. An error will result when attempting to decode a string with a character that is not in the encoding alphabet or not one of `=`, `\\r`, or `\\n`.",
 	"json_ref":      "*Warning*: Usage should be restricted to very rare use cases, as JSON decoding is expensive and quite limited. In addition, JSON objects are large and not optimized for size.\n\nAlmost all smart contracts should use simpler and smaller methods (such as the [ABI](https://arc.algorand.foundation/ARCs/arc-0004). This opcode should only be used in cases where JSON is only available option, e.g. when a third-party only signs JSON.",
@@ -403,6 +436,12 @@ const (
 
 	// StackBytes in an OpSpec shows that the op pops or yields a []byte
 	StackBytes
+
+	StackAddress
+
+	StackBytes32
+
+	StackBoolean
 )
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
@@ -412,7 +451,7 @@ type runMode uint64
 
 const (
 	// modeSig is LogicSig execution
-	modeSig runMode = 1 << iota
+	modeSig RunMode = 1 << iota
 
 	// modeApp is application/contract execution
 	modeApp
@@ -421,7 +460,7 @@ const (
 	modeAny = modeSig | modeApp
 )
 
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -437,7 +476,7 @@ const (
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -681,18 +720,18 @@ func (fs txnFieldSpec) Note() string {
 }
 
 var txnFieldSpecs = [...]txnFieldSpec{
-	{Sender, StackBytes, false, 0, 5, false, "32 byte address"},
+	{Sender, StackAddress, false, 0, 5, false, "32 byte address"},
 	{Fee, StackUint64, false, 0, 5, false, "microalgos"},
 	{FirstValid, StackUint64, false, 0, 0, false, "round number"},
 	{FirstValidTime, StackUint64, false, randomnessVersion, 0, false, "UNIX timestamp of block before txn.FirstValid. Fails if negative"},
 	{LastValid, StackUint64, false, 0, 0, false, "round number"},
 	{Note, StackBytes, false, 0, 6, false, "Any data up to 1024 bytes"},
-	{Lease, StackBytes, false, 0, 0, false, "32 byte lease value"},
-	{Receiver, StackBytes, false, 0, 5, false, "32 byte address"},
+	{Lease, StackBytes32, false, 0, 0, false, "32 byte lease value"},
+	{Receiver, StackAddress, false, 0, 5, false, "32 byte address"},
 	{Amount, StackUint64, false, 0, 5, false, "microalgos"},
-	{CloseRemainderTo, StackBytes, false, 0, 5, false, "32 byte address"},
-	{VotePK, StackBytes, false, 0, 6, false, "32 byte address"},
-	{SelectionPK, StackBytes, false, 0, 6, false, "32 byte address"},
+	{CloseRemainderTo, StackAddress, false, 0, 5, false, "32 byte address"},
+	{VotePK, StackBytes32, false, 0, 6, false, "32 byte address"},
+	{SelectionPK, StackBytes32, false, 0, 6, false, "32 byte address"},
 	{VoteFirst, StackUint64, false, 0, 6, false, "The first round that the participation key is valid."},
 	{VoteLast, StackUint64, false, 0, 6, false, "The last round that the participation key is valid."},
 	{VoteKeyDilution, StackUint64, false, 0, 6, false, "Dilution for the 2-level participation key"},
@@ -700,42 +739,42 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{TypeEnum, StackUint64, false, 0, 5, false, "Transaction type as integer"},
 	{XferAsset, StackUint64, false, 0, 5, false, "Asset ID"},
 	{AssetAmount, StackUint64, false, 0, 5, false, "value in Asset's units"},
-	{AssetSender, StackBytes, false, 0, 5, false,
+	{AssetSender, StackAddress, false, 0, 5, false,
 		"32 byte address. Source of assets if Sender is the Asset's Clawback address."},
-	{AssetReceiver, StackBytes, false, 0, 5, false, "32 byte address"},
-	{AssetCloseTo, StackBytes, false, 0, 5, false, "32 byte address"},
+	{AssetReceiver, StackAddress, false, 0, 5, false, "32 byte address"},
+	{AssetCloseTo, StackAddress, false, 0, 5, false, "32 byte address"},
 	{GroupIndex, StackUint64, false, 0, 0, false,
 		"Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1"},
-	{TxID, StackBytes, false, 0, 0, false, "The computed ID for this transaction. 32 bytes."},
+	{TxID, StackBytes32, false, 0, 0, false, "The computed ID for this transaction. 32 bytes."},
 	{ApplicationID, StackUint64, false, 2, 6, false, "ApplicationID from ApplicationCall transaction"},
 	{OnCompletion, StackUint64, false, 2, 6, false, "ApplicationCall transaction on completion action"},
 	{ApplicationArgs, StackBytes, true, 2, 6, false,
 		"Arguments passed to the application in the ApplicationCall transaction"},
 	{NumAppArgs, StackUint64, false, 2, 0, false, "Number of ApplicationArgs"},
-	{Accounts, StackBytes, true, 2, 6, false, "Accounts listed in the ApplicationCall transaction"},
+	{Accounts, StackAddress, true, 2, 6, false, "Accounts listed in the ApplicationCall transaction"},
 	{NumAccounts, StackUint64, false, 2, 0, false, "Number of Accounts"},
 	{ApprovalProgram, StackBytes, false, 2, 6, false, "Approval program"},
 	{ClearStateProgram, StackBytes, false, 2, 6, false, "Clear state program"},
-	{RekeyTo, StackBytes, false, 2, 6, false, "32 byte Sender's new AuthAddr"},
+	{RekeyTo, StackAddress, false, 2, 6, false, "32 byte Sender's new AuthAddr"},
 	{ConfigAsset, StackUint64, false, 2, 5, false, "Asset ID in asset config transaction"},
 	{ConfigAssetTotal, StackUint64, false, 2, 5, false, "Total number of units of this asset created"},
 	{ConfigAssetDecimals, StackUint64, false, 2, 5, false,
 		"Number of digits to display after the decimal place when displaying the asset"},
-	{ConfigAssetDefaultFrozen, StackUint64, false, 2, 5, false,
+	{ConfigAssetDefaultFrozen, StackBoolean, false, 2, 5, false,
 		"Whether the asset's slots are frozen by default or not, 0 or 1"},
 	{ConfigAssetUnitName, StackBytes, false, 2, 5, false, "Unit name of the asset"},
 	{ConfigAssetName, StackBytes, false, 2, 5, false, "The asset name"},
 	{ConfigAssetURL, StackBytes, false, 2, 5, false, "URL"},
-	{ConfigAssetMetadataHash, StackBytes, false, 2, 5, false,
+	{ConfigAssetMetadataHash, StackBytes32, false, 2, 5, false,
 		"32 byte commitment to unspecified asset metadata"},
-	{ConfigAssetManager, StackBytes, false, 2, 5, false, "32 byte address"},
-	{ConfigAssetReserve, StackBytes, false, 2, 5, false, "32 byte address"},
-	{ConfigAssetFreeze, StackBytes, false, 2, 5, false, "32 byte address"},
-	{ConfigAssetClawback, StackBytes, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetManager, StackAddress, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetReserve, StackAddress, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetFreeze, StackAddress, false, 2, 5, false, "32 byte address"},
+	{ConfigAssetClawback, StackAddress, false, 2, 5, false, "32 byte address"},
 	{FreezeAsset, StackUint64, false, 2, 5, false, "Asset ID being frozen or un-frozen"},
-	{FreezeAssetAccount, StackBytes, false, 2, 5, false,
+	{FreezeAssetAccount, StackAddress, false, 2, 5, false,
 		"32 byte address of the account whose asset slot is being frozen or un-frozen"},
-	{FreezeAssetFrozen, StackUint64, false, 2, 5, false, "The new frozen value, 0 or 1"},
+	{FreezeAssetFrozen, StackBoolean, false, 2, 5, false, "The new frozen value, 0 or 1"},
 	{Assets, StackUint64, true, 3, 6, false, "Foreign Assets listed in the ApplicationCall transaction"},
 	{NumAssets, StackUint64, false, 3, 0, false, "Number of Assets"},
 	{Applications, StackUint64, true, 3, 6, false, "Foreign Apps listed in the ApplicationCall transaction"},
@@ -746,7 +785,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{LocalNumByteSlice, StackUint64, false, 3, 6, false, "Number of local state byteslices in ApplicationCall"},
 	{ExtraProgramPages, StackUint64, false, 4, 6, false,
 		"Number of additional pages for each of the application's approval and clear state programs. An ExtraProgramPages of 1 means 2048 more total bytes, or 1024 for each program."},
-	{Nonparticipation, StackUint64, false, 5, 6, false, "Marks an account nonparticipating for rewards"},
+	{Nonparticipation, StackBoolean, false, 5, 6, false, "Marks an account nonparticipating for rewards"},
 
 	// "Effects" Last two things are always going to: 0, true
 	{Logs, StackBytes, true, 5, 0, true, "Log messages emitted by an application call (only with `itxn` in v5)"},
@@ -942,6 +981,13 @@ const (
 	// CallerApplicationAddress The Address of the caller app, else ZeroAddress
 	CallerApplicationAddress
 
+	// AssetCreateMinBalance is the additional minimum balance required to
+	// create an asset (which also opts an account into that asset)
+	AssetCreateMinBalance
+
+	// AssetOptInMinBalance is the additional minimum balance required to opt in to an asset
+	AssetOptInMinBalance
+
 	invalidGlobalField // compile-time constant for number of fields
 )
 
@@ -951,7 +997,7 @@ var GlobalFieldNames [invalidGlobalField]string
 type globalFieldSpec struct {
 	field   GlobalField
 	ftype   StackType
-	mode    runMode
+	mode    RunMode
 	version uint64
 	doc     string
 }
@@ -970,7 +1016,7 @@ func (fs globalFieldSpec) Version() uint64 {
 }
 func (fs globalFieldSpec) Note() string {
 	note := fs.doc
-	if fs.mode == modeApp {
+	if fs.mode == ModeApp {
 		note = addExtra(note, "Application mode only.")
 	}
 	// There are no Signature mode only globals
@@ -982,26 +1028,30 @@ var globalFieldSpecs = [...]globalFieldSpec{
 	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
 	{MinBalance, StackUint64, modeAny, 0, "microalgos"},
 	{MaxTxnLife, StackUint64, modeAny, 0, "rounds"},
-	{ZeroAddress, StackBytes, modeAny, 0, "32 byte address of all zero bytes"},
+	{ZeroAddress, StackAddress, modeAny, 0, "32 byte address of all zero bytes"},
 	{GroupSize, StackUint64, modeAny, 0,
 		"Number of transactions in this atomic transaction group. At least 1"},
 	{LogicSigVersion, StackUint64, modeAny, 2, "Maximum supported version"},
-	{Round, StackUint64, modeApp, 2, "Current round number"},
-	{LatestTimestamp, StackUint64, modeApp, 2,
+	{Round, StackUint64, ModeApp, 2, "Current round number"},
+	{LatestTimestamp, StackUint64, ModeApp, 2,
 		"Last confirmed block UNIX timestamp. Fails if negative"},
-	{CurrentApplicationID, StackUint64, modeApp, 2, "ID of current application executing"},
-	{CreatorAddress, StackBytes, modeApp, 3,
+	{CurrentApplicationID, StackUint64, ModeApp, 2, "ID of current application executing"},
+	{CreatorAddress, StackAddress, ModeApp, 3,
 		"Address of the creator of the current application"},
-	{CurrentApplicationAddress, StackBytes, modeApp, 5,
+	{CurrentApplicationAddress, StackAddress, ModeApp, 5,
 		"Address that the current application controls"},
-	{GroupID, StackBytes, modeAny, 5,
+	{GroupID, StackBytes32, modeAny, 5,
 		"ID of the transaction group. 32 zero bytes if the transaction is not part of a group."},
 	{OpcodeBudget, StackUint64, modeAny, 6,
 		"The remaining cost that can be spent by opcodes in this program."},
-	{CallerApplicationID, StackUint64, modeApp, 6,
+	{CallerApplicationID, StackUint64, ModeApp, 6,
 		"The application ID of the application that called this application. 0 if this application is at the top-level."},
-	{CallerApplicationAddress, StackBytes, modeApp, 6,
+	{CallerApplicationAddress, StackAddress, ModeApp, 6,
 		"The application address of the application that called this application. ZeroAddress if this application is at the top-level."},
+	{AssetCreateMinBalance, StackUint64, modeAny, 10,
+		"The additional minimum balance required to create (and opt-in to) an asset."},
+	{AssetOptInMinBalance, StackUint64, modeAny, 10,
+		"The additional minimum balance required to opt-in to an asset."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {
@@ -1088,6 +1138,74 @@ var EcdsaCurves = FieldGroup{
 	"ECDSA", "Curves",
 	ecdsaCurveNames[:],
 	ecdsaCurveSpecByName,
+}
+
+// EcGroup is an enum for `ec_` opcodes
+type EcGroup int
+
+const (
+	// BN254g1 is the G1 group of BN254
+	BN254g1 EcGroup = iota
+	// BN254g2 is the G2 group of BN254
+	BN254g2
+	// BLS12_381g1 specifies the G1 group of BLS 12-381
+	BLS12_381g1
+	// BLS12_381g2 specifies the G2 group of BLS 12-381
+	BLS12_381g2
+	invalidEcGroup // compile-time constant for number of fields
+)
+
+var ecGroupNames [invalidEcGroup]string
+
+type ecGroupSpec struct {
+	field EcGroup
+	doc   string
+}
+
+func (fs ecGroupSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs ecGroupSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs ecGroupSpec) OpVersion() uint64 {
+	return pairingVersion
+}
+func (fs ecGroupSpec) Version() uint64 {
+	return pairingVersion
+}
+func (fs ecGroupSpec) Note() string {
+	return fs.doc
+}
+
+var ecGroupSpecs = [...]ecGroupSpec{
+	{BN254g1, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
+	{BN254g2, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
+	{BLS12_381g1, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
+	{BLS12_381g2, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"},
+}
+
+func ecGroupSpecByField(c EcGroup) (ecGroupSpec, bool) {
+	if int(c) >= len(ecGroupSpecs) {
+		return ecGroupSpec{}, false
+	}
+	return ecGroupSpecs[c], true
+}
+
+var ecGroupSpecByName = make(ecGroupNameSpecMap, len(ecGroupNames))
+
+type ecGroupNameSpecMap map[string]ecGroupSpec
+
+func (s ecGroupNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// EcGroups collects details about the constants used to describe EcGroups
+var EcGroups = FieldGroup{
+	"EC", "Groups",
+	ecGroupNames[:],
+	ecGroupSpecByName,
 }
 
 // Base64Encoding is an enum for the `base64decode` opcode
@@ -1397,7 +1515,7 @@ func (fs assetHoldingFieldSpec) Note() string {
 
 var assetHoldingFieldSpecs = [...]assetHoldingFieldSpec{
 	{AssetBalance, StackUint64, 2, "Amount of the asset unit held by this account"},
-	{AssetFrozen, StackUint64, 2, "Is the asset frozen or not"},
+	{AssetFrozen, StackBoolean, 2, "Is the asset frozen or not"},
 }
 
 func assetHoldingFieldSpecByField(f AssetHoldingField) (assetHoldingFieldSpec, bool) {
@@ -1484,16 +1602,16 @@ func (fs assetParamsFieldSpec) Note() string {
 var assetParamsFieldSpecs = [...]assetParamsFieldSpec{
 	{AssetTotal, StackUint64, 2, "Total number of units of this asset"},
 	{AssetDecimals, StackUint64, 2, "See AssetParams.Decimals"},
-	{AssetDefaultFrozen, StackUint64, 2, "Frozen by default or not"},
+	{AssetDefaultFrozen, StackBoolean, 2, "Frozen by default or not"},
 	{AssetUnitName, StackBytes, 2, "Asset unit name"},
 	{AssetName, StackBytes, 2, "Asset name"},
 	{AssetURL, StackBytes, 2, "URL with additional info about the asset"},
-	{AssetMetadataHash, StackBytes, 2, "Arbitrary commitment"},
-	{AssetManager, StackBytes, 2, "Manager address"},
-	{AssetReserve, StackBytes, 2, "Reserve address"},
-	{AssetFreeze, StackBytes, 2, "Freeze address"},
-	{AssetClawback, StackBytes, 2, "Clawback address"},
-	{AssetCreator, StackBytes, 5, "Creator address"},
+	{AssetMetadataHash, StackBytes32, 2, "Arbitrary commitment"},
+	{AssetManager, StackAddress, 2, "Manager address"},
+	{AssetReserve, StackAddress, 2, "Reserve address"},
+	{AssetFreeze, StackAddress, 2, "Freeze address"},
+	{AssetClawback, StackAddress, 2, "Clawback address"},
+	{AssetCreator, StackAddress, 5, "Creator address"},
 }
 
 func assetParamsFieldSpecByField(f AssetParamsField) (assetParamsFieldSpec, bool) {
@@ -1580,8 +1698,8 @@ var appParamsFieldSpecs = [...]appParamsFieldSpec{
 	{AppLocalNumUint, StackUint64, 5, "Number of uint64 values allowed in Local State"},
 	{AppLocalNumByteSlice, StackUint64, 5, "Number of byte array values allowed in Local State"},
 	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
-	{AppCreator, StackBytes, 5, "Creator address"},
-	{AppAddress, StackBytes, 5, "Address for which this application has authority"},
+	{AppCreator, StackAddress, 5, "Creator address"},
+	{AppAddress, StackAddress, 5, "Address for which this application has authority"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {
@@ -1673,7 +1791,7 @@ func (fs acctParamsFieldSpec) Note() string {
 var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctBalance, StackUint64, 6, "Account balance in microalgos"},
 	{AcctMinBalance, StackUint64, 6, "Minimum required balance for account, in microalgos"},
-	{AcctAuthAddr, StackBytes, 6, "Address the account is rekeyed to."},
+	{AcctAuthAddr, StackAddress, 6, "Address the account is rekeyed to."},
 
 	{AcctTotalNumUint, StackUint64, 8, "The total number of uint64 values allocated by this account in Global and Local States."},
 	{AcctTotalNumByteSlice, StackUint64, 8, "The total number of byte array values allocated by this account in Global and Local States."},
@@ -1707,19 +1825,6 @@ var AcctParamsFields = FieldGroup{
 	"acct_params", "Fields",
 	acctParamsFieldNames[:],
 	acctParamsFieldSpecByName,
-}
-
-// TypeNameDescriptions contains extra description about a low level
-// protocol transaction Type string, and provide a friendlier type
-// constant name in assembler.
-var TypeNameDescriptions = map[string]string{
-	string(protocol.UnknownTx):         "Unknown type. Invalid transaction",
-	string(protocol.PaymentTx):         "Payment",
-	string(protocol.KeyRegistrationTx): "KeyRegistration",
-	string(protocol.AssetConfigTx):     "AssetConfig",
-	string(protocol.AssetTransferTx):   "AssetTransfer",
-	string(protocol.AssetFreezeTx):     "AssetFreeze",
-	string(protocol.ApplicationCallTx): "ApplicationCall",
 }
 
 func init() {
@@ -1830,22 +1935,6 @@ func init() {
 
 }
 
-func addExtra(original string, extra string) string {
-	if len(original) == 0 {
-		return extra
-	}
-	if len(extra) == 0 {
-		return original
-	}
-	sep := ". "
-	if original[len(original)-1] == '.' {
-		sep = " "
-	}
-	return original + sep + extra
-}
-
-// !!!
-
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
@@ -1950,12 +2039,14 @@ func _() {
 	_ = x[OpcodeBudget-12]
 	_ = x[CallerApplicationID-13]
 	_ = x[CallerApplicationAddress-14]
-	_ = x[invalidGlobalField-15]
+	_ = x[AssetCreateMinBalance-15]
+	_ = x[AssetOptInMinBalance-16]
+	_ = x[invalidGlobalField-17]
 }
 
-const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressinvalidGlobalField"
+const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceinvalidGlobalField"
 
-var _GlobalField_index = [...]uint8{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 223}
+var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 264}
 
 func (i GlobalField) String() string {
 	if i >= GlobalField(len(_GlobalField_index)-1) {
@@ -2107,21 +2198,20 @@ func (i EcdsaCurve) String() string {
 	}
 	return _EcdsaCurve_name[_EcdsaCurve_index[i]:_EcdsaCurve_index[i+1]]
 }
-
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[BN254_G1-0]
-	_ = x[BN254_G2-1]
-	_ = x[BLS12_381_G1-2]
-	_ = x[BLS12_381_G2-3]
-	_ = x[invalidEcgroup-4]
+	_ = x[BN254g1-0]
+	_ = x[BN254g2-1]
+	_ = x[BLS12_381g1-2]
+	_ = x[BLS12_381g2-3]
+	_ = x[invalidEcGroup-4]
 }
 
-const _EcGroup_name = "BN254_G1BN254_G2BLS12_381_G1BLS12_381_G2invalidEcgroup"
+const _EcGroup_name = "BN254g1BN254g2BLS12_381g1BLS12_381g2invalidEcGroup"
 
-var _EcGroup_index = [...]uint8{0, 8, 16, 28, 40, 54}
+var _EcGroup_index = [...]uint8{0, 7, 14, 25, 36, 50}
 
 func (i EcGroup) String() string {
 	if i < 0 || i >= EcGroup(len(_EcGroup_index)-1) {
@@ -2129,75 +2219,6 @@ func (i EcGroup) String() string {
 	}
 	return _EcGroup_name[_EcGroup_index[i]:_EcGroup_index[i+1]]
 }
-
-// Ecgroup is an enum for `ec_` opcodes
-type EcGroup int
-
-const (
-	// BN254_G1 is the G1 group of BN254
-	BN254_G1 EcGroup = iota
-	// BN254_G2 is the G2 group of BN254
-	BN254_G2
-	// BL12_381_G1 specifies the G1 group of BLS 12-381
-	BLS12_381_G1
-	// BL12_381_G2 specifies the G2 group of BLS 12-381
-	BLS12_381_G2
-	invalidEcgroup // compile-time constant for number of fields
-)
-
-var ecGroupNames [invalidEcgroup]string
-
-type ecGroupSpec struct {
-	field EcGroup
-	doc   string
-}
-
-func (fs ecGroupSpec) Field() byte {
-	return byte(fs.field)
-}
-func (fs ecGroupSpec) Type() StackType {
-	return StackNone // Will not show, since all are untyped
-}
-func (fs ecGroupSpec) OpVersion() uint64 {
-	return pairingVersion
-}
-func (fs ecGroupSpec) Version() uint64 {
-	return pairingVersion
-}
-func (fs ecGroupSpec) Note() string {
-	return fs.doc
-}
-
-var ecGroupSpecs = [...]ecGroupSpec{
-	{BN254_G1, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
-	{BN254_G2, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
-	{BLS12_381_G1, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
-	{BLS12_381_G2, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 48 byte Y"},
-}
-
-func ecGroupSpecByField(c EcGroup) (ecGroupSpec, bool) {
-	if int(c) >= len(ecGroupSpecs) {
-		return ecGroupSpec{}, false
-	}
-	return ecGroupSpecs[c], true
-}
-
-var ecGroupSpecByName = make(ecGroupNameSpecMap, len(ecGroupNames))
-
-type ecGroupNameSpecMap map[string]ecGroupSpec
-
-func (s ecGroupNameSpecMap) get(name string) (FieldSpec, bool) {
-	fs, ok := s[name]
-	return fs, ok
-}
-
-// EcGroups collects details about the constants used to describe EcGroups
-var EcGroups = FieldGroup{
-	"EC", "Groups",
-	ecGroupNames[:],
-	ecGroupSpecByName,
-}
-
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
@@ -2275,12 +2296,19 @@ func (i BlockField) String() string {
 	return _BlockField_name[_BlockField_index[i]:_BlockField_index[i+1]]
 }
 
-var ecdsaVerifyCosts = []int{
-	Secp256k1: 1700,
-	Secp256r1: 2500,
+// TypeNameDescriptions contains extra description about a low level
+// protocol transaction Type string, and provide a friendlier type
+// constant name in assembler.
+var TypeNameDescriptions = map[string]string{
+	string(protocol.UnknownTx):         "Unknown type. Invalid transaction",
+	string(protocol.PaymentTx):         "Payment",
+	string(protocol.KeyRegistrationTx): "KeyRegistration",
+	string(protocol.AssetConfigTx):     "AssetConfig",
+	string(protocol.AssetTransferTx):   "AssetTransfer",
+	string(protocol.AssetFreezeTx):     "AssetFreeze",
+	string(protocol.ApplicationCallTx): "ApplicationCall",
 }
 
-var ecdsaDecompressCosts = []int{
-	Secp256k1: 650,
-	Secp256r1: 2400,
-}
+// RunMode is a bitset of logic evaluation modes.
+// There are currently two such modes: Signature and Application.
+type RunMode uint64

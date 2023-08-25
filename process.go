@@ -464,6 +464,7 @@ var opsList = []opListItem{
 	{"ec_add", opEcAdd},
 	{"ec_scalar_mul", opEcScalarMul},
 	{"ec_pairing_check", opEcPairingCheck},
+	{"ec_multi_scalar_mul", opEcMultiScalarMul},
 	{"ec_multi_exp", opEcMultiExp},
 	{"ec_subgroup_check", opEcSubgroupCheck},
 	{"ec_map_to", opEcMapTo},
@@ -2303,35 +2304,39 @@ func opSHA3_256(c ProcessContext) {
 	c.emit(Sha3256)
 }
 func opEcAdd(c ProcessContext) {
-	c.minVersion(9)
+	c.minVersion(10)
 	v := c.mustReadEcGroup("curve")
 	c.emit(&EcAddExpr{Group: v})
 }
 func opEcScalarMul(c ProcessContext) {
-	c.minVersion(9)
+	c.minVersion(10)
 	v := c.mustReadEcGroup("curve")
 	c.emit(&EcScalarMul{Group: v})
 }
 func opEcPairingCheck(c ProcessContext) {
-	c.minVersion(9)
+	c.minVersion(10)
 	v := c.mustReadEcGroup("curve")
 	c.emit(&EcPairingCheckExpr{Group: v})
 }
-
+func opEcMultiScalarMul(c ProcessContext) {
+	c.minVersion(10)
+	v := c.mustReadEcGroup("curve")
+	c.emit(&EcMultiScalarMulExpr{Group: v})
+}
 func opEcMultiExp(c ProcessContext) {
-	c.minVersion(9)
+	c.minVersion(10)
 	v := c.mustReadEcGroup("curve")
 	c.emit(&EcMultiExpExpr{Group: v})
 }
 
 func opEcSubgroupCheck(c ProcessContext) {
-	c.minVersion(9)
+	c.minVersion(10)
 	v := c.mustReadEcGroup("curve")
 	c.emit(&EcSubgroupCheckExpr{Group: v})
 }
 
 func opEcMapTo(c ProcessContext) {
-	c.minVersion(9)
+	c.minVersion(10)
 	v := c.mustReadEcGroup("curve")
 	c.emit(&EcMapToExpr{Group: v})
 }
