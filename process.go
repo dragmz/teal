@@ -3268,7 +3268,7 @@ func readLines(ts []Token) []Line {
 	return lines
 }
 
-func prepareLines(lines []Line) {
+func prepareLines(c *parserContext, lines []Line) {
 	for li, l := range lines {
 		sf := 0
 
@@ -3281,6 +3281,10 @@ func prepareLines(lines []Line) {
 				})
 				sf = i + 1
 			case TokenComment:
+				if strings.TrimSpace(t.String()) == "#pragma mode logicsig" {
+					c.mode = ModeSig
+				}
+
 				l.Tokens = l.Tokens[:i]
 				l.Subs = append(l.Subs, Subline{
 					Tokens: l.Tokens[sf:i],
@@ -3313,7 +3317,7 @@ func Process(source string) *ProcessResult {
 	ts, c.diag = readTokens(source)
 
 	lines := readLines(ts)
-	prepareLines(lines)
+	prepareLines(c, lines)
 
 	var ops []Token
 	var lsyms []*labelSymbol
@@ -3346,15 +3350,7 @@ func Process(source string) *ProcessResult {
 					return
 				}
 
-				if c.args.Curr().Type() == TokenComment {
-					if strings.TrimSpace(c.args.Curr().String()) == "#pragma mode logicsig" {
-						c.mode = ModeSig
-					} else {
-						c.comment(c.args.Curr().String())
-					}
-					c.emit(Empty)
-					return
-				} else if strings.HasSuffix(c.args.Text(), ":") {
+				if strings.HasSuffix(c.args.Text(), ":") {
 					name := c.args.Text()
 					name = name[:len(name)-1]
 					if len(name) == 0 {

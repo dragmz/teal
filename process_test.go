@@ -258,3 +258,14 @@ func TestDefine(t *testing.T) {
 	#define test123 b a`)
 	assert.Len(t, res.Diagnostics, 0)
 }
+
+func TestLogicSigMode(t *testing.T) {
+	res := Process(`//#pragma mode logicsig`)
+
+	assert.Equal(t, ProgramMode(ModeSig), res.Mode)
+}
+
+func TestAppMode(t *testing.T) {
+	req := Process(``)
+	assert.Equal(t, ProgramMode(ModeApp), req.Mode)
+}
