@@ -209,7 +209,7 @@ func readAssetParamsField(v uint64, s string) (AssetParamsField, bool, error) {
 func readGlobalField(v uint64, s string, mode RunMode) (GlobalField, bool, error) {
 	spec, ok := globalFieldSpecByName[s]
 	if ok {
-		if mode != ModeAny {
+		if spec.mode != ModeAny {
 			if spec.mode != mode {
 				return 0, true, errors.Errorf("not available in this mode (need: %s, got: %s)", spec.mode, mode)
 			}
