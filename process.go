@@ -518,7 +518,7 @@ type ProcessContext interface {
 	emit(op Op)
 
 	minVersion(v uint64)
-	modeMinVersion(mode ProgramMode, v uint64)
+	modeMinVersion(mode RunMode, v uint64)
 
 	mustReadDefine() string
 	mustReadEcGroup(name string) EcGroup
@@ -578,7 +578,7 @@ func (c *docContext) minVersion(v uint64) {
 	c.sigVersion = v
 }
 
-func (c *docContext) modeMinVersion(mode ProgramMode, v uint64) {
+func (c *docContext) modeMinVersion(mode RunMode, v uint64) {
 	switch mode {
 	case ModeSig:
 		c.sigVersion = v
@@ -847,15 +847,7 @@ func (c *docContext) mustReadBlockField(name string) (v BlockField) {
 	return
 }
 
-type ProgramMode int
-
-const (
-	ModeNone = iota
-	ModeApp
-	ModeSig
-)
-
-func (m ProgramMode) String() string {
+func (m RunMode) String() string {
 	switch m {
 	case ModeApp:
 		return "application"
@@ -877,7 +869,7 @@ type LineOp struct {
 }
 
 type parserContext struct {
-	mode    ProgramMode
+	mode    RunMode
 	version uint64
 
 	lintlops [][]Op
@@ -934,7 +926,7 @@ func (c *parserContext) minVersion(v uint64) {
 
 }
 
-func (c *parserContext) modeMinVersion(mode ProgramMode, v uint64) {
+func (c *parserContext) modeMinVersion(mode RunMode, v uint64) {
 }
 
 func (c *parserContext) failAt(l int, b int, e int, err error) {
@@ -1110,7 +1102,7 @@ func (c *parserContext) mustReadBlockField(name string) BlockField {
 func (c *parserContext) mustReadGlobalField(name string) GlobalField {
 	c.mustReadArg(name)
 
-	f, isconst, err := readGlobalField(c.version, c.args.Text())
+	f, isconst, err := readGlobalField(c.version, c.args.Text(), c.mode)
 	if err != nil {
 		c.failCurr(err)
 	}
@@ -2659,7 +2651,7 @@ func (v RequiredVersion) EndCharacter() int {
 }
 
 type ProcessResult struct {
-	Mode ProgramMode
+	Mode RunMode
 
 	Version      uint64
 	VersionToken *Token

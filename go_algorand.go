@@ -447,17 +447,17 @@ const (
 // StackTypes is an alias for a list of StackType with syntactic sugar
 type StackTypes []StackType
 
-type runMode uint64
+type RunMode uint64
 
 const (
-	// modeSig is LogicSig execution
-	modeSig RunMode = 1 << iota
+	// ModeSig is LogicSig execution
+	ModeSig RunMode = 1 << iota
 
-	// modeApp is application/contract execution
-	modeApp
+	// ModeApp is application/contract execution
+	ModeApp
 
 	// local constant, run in any mode
-	modeAny = modeSig | modeApp
+	ModeAny = ModeSig | ModeApp
 )
 
 // Copyright (C) 2019-2023 Algorand, Inc.
@@ -1025,13 +1025,13 @@ func (fs globalFieldSpec) Note() string {
 
 var globalFieldSpecs = [...]globalFieldSpec{
 	// version 0 is the same as v1 (initial release)
-	{MinTxnFee, StackUint64, modeAny, 0, "microalgos"},
-	{MinBalance, StackUint64, modeAny, 0, "microalgos"},
-	{MaxTxnLife, StackUint64, modeAny, 0, "rounds"},
-	{ZeroAddress, StackAddress, modeAny, 0, "32 byte address of all zero bytes"},
-	{GroupSize, StackUint64, modeAny, 0,
+	{MinTxnFee, StackUint64, ModeAny, 0, "microalgos"},
+	{MinBalance, StackUint64, ModeAny, 0, "microalgos"},
+	{MaxTxnLife, StackUint64, ModeAny, 0, "rounds"},
+	{ZeroAddress, StackAddress, ModeAny, 0, "32 byte address of all zero bytes"},
+	{GroupSize, StackUint64, ModeAny, 0,
 		"Number of transactions in this atomic transaction group. At least 1"},
-	{LogicSigVersion, StackUint64, modeAny, 2, "Maximum supported version"},
+	{LogicSigVersion, StackUint64, ModeAny, 2, "Maximum supported version"},
 	{Round, StackUint64, ModeApp, 2, "Current round number"},
 	{LatestTimestamp, StackUint64, ModeApp, 2,
 		"Last confirmed block UNIX timestamp. Fails if negative"},
@@ -1040,17 +1040,17 @@ var globalFieldSpecs = [...]globalFieldSpec{
 		"Address of the creator of the current application"},
 	{CurrentApplicationAddress, StackAddress, ModeApp, 5,
 		"Address that the current application controls"},
-	{GroupID, StackBytes32, modeAny, 5,
+	{GroupID, StackBytes32, ModeAny, 5,
 		"ID of the transaction group. 32 zero bytes if the transaction is not part of a group."},
-	{OpcodeBudget, StackUint64, modeAny, 6,
+	{OpcodeBudget, StackUint64, ModeAny, 6,
 		"The remaining cost that can be spent by opcodes in this program."},
 	{CallerApplicationID, StackUint64, ModeApp, 6,
 		"The application ID of the application that called this application. 0 if this application is at the top-level."},
 	{CallerApplicationAddress, StackAddress, ModeApp, 6,
 		"The application address of the application that called this application. ZeroAddress if this application is at the top-level."},
-	{AssetCreateMinBalance, StackUint64, modeAny, 10,
+	{AssetCreateMinBalance, StackUint64, ModeAny, 10,
 		"The additional minimum balance required to create (and opt-in to) an asset."},
-	{AssetOptInMinBalance, StackUint64, modeAny, 10,
+	{AssetOptInMinBalance, StackUint64, ModeAny, 10,
 		"The additional minimum balance required to opt-in to an asset."},
 }
 
@@ -2308,7 +2308,3 @@ var TypeNameDescriptions = map[string]string{
 	string(protocol.AssetFreezeTx):     "AssetFreeze",
 	string(protocol.ApplicationCallTx): "ApplicationCall",
 }
-
-// RunMode is a bitset of logic evaluation modes.
-// There are currently two such modes: Signature and Application.
-type RunMode uint64

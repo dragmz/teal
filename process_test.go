@@ -33,7 +33,7 @@ func (r testRange) EndCharacter() int {
 func TestProcessEmpty(t *testing.T) {
 	res := Process("")
 
-	assert.Equal(t, ProgramMode(ModeApp), res.Mode)
+	assert.Equal(t, ModeApp, res.Mode)
 	assert.Equal(t, uint64(1), res.Version)
 
 	assert.Equal(t, 0, len(res.Diagnostics))
@@ -262,10 +262,10 @@ func TestDefine(t *testing.T) {
 func TestLogicSigMode(t *testing.T) {
 	res := Process(`//#pragma mode logicsig`)
 
-	assert.Equal(t, ProgramMode(ModeSig), res.Mode)
+	assert.Equal(t, ModeSig, res.Mode)
 }
 
 func TestAppMode(t *testing.T) {
 	req := Process(``)
-	assert.Equal(t, ProgramMode(ModeApp), req.Mode)
+	assert.Equal(t, ModeApp, req.Mode)
 }
