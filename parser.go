@@ -288,9 +288,13 @@ func readJsonRefField(v uint64, s string) (JSONRefType, bool, error) {
 	return JSONRefType(value), false, nil
 }
 
-func readTxnField(c fieldContext, v uint64, s string) (TxnField, bool, error) {
+func readTxnField(c fieldContext, v uint64, s string, m RunMode) (TxnField, bool, error) {
 	spec, ok := txnFieldSpecByName[s]
 	if ok {
+		if spec.effects && m == ModeSig {
+			return 0, true, errors.Errorf("not available in this mode (need: %s, got: %s)", ModeApp, m)
+		}
+
 		switch c {
 		case txnaFieldContext:
 			if !spec.array {

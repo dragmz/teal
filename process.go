@@ -1283,7 +1283,7 @@ func (c *parserContext) parseJsonRef(name string) JSONRefType {
 }
 
 func (c *parserContext) parseTxnField(tc fieldContext, name string) TxnField {
-	v, isconst, err := readTxnField(tc, c.version, c.args.Text())
+	v, isconst, err := readTxnField(tc, c.version, c.args.Text(), c.mode)
 
 	if err != nil {
 		c.failCurr(errors.Wrapf(err, "failed to parse txn field: %s", name))
