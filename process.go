@@ -461,6 +461,8 @@ var opsList = []opListItem{
 	{"bsqrt", opBytesSqrt},
 	{"divw", opDivw},
 	{"sha3_256", opSHA3_256},
+	{"sumhash512", opSumHash512},
+	{"falcon_verify", opFalconVerify},
 	{"ec_add", opEcAdd},
 	{"ec_scalar_mul", opEcScalarMul},
 	{"ec_pairing_check", opEcPairingCheck},
@@ -2294,6 +2296,14 @@ func opDivw(c ProcessContext) {
 func opSHA3_256(c ProcessContext) {
 	c.minVersion(7)
 	c.emit(Sha3256)
+}
+func opSumHash512(c ProcessContext) {
+	c.minVersion(10)
+	c.emit(SumHash512)
+}
+func opFalconVerify(c ProcessContext) {
+	c.minVersion(10)
+	c.emit(FalconVerify)
 }
 func opEcAdd(c ProcessContext) {
 	c.minVersion(10)

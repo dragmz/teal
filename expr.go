@@ -34,6 +34,26 @@ func (e *Sha3256Expr) String() string {
 
 var Sha3256 = &Sha3256Expr{}
 
+// sumhash512
+
+type Sumhash512Expr struct{}
+
+func (e *Sumhash512Expr) String() string {
+	return "sumhash512"
+}
+
+var SumHash512 = &Sumhash512Expr{}
+
+// falcon_verify
+
+type FalconVerifyExpr struct{}
+
+func (e *FalconVerifyExpr) String() string {
+	return "falcon_verify"
+}
+
+var FalconVerify = &FalconVerifyExpr{}
+
 // sha256
 
 type Sha256Expr struct{}

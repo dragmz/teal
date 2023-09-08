@@ -1,0 +1,4 @@
+#pragma version 10
+
+sumhash512
+falcon_verify
