@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/algorand/go-algorand-sdk/client/v2/algod"
-	"github.com/algorand/go-algorand-sdk/types"
+	"github.com/algorand/go-algorand-sdk/v2/client/v2/algod"
+	"github.com/algorand/go-algorand-sdk/v2/types"
 	"github.com/dragmz/abs"
 	"github.com/dragmz/teal"
 	"github.com/pkg/errors"
