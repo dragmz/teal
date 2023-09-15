@@ -1,0 +1,68 @@
+#pragma version 9
+
+txn ApplicationID
+int 0
+==
+bnz end
+
+// txn-1 (pay)
+// txn (app call)
+// txn+1 (app creation)
+
+    txn GroupIndex
+    int 1
+    +
+    store 0 // txn+1 index
+
+    txn NumAppArgs
+    store 1 // num args (n)
+
+itxn_begin
+
+    int ApplicationCall
+    itxn_field TypeEnum
+
+    load 0
+    gtxns ApprovalProgram
+    itxn_field ApprovalProgram
+
+    load 0
+    gtxns ClearStateProgram
+    itxn_field ClearStateProgram
+
+itxn_submit
+
+itxn_begin
+
+    int ApplicationCall
+    itxn_field TypeEnum
+
+    itxn CreatedApplicationID
+    itxn_field ApplicationID
+
+    int 0
+    store 2 // i = 0
+
+    loop:
+    
+        load 1
+        load 2
+        ==
+        bnz submit // if(i == n) goto submit
+
+        load 2
+        txnas ApplicationArgs
+        itxn_field ApplicationArgs // append(args, arg[i])
+
+        load 2
+        int 1
+        +
+        store 2 // i = i + 1
+
+        b loop
+    submit:
+
+itxn_submit
+
+end:
+int 1
