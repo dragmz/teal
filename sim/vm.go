@@ -47,6 +47,7 @@ type Vm struct {
 	Branch    *VmBranch
 	Branches  []*VmBranch
 	Scratch   VmScratch
+	Pause     bool
 }
 
 func NewVm(src string) (*Vm, error) {
@@ -70,9 +71,10 @@ func NewVm(src string) (*Vm, error) {
 	}
 
 	v := &Vm{
-		Error:    err,
-		Branch:   b,
-		Branches: []*VmBranch{b},
+		Error:     err,
+		Branch:    b,
+		Branches:  []*VmBranch{b},
+		Triggered: map[int][]int{},
 	}
 
 	v.onLine()
@@ -96,26 +98,43 @@ func (v *Vm) SetBreakpoints(lines []int) map[int]bool {
 }
 
 func (v *Vm) Run() {
+	for !v.Pause {
+		if !v.Step() {
+			break
+		}
 
+		if len(v.Triggered) > 0 {
+			break
+		}
+	}
+
+	v.Pause = false
 }
 
 func (v *Vm) Switch(id int) {
 
 }
 
-func (v *Vm) Step() {
+func (v *Vm) Step() bool {
 	if v.Branch.i >= len(v.Branch.Trace) {
-		return
+		return false
 	}
 
 	v.Branch.i++
 	v.onLine()
+
+	return true
 }
 
 func (v *Vm) onLine() {
+	clear(v.Triggered)
+
 	if v.Branch.i >= len(v.Branch.Trace) {
 		return
 	}
 
 	v.Branch.Line = v.Branch.Trace[v.Branch.i].Line
+	if v.Branch.b[v.Branch.Line] {
+		v.Triggered[v.Branch.Id] = []int{v.Branch.Line}
+	}
 }

@@ -487,6 +487,8 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				return err
 			}
 
+			l.vm.tvm.Pause = true
+
 			var tid *int
 			if l.vm.tvm.Branch != nil {
 				tid = new(int)
