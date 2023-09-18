@@ -17,7 +17,7 @@ import (
 )
 
 type ProgramExecutionTrace struct {
-	PC   int
+	models.SimulationOpcodeTraceUnit
 	Line int
 	Text string
 }
@@ -48,11 +48,10 @@ func (p program) translateUnit(unit []models.SimulationOpcodeTraceUnit) ([]Progr
 
 	for _, u := range unit {
 		line := p.sm.PcToLine[int(u.Pc)]
-
 		r = append(r, ProgramExecutionTrace{
-			PC:   int(u.Pc),
-			Line: line,
-			Text: p.lines[line],
+			SimulationOpcodeTraceUnit: u,
+			Line:                      line,
+			Text:                      p.lines[line],
 		})
 	}
 

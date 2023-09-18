@@ -4,15 +4,27 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/algod"
+	"github.com/algorand/go-algorand-sdk/v2/client/v2/common/models"
 	"github.com/dragmz/teal"
 )
 
-type VmStackItem struct {
-	None bool
+type VmValue struct {
+	models.AvmValue
 }
 
-func (i VmStackItem) String() string {
-	return "TODO"
+func (i VmValue) IsNone() bool {
+	return i.Type == 0
+}
+
+func (i VmValue) String() string {
+	switch i.Type {
+	case 1:
+		return fmt.Sprintf("bytes(%s)", string(i.Bytes))
+	case 2:
+		return fmt.Sprintf("uint(%d)", i.Uint)
+	default:
+		return fmt.Sprintf("unknown(%d)", i.Type)
+	}
 }
 
 type VmFrame struct {
@@ -21,24 +33,25 @@ type VmFrame struct {
 }
 
 type VmBranch struct {
-	Id     int
-	Budget int
-	Stack  VmStack
-	Line   int
-	Name   string
-	Frames []VmFrame
-	Trace  []ProgramExecutionTrace
+	Id        int
+	Budget    int
+	Stack     VmStack
+	PrevTrace *ProgramExecutionTrace
+	Line      int
+	Name      string
+	Frames    []VmFrame
+	Trace     []ProgramExecutionTrace
 
 	i int
 	b map[int]bool
 }
 
 type VmStack struct {
-	Items []VmStackItem
+	Items []VmValue
 }
 
 type VmScratch struct {
-	Items []VmStackItem
+	Items []VmValue
 }
 
 type Vm struct {
@@ -75,6 +88,9 @@ func NewVm(src string) (*Vm, error) {
 		Branch:    b,
 		Branches:  []*VmBranch{b},
 		Triggered: map[int][]int{},
+		Scratch: VmScratch{
+			Items: make([]VmValue, 256),
+		},
 	}
 
 	v.onLine()
@@ -133,8 +149,33 @@ func (v *Vm) onLine() {
 		return
 	}
 
-	v.Branch.Line = v.Branch.Trace[v.Branch.i].Line
+	t := v.Branch.Trace[v.Branch.i]
+
+	v.Branch.Line = t.Line
 	if v.Branch.b[v.Branch.Line] {
 		v.Triggered[v.Branch.Id] = []int{v.Branch.Line}
 	}
+
+	pt := v.Branch.PrevTrace
+
+	if pt != nil {
+		popCount := int(pt.StackPopCount)
+
+		if popCount > len(v.Branch.Stack.Items) {
+			popCount = len(v.Branch.Stack.Items)
+			v.Error = fmt.Errorf("stack underflow")
+		}
+
+		v.Branch.Stack.Items = v.Branch.Stack.Items[:len(v.Branch.Stack.Items)-popCount]
+
+		for _, a := range pt.StackAdditions {
+			v.Branch.Stack.Items = append(v.Branch.Stack.Items, VmValue{a})
+		}
+
+		for _, s := range pt.ScratchChanges {
+			v.Scratch.Items[s.Slot] = VmValue{s.NewValue}
+		}
+	}
+
+	v.Branch.PrevTrace = &t
 }

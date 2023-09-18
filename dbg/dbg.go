@@ -606,10 +606,6 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 						if b.Id == f {
 							switch i {
 							case 0:
-								vs = append(vs, dapVariable{
-									Name:  "Budget",
-									Value: strconv.Itoa(b.Budget),
-								})
 							case 1:
 								for i := len(b.Stack.Items) - 1; i >= 0; i-- {
 									vs = append(vs, dapVariable{
@@ -631,7 +627,7 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 
 								for i := s; i < e; i++ {
 									v := l.vm.tvm.Scratch.Items[i]
-									if v.None {
+									if !v.IsNone() {
 										vs = append(vs, dapVariable{
 											Name:  strconv.Itoa(i),
 											Value: v.String(),
@@ -658,11 +654,6 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 			if l.vm != nil {
 				for _, b := range l.vm.tvm.Branches {
 					if b.Id == sreq.Arguments.FrameId {
-						ss = append(ss, dapScope{
-							Name:               "State",
-							VariablesReference: 1 + 10*b.Id, // TODO: make sure var ref calculation is reliable
-						})
-
 						stacklen := len(b.Stack.Items)
 						ss = append(ss, dapScope{
 							Name:               "Stack",
