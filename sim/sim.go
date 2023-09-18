@@ -167,7 +167,10 @@ func Run(ac *algod.Client, sender string, approval []byte, clear []byte) (Result
 	sr, err := ac.SimulateTransaction(models.SimulateRequest{
 		AllowEmptySignatures: true,
 		ExecTraceConfig: models.SimulateTraceConfig{
-			Enable: true,
+			Enable:        true,
+			ScratchChange: true,
+			StackChange:   true,
+			StateChange:   true,
 		},
 		TxnGroups: []models.SimulateRequestTransactionGroup{
 			{
