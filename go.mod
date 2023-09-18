@@ -1,9 +1,9 @@
 module github.com/dragmz/teal
 
-go 1.21
+go 1.20
 
 require (
-	github.com/algorand/go-algorand-sdk/v2 v2.2.0
+	github.com/algorand/go-algorand-sdk/v2 v2.3.0
 	github.com/dragmz/abs v0.0.0-20230914211128-178bcb773f36
 	github.com/joe-p/tealfmt v0.0.0-20221219211223-cec2ea891d52
 	github.com/pkg/errors v0.9.1

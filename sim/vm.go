@@ -83,7 +83,7 @@ func NewVm(src string) (*Vm, error) {
 }
 
 func (v *Vm) SetBreakpoints(lines []int) map[int]bool {
-	clear(v.Branch.b)
+	v.Branch.b = map[int]bool{}
 	for _, l := range lines {
 		for _, t := range v.Branch.Trace {
 			if t.Line != l {
@@ -127,7 +127,7 @@ func (v *Vm) Step() bool {
 }
 
 func (v *Vm) onLine() {
-	clear(v.Triggered)
+	v.Triggered = map[int][]int{}
 
 	if v.Branch.i >= len(v.Branch.Trace) {
 		return

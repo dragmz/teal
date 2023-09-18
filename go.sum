@@ -2,6 +2,8 @@ github.com/algorand/avm-abi v0.2.0 h1:bkjsG+BOEcxUcnGSALLosmltE0JZdg+ZisXKx0UDX2
 github.com/algorand/avm-abi v0.2.0/go.mod h1:+CgwM46dithy850bpTeHh9MC99zpn2Snirb3QTl2O/g=
 github.com/algorand/go-algorand-sdk/v2 v2.2.0 h1:zWwK+k/WArtZJUSkDXTDj4a0GUik2iOhFlPjLFDET6s=
 github.com/algorand/go-algorand-sdk/v2 v2.2.0/go.mod h1:+3+4EZmMUcQk6bgmtC5Ic5kKZE/g6SmfiW098tYLkPE=
+github.com/algorand/go-algorand-sdk/v2 v2.3.0 h1:WkdZ3EleBZ+DO0KbNvdmmJLv892ghbtQI0A/H165emw=
+github.com/algorand/go-algorand-sdk/v2 v2.3.0/go.mod h1:Xk569fTpBTV0QtE74+79NTl6Rz3OC1K3iods4uG0ffU=
 github.com/algorand/go-codec/codec v1.1.10 h1:zmWYU1cp64jQVTOG8Tw8wa+k0VfwgXIPbnDfiVa+5QA=
 github.com/algorand/go-codec/codec v1.1.10/go.mod h1:YkEx5nmr/zuCeaDYOIhlDg92Lxju8tj2d2NrYqP7g7k=
 github.com/chrismcguire/gobberish v0.0.0-20150821175641-1d8adb509a0e h1:CHPYEbz71w8DqJ7DRIq+MXyCQsdibK08vdcQTY4ufas=
