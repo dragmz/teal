@@ -35,7 +35,7 @@ func run(a args) error {
 		return errors.Wrap(err, "failed to read clear program")
 	}
 
-	res, err := sim.Run(ac, a.Sender, abs, cbs)
+	res, err := sim.Run(ac, a.Sender, abs, cbs, [][]byte{})
 	if err != nil {
 		return errors.Wrap(err, "failed to run simulation")
 	}
