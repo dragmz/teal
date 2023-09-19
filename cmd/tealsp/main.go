@@ -21,8 +21,10 @@ type lspArgs struct {
 }
 
 type dbgArgs struct {
-	Debug  string
-	Config string
+	Debug      string
+	Config     string
+	Algod      string
+	AlgodToken string
 }
 
 func runLsp(a lspArgs) (int, error) {
@@ -88,6 +90,10 @@ func runDbg(a dbgArgs) (int, error) {
 		opts = append(opts, dbg.WithConfig(cfg))
 	}
 
+	if a.Algod != "" {
+		opts = append(opts, dbg.WithAlgod(a.Algod, a.AlgodToken))
+	}
+
 	l, err := dbg.New(r, w, opts...)
 	if err != nil {
 		return -3, errors.Wrap(err, "failed to create dbg")
@@ -102,6 +108,8 @@ func main() {
 
 		flag.StringVar(&a.Debug, "debug", "", "debug file path")
 		flag.StringVar(&a.Config, "config", "", "config file path")
+		flag.StringVar(&a.Algod, "algod", "https://testnet-api.algonode.cloud", "algod endpoint")
+		flag.StringVar(&a.AlgodToken, "algod-token", "", "algod token")
 
 		copy(os.Args[1:], os.Args[2:])
 		os.Args = os.Args[:len(os.Args)-1]

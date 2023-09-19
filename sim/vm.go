@@ -63,12 +63,12 @@ type Vm struct {
 	Pause     bool
 }
 
-func NewVm(src string, args [][]byte) (*Vm, error) {
-	ac, err := algod.MakeClient("https://testnet-api.algonode.cloud", "")
-	if err != nil {
-		return nil, err
-	}
+type VmConfig struct {
+	Ac   *algod.Client
+	Args [][]byte
+}
 
+func NewVm(src string, config VmConfig) (*Vm, error) {
 	pr := teal.Process(src)
 
 	clear := "int 1"
@@ -76,7 +76,7 @@ func NewVm(src string, args [][]byte) (*Vm, error) {
 		clear = fmt.Sprintf("#pragma version %d\r\n", pr.Version) + clear
 	}
 
-	r, err := Run(ac, "F77YBQEP4EAJYCQPS4GYEW2WWJXU6DQ4OJHRYSV74UXHOTRWXYRN7HNP3U", []byte(src), []byte(clear), args)
+	r, err := Run(config.Ac, "F77YBQEP4EAJYCQPS4GYEW2WWJXU6DQ4OJHRYSV74UXHOTRWXYRN7HNP3U", []byte(src), []byte(clear), config.Args)
 
 	b := &VmBranch{
 		Trace: r.Call.Approval,

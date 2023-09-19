@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/algorand/go-algorand-sdk/v2/client/v2/algod"
 	"github.com/dragmz/teal/sim"
 	"github.com/pkg/errors"
 )
@@ -24,6 +25,7 @@ func init() {
 
 type dbg struct {
 	config DbgConfig
+	ac     *algod.Client
 
 	id int
 
@@ -74,6 +76,19 @@ func WithConfig(c DbgConfig) DbgOption {
 func WithDebug(w io.Writer) DbgOption {
 	return func(l *dbg) error {
 		l.debug = bufio.NewWriter(w)
+		return nil
+	}
+}
+
+func WithAlgod(addr string, token string) DbgOption {
+	return func(l *dbg) error {
+		var err error
+
+		l.ac, err = algod.MakeClient(addr, token)
+		if err != nil {
+			return errors.Wrap(err, "failed to make algod client")
+		}
+
 		return nil
 	}
 }
@@ -401,7 +416,10 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 			}
 
 			src := string(bs)
-			tvm, err := sim.NewVm(src, args)
+			tvm, err := sim.NewVm(src, sim.VmConfig{
+				Ac:   l.ac,
+				Args: args,
+			})
 			if err != nil {
 				return err
 			}
