@@ -2,6 +2,7 @@ package dbg
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/textproto"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/dragmz/teal/sim"
 	"github.com/pkg/errors"
@@ -21,6 +23,8 @@ func init() {
 }
 
 type dbg struct {
+	config DbgConfig
+
 	id int
 
 	shutdown bool
@@ -55,6 +59,17 @@ type dbgBreakpoint struct {
 }
 
 type DbgOption func(l *dbg) error
+
+type DbgConfig struct {
+	Args []string `json:"args,omitempty"`
+}
+
+func WithConfig(c DbgConfig) DbgOption {
+	return func(l *dbg) error {
+		l.config = c
+		return nil
+	}
+}
 
 func WithDebug(w io.Writer) DbgOption {
 	return func(l *dbg) error {
@@ -368,9 +383,25 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				return err
 			}
 
-			src := string(bs)
+			args := make([][]byte, len(l.config.Args))
 
-			tvm, err := sim.NewVm(src)
+			for i, arg := range l.config.Args {
+				var bs []byte
+
+				if strings.HasPrefix(arg, "b64:") {
+					bs, err = base64.StdEncoding.DecodeString(arg[4:])
+					if err != nil {
+						return err
+					}
+				} else {
+					bs = []byte(arg)
+				}
+
+				args[i] = bs
+			}
+
+			src := string(bs)
+			tvm, err := sim.NewVm(src, args)
 			if err != nil {
 				return err
 			}

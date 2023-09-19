@@ -94,7 +94,7 @@ type Result struct {
 	Call   ProgramExecution
 }
 
-func Run(ac *algod.Client, sender string, approval []byte, clear []byte) (Result, error) {
+func Run(ac *algod.Client, sender string, approval []byte, clear []byte, args [][]byte) (Result, error) {
 	var r Result
 
 	ar, err := ac.TealCompile([]byte(approval)).Sourcemap(true).Do(context.Background())
@@ -136,7 +136,7 @@ func Run(ac *algod.Client, sender string, approval []byte, clear []byte) (Result
 	}
 
 	calltx, err := transaction.MakeApplicationCallTx(appId,
-		nil, nil, nil, nil, types.NoOpOC, nil, nil,
+		args, nil, nil, nil, types.NoOpOC, nil, nil,
 		types.StateSchema{}, types.StateSchema{},
 		sp, addr, nil, types.Digest{}, [32]byte{}, types.ZeroAddress)
 	if err != nil {

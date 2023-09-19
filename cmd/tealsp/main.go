@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"io"
 	"net"
@@ -20,7 +21,8 @@ type lspArgs struct {
 }
 
 type dbgArgs struct {
-	Debug string
+	Debug  string
+	Config string
 }
 
 func runLsp(a lspArgs) (int, error) {
@@ -72,6 +74,20 @@ func runDbg(a dbgArgs) (int, error) {
 		opts = append(opts, dbg.WithDebug(f))
 	}
 
+	if a.Config != "" {
+		bs, err := os.ReadFile(a.Config)
+		if err != nil {
+			return -3, errors.Wrap(err, "failed to read config file")
+		}
+
+		var cfg dbg.DbgConfig
+		if err := json.Unmarshal(bs, &cfg); err != nil {
+			return -4, errors.Wrap(err, "failed to unmarshal config file")
+		}
+
+		opts = append(opts, dbg.WithConfig(cfg))
+	}
+
 	l, err := dbg.New(r, w, opts...)
 	if err != nil {
 		return -3, errors.Wrap(err, "failed to create dbg")
@@ -85,6 +101,8 @@ func main() {
 		var a dbgArgs
 
 		flag.StringVar(&a.Debug, "debug", "", "debug file path")
+		flag.StringVar(&a.Config, "config", "", "config file path")
+
 		copy(os.Args[1:], os.Args[2:])
 		os.Args = os.Args[:len(os.Args)-1]
 

@@ -63,7 +63,7 @@ type Vm struct {
 	Pause     bool
 }
 
-func NewVm(src string) (*Vm, error) {
+func NewVm(src string, args [][]byte) (*Vm, error) {
 	ac, err := algod.MakeClient("https://testnet-api.algonode.cloud", "")
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func NewVm(src string) (*Vm, error) {
 		clear = fmt.Sprintf("#pragma version %d\r\n", pr.Version) + clear
 	}
 
-	r, err := Run(ac, "F77YBQEP4EAJYCQPS4GYEW2WWJXU6DQ4OJHRYSV74UXHOTRWXYRN7HNP3U", []byte(src), []byte(clear))
+	r, err := Run(ac, "F77YBQEP4EAJYCQPS4GYEW2WWJXU6DQ4OJHRYSV74UXHOTRWXYRN7HNP3U", []byte(src), []byte(clear), args)
 
 	b := &VmBranch{
 		Trace: r.Call.Approval,
