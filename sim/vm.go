@@ -131,7 +131,9 @@ func NewVm(src string, config RunConfig) (*Vm, error) {
 		Triggered: map[int][]int{},
 	}
 
-	v.onLine()
+	for _, b := range branches {
+		v.onLine(b)
+	}
 
 	return v, nil
 }
@@ -180,45 +182,45 @@ func (v *Vm) Step() bool {
 	}
 
 	v.Branch.i++
-	v.onLine()
+	v.onLine(v.Branch)
 
 	return true
 }
 
-func (v *Vm) onLine() {
+func (v *Vm) onLine(b *VmBranch) {
 	v.Triggered = map[int][]int{}
 
-	if v.Branch.i >= len(v.Branch.Trace) {
+	if b.i >= len(b.Trace) {
 		return
 	}
 
-	t := v.Branch.Trace[v.Branch.i]
+	t := b.Trace[b.i]
 
-	v.Branch.Line = t.Line
-	if v.Branch.b[v.Branch.Line] {
-		v.Triggered[v.Branch.Id] = []int{v.Branch.Line}
+	b.Line = t.Line
+	if b.b[b.Line] {
+		v.Triggered[b.Id] = []int{b.Line}
 	}
 
-	pt := v.Branch.PrevTrace
+	pt := b.PrevTrace
 
 	if pt != nil {
 		popCount := int(pt.StackPopCount)
 
-		if popCount > len(v.Branch.Stack.Items) {
-			popCount = len(v.Branch.Stack.Items)
+		if popCount > len(b.Stack.Items) {
+			popCount = len(b.Stack.Items)
 			v.Error = fmt.Errorf("stack underflow")
 		}
 
-		v.Branch.Stack.Items = v.Branch.Stack.Items[:len(v.Branch.Stack.Items)-popCount]
+		b.Stack.Items = b.Stack.Items[:len(b.Stack.Items)-popCount]
 
 		for _, a := range pt.StackAdditions {
-			v.Branch.Stack.Items = append(v.Branch.Stack.Items, VmValue{a})
+			b.Stack.Items = append(b.Stack.Items, VmValue{a})
 		}
 
 		for _, s := range pt.ScratchChanges {
-			v.Branch.Scratch.Items[s.Slot] = VmValue{s.NewValue}
+			b.Scratch.Items[s.Slot] = VmValue{s.NewValue}
 		}
 	}
 
-	v.Branch.PrevTrace = &t
+	b.PrevTrace = &t
 }

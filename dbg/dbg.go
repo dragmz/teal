@@ -482,7 +482,7 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				return err
 			}
 
-			createConfig, err := makeRunConfig(l.config, l.config.Create, false)
+			createConfig, err := makeRunConfig(l.config, l.config.Create, true)
 			if err != nil {
 				return err
 			}
