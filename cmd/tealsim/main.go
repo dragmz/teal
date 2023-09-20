@@ -38,6 +38,8 @@ func run(a args) error {
 	res, err := sim.Run(abs, cbs, sim.RunConfig{
 		Sender: a.Sender,
 		Ac:     ac,
+		Create: sim.AppRunConfig{},
+		Call:   sim.AppRunConfig{},
 	})
 	if err != nil {
 		return errors.Wrap(err, "failed to run simulation")

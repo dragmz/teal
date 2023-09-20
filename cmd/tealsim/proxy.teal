@@ -15,7 +15,11 @@ bnz end
     store 0 // txn+1 index
 
     txn NumAppArgs
-    store 1 // num args (n)
+    store 1 // num args (call_n)
+
+    load 0
+    gtxns NumAppArgs
+    store 3 // num args (create_n)
 
 itxn_begin
 
@@ -30,6 +34,29 @@ itxn_begin
     gtxns ClearStateProgram
     itxn_field ClearStateProgram
 
+    int 0
+    store 2 // i = 0
+
+    loop_create_args:
+    
+        load 3
+        load 2
+        ==
+        bnz submit_create // if(i == create_n) goto submit
+
+        load 0
+        load 2
+        gtxnsas ApplicationArgs
+        itxn_field ApplicationArgs // append(args, arg[i])
+
+        load 2
+        int 1
+        +
+        store 2 // i = i + 1
+
+        b loop_create_args
+
+submit_create:
 itxn_submit
 
 itxn_begin
@@ -43,12 +70,12 @@ itxn_begin
     int 0
     store 2 // i = 0
 
-    loop:
+    loop_call_args:
     
         load 1
         load 2
         ==
-        bnz submit // if(i == n) goto submit
+        bnz submit_call // if(i == call_n) goto submit
 
         load 2
         txnas ApplicationArgs
@@ -59,8 +86,8 @@ itxn_begin
         +
         store 2 // i = i + 1
 
-        b loop
-    submit:
+        b loop_call_args
+    submit_call:
 
 itxn_submit
 

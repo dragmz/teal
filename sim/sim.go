@@ -146,7 +146,7 @@ func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {
 		return r, errors.Wrap(err, "failed to decode clear program")
 	}
 
-	appId := uint64(340618153)
+	appId := uint64(366989729)
 	appAddr := crypto.GetApplicationAddress(appId)
 
 	paytx, err := transaction.MakePaymentTxn(addr.String(), appAddr.String(), 1000000, nil, "", sp)
