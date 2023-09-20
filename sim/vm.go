@@ -21,7 +21,7 @@ func (i VmValue) String() string {
 	case 1:
 		return fmt.Sprintf("bytes(%s)", string(i.Bytes))
 	case 2:
-		return fmt.Sprintf("uint(%d)", i.Uint)
+		return fmt.Sprintf("uint64(%d)", i.Uint)
 	default:
 		return fmt.Sprintf("unknown(%d)", i.Type)
 	}
@@ -36,6 +36,7 @@ type VmBranch struct {
 	Id        int
 	Budget    int
 	Stack     VmStack
+	Scratch   VmScratch
 	PrevTrace *ProgramExecutionTrace
 	Line      int
 	Name      string
@@ -59,16 +60,19 @@ type Vm struct {
 	Triggered map[int][]int
 	Branch    *VmBranch
 	Branches  []*VmBranch
-	Scratch   VmScratch
 	Pause     bool
 }
 
 type VmConfig struct {
-	Ac   *algod.Client
-	Args [][]byte
+	Ac *algod.Client
+
+	Args     [][]byte
+	Accounts []string
+	Apps     []uint64
+	Assets   []uint64
 }
 
-func NewVm(src string, config VmConfig) (*Vm, error) {
+func NewVm(src string, config RunConfig) (*Vm, error) {
 	pr := teal.Process(src)
 
 	clear := "int 1"
@@ -76,21 +80,55 @@ func NewVm(src string, config VmConfig) (*Vm, error) {
 		clear = fmt.Sprintf("#pragma version %d\r\n", pr.Version) + clear
 	}
 
-	r, err := Run(config.Ac, "F77YBQEP4EAJYCQPS4GYEW2WWJXU6DQ4OJHRYSV74UXHOTRWXYRN7HNP3U", []byte(src), []byte(clear), config.Args)
+	r, err := Run([]byte(src), []byte(clear), config)
 
-	b := &VmBranch{
+	createBranch := &VmBranch{
+		Id:    0,
+		Name:  "create",
+		Trace: r.Create.Approval,
+		b:     map[int]bool{},
+		Scratch: VmScratch{
+			Items: make([]VmValue, 256),
+		},
+	}
+
+	callBranch := &VmBranch{
+		Id:    1,
+		Name:  "call",
 		Trace: r.Call.Approval,
 		b:     map[int]bool{},
+		Scratch: VmScratch{
+			Items: make([]VmValue, 256),
+		},
+	}
+
+	var branches []*VmBranch
+
+	if config.Create.Debug {
+		branches = append(branches, createBranch)
+	}
+
+	if config.Call.Debug {
+		branches = append(branches, callBranch)
+	}
+
+	for _, b := range branches {
+		if len(b.Trace) > 0 {
+			b.Line = b.Trace[0].Line
+		}
+	}
+
+	var branch *VmBranch
+
+	if len(branches) > 0 {
+		branch = branches[0]
 	}
 
 	v := &Vm{
 		Error:     err,
-		Branch:    b,
-		Branches:  []*VmBranch{b},
+		Branch:    branch,
+		Branches:  branches,
 		Triggered: map[int][]int{},
-		Scratch: VmScratch{
-			Items: make([]VmValue, 256),
-		},
 	}
 
 	v.onLine()
@@ -128,7 +166,12 @@ func (v *Vm) Run() {
 }
 
 func (v *Vm) Switch(id int) {
-
+	for _, b := range v.Branches {
+		if b.Id == id {
+			v.Branch = b
+			break
+		}
+	}
 }
 
 func (v *Vm) Step() bool {
@@ -173,7 +216,7 @@ func (v *Vm) onLine() {
 		}
 
 		for _, s := range pt.ScratchChanges {
-			v.Scratch.Items[s.Slot] = VmValue{s.NewValue}
+			v.Branch.Scratch.Items[s.Slot] = VmValue{s.NewValue}
 		}
 	}
 

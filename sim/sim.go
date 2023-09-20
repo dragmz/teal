@@ -90,12 +90,31 @@ func (p program) translateTrace(trace models.SimulationTransactionExecTrace) (Pr
 }
 
 type Result struct {
+	Error  error
 	Create ProgramExecution
 	Call   ProgramExecution
 }
 
-func Run(ac *algod.Client, sender string, approval []byte, clear []byte, args [][]byte) (Result, error) {
+type AppRunConfig struct {
+	Debug bool
+
+	Args     [][]byte
+	Accounts []string
+	Apps     []uint64
+	Assets   []uint64
+}
+
+type RunConfig struct {
+	Ac     *algod.Client
+	Sender string
+	Create AppRunConfig
+	Call   AppRunConfig
+}
+
+func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {
 	var r Result
+
+	ac := config.Ac
 
 	ar, err := ac.TealCompile([]byte(approval)).Sourcemap(true).Do(context.Background())
 	if err != nil {
@@ -112,7 +131,7 @@ func Run(ac *algod.Client, sender string, approval []byte, clear []byte, args []
 		return r, errors.Wrap(err, "failed to get suggested params")
 	}
 
-	addr, err := types.DecodeAddress(sender)
+	addr, err := types.DecodeAddress(config.Sender)
 	if err != nil {
 		return r, errors.Wrap(err, "failed to decode sender address")
 	}
@@ -136,7 +155,7 @@ func Run(ac *algod.Client, sender string, approval []byte, clear []byte, args []
 	}
 
 	calltx, err := transaction.MakeApplicationCallTx(appId,
-		args, nil, nil, nil, types.NoOpOC, nil, nil,
+		config.Call.Args, config.Call.Accounts, config.Call.Apps, config.Call.Assets, types.NoOpOC, nil, nil,
 		types.StateSchema{}, types.StateSchema{},
 		sp, addr, nil, types.Digest{}, [32]byte{}, types.ZeroAddress)
 	if err != nil {
@@ -145,7 +164,7 @@ func Run(ac *algod.Client, sender string, approval []byte, clear []byte, args []
 
 	metatx, err := transaction.MakeApplicationCreateTx(false, acbs, ccbs,
 		types.StateSchema{}, types.StateSchema{},
-		nil, nil, nil, nil, sp, addr, nil, types.Digest{}, [32]byte{}, types.ZeroAddress)
+		config.Create.Args, config.Create.Accounts, config.Create.Apps, config.Create.Assets, sp, addr, nil, types.Digest{}, [32]byte{}, types.ZeroAddress)
 	if err != nil {
 		return r, errors.Wrap(err, "failed to make meta transaction")
 	}
@@ -196,6 +215,10 @@ func Run(ac *algod.Client, sender string, approval []byte, clear []byte, args []
 	}
 
 	res := sr.TxnGroups[0].TxnResults[1]
+
+	if sr.TxnGroups[0].FailureMessage != "" {
+		r.Error = errors.New(sr.TxnGroups[0].FailureMessage)
+	}
 
 	t, err := p.translateTrace(res.ExecTrace)
 	if err != nil {

@@ -62,8 +62,22 @@ type dbgBreakpoint struct {
 
 type DbgOption func(l *dbg) error
 
+type DbgAppConfig struct {
+	Debug    *bool    `json:"debug,omitempty"`
+	Args     []string `json:"args,omitempty"`
+	Accounts []string `json:"accounts,omitempty"`
+	Apps     []uint64 `json:"apps,omitempty"`
+	Assets   []uint64 `json:"assets,omitempty"`
+}
+
 type DbgConfig struct {
-	Args []string `json:"args,omitempty"`
+	Args     []string `json:"args,omitempty"`
+	Accounts []string `json:"accounts,omitempty"`
+	Apps     []uint64 `json:"apps,omitempty"`
+	Assets   []uint64 `json:"assets,omitempty"`
+
+	Create DbgAppConfig `json:"create,omitempty"`
+	Call   DbgAppConfig `json:"call,omitempty"`
 }
 
 func WithConfig(c DbgConfig) DbgOption {
@@ -353,6 +367,76 @@ func (l *dbg) notify(event string, params interface{}) error {
 	})
 }
 
+func makeArgs(ca []string) ([][]byte, error) {
+	args := make([][]byte, len(ca))
+
+	for i, arg := range ca {
+		var bs []byte
+		var err error
+
+		if strings.HasPrefix(arg, "b64:") {
+			bs, err = base64.StdEncoding.DecodeString(arg[4:])
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			bs = []byte(arg)
+		}
+
+		args[i] = bs
+	}
+
+	return args, nil
+}
+
+func makeRunConfig(config DbgConfig, dbg DbgAppConfig, debugDefault bool) (sim.AppRunConfig, error) {
+	var run sim.AppRunConfig
+
+	var err error
+	var args [][]byte
+
+	if dbg.Args != nil {
+		args, err = makeArgs(dbg.Args)
+	} else {
+		args, err = makeArgs(config.Args)
+	}
+	if err != nil {
+		return run, err
+	}
+
+	var debug bool
+	if dbg.Debug != nil {
+		debug = *dbg.Debug
+	} else {
+		debug = debugDefault
+	}
+
+	accounts := dbg.Accounts
+	if accounts == nil {
+		accounts = config.Accounts
+	}
+
+	apps := dbg.Apps
+	if apps == nil {
+		apps = config.Apps
+	}
+
+	assets := dbg.Assets
+	if assets == nil {
+		assets = config.Assets
+	}
+
+	run = sim.AppRunConfig{
+		Debug:    debug,
+		Args:     args,
+		Accounts: accounts,
+		Apps:     apps,
+		Assets:   assets,
+	}
+
+	return run, nil
+}
+
 func (l *dbg) handle(h dapHeader, b []byte) error {
 	switch h.Type {
 	case "request":
@@ -398,27 +482,22 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				return err
 			}
 
-			args := make([][]byte, len(l.config.Args))
+			createConfig, err := makeRunConfig(l.config, l.config.Create, false)
+			if err != nil {
+				return err
+			}
 
-			for i, arg := range l.config.Args {
-				var bs []byte
-
-				if strings.HasPrefix(arg, "b64:") {
-					bs, err = base64.StdEncoding.DecodeString(arg[4:])
-					if err != nil {
-						return err
-					}
-				} else {
-					bs = []byte(arg)
-				}
-
-				args[i] = bs
+			callConfig, err := makeRunConfig(l.config, l.config.Call, true)
+			if err != nil {
+				return err
 			}
 
 			src := string(bs)
-			tvm, err := sim.NewVm(src, sim.VmConfig{
-				Ac:   l.ac,
-				Args: args,
+			tvm, err := sim.NewVm(src, sim.RunConfig{
+				Ac:     l.ac,
+				Sender: "F77YBQEP4EAJYCQPS4GYEW2WWJXU6DQ4OJHRYSV74UXHOTRWXYRN7HNP3U",
+				Create: createConfig,
+				Call:   callConfig,
 			})
 			if err != nil {
 				return err
@@ -664,7 +743,7 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 								}
 							case 2:
 								s := 0
-								e := len(l.vm.tvm.Scratch.Items)
+								e := len(l.vm.tvm.Branch.Scratch.Items)
 
 								if vreq.Arguments.Start != nil {
 									s = *vreq.Arguments.Start
@@ -675,7 +754,7 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 								}
 
 								for i := s; i < e; i++ {
-									v := l.vm.tvm.Scratch.Items[i]
+									v := l.vm.tvm.Branch.Scratch.Items[i]
 									if !v.IsNone() {
 										vs = append(vs, dapVariable{
 											Name:  strconv.Itoa(i),
