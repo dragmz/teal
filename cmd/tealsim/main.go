@@ -45,16 +45,12 @@ func run(a args) error {
 		return errors.Wrap(err, "failed to run simulation")
 	}
 
-	fmt.Println("Create")
+	for i, e := range res.Executions {
+		fmt.Printf("Execution %d\n", i)
 
-	for _, a := range res.Create.Approval {
-		fmt.Printf("%d: %s\n", a.Line, a.Text)
-	}
-
-	fmt.Println("Call")
-
-	for _, a := range res.Call.Approval {
-		fmt.Printf("%d: %s\n", a.Line, a.Text)
+		for _, t := range e.Approval {
+			fmt.Printf("%d: %s\n", t.Line, t.Text)
+		}
 	}
 
 	return nil

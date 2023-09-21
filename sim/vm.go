@@ -82,34 +82,19 @@ func NewVm(src string, config RunConfig) (*Vm, error) {
 
 	r, err := Run([]byte(src), []byte(clear), config)
 
-	createBranch := &VmBranch{
-		Id:    0,
-		Name:  "create",
-		Trace: r.Create.Approval,
-		b:     map[int]bool{},
-		Scratch: VmScratch{
-			Items: make([]VmValue, 256),
-		},
-	}
-
-	callBranch := &VmBranch{
-		Id:    1,
-		Name:  "call",
-		Trace: r.Call.Approval,
-		b:     map[int]bool{},
-		Scratch: VmScratch{
-			Items: make([]VmValue, 256),
-		},
-	}
-
 	var branches []*VmBranch
+	for i, e := range r.Executions {
+		branch := &VmBranch{
+			Id:    i,
+			Name:  "", // TODO: name
+			Trace: e.Approval,
+			b:     map[int]bool{},
+			Scratch: VmScratch{
+				Items: make([]VmValue, 256),
+			},
+		}
 
-	if config.Create.Debug {
-		branches = append(branches, createBranch)
-	}
-
-	if config.Call.Debug {
-		branches = append(branches, callBranch)
+		branches = append(branches, branch)
 	}
 
 	for _, b := range branches {

@@ -601,7 +601,7 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				for _, b := range l.vm.tvm.Branches {
 					ts = append(ts, dapThread{
 						Id:   b.Id,
-						Name: fmt.Sprintf("Branch %d", b.Id),
+						Name: fmt.Sprintf("Call %d", b.Id),
 					})
 				}
 			}

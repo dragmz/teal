@@ -3,13 +3,11 @@ package sim
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"strings"
 
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/algod"
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/common/models"
 	"github.com/algorand/go-algorand-sdk/v2/crypto"
-	"github.com/algorand/go-algorand-sdk/v2/encoding/json"
 	"github.com/algorand/go-algorand-sdk/v2/logic"
 	"github.com/algorand/go-algorand-sdk/v2/transaction"
 	"github.com/algorand/go-algorand-sdk/v2/types"
@@ -90,9 +88,8 @@ func (p program) translateTrace(trace models.SimulationTransactionExecTrace) (Pr
 }
 
 type Result struct {
-	Error  error
-	Create ProgramExecution
-	Call   ProgramExecution
+	Error      error
+	Executions []ProgramExecution
 }
 
 type AppRunConfig struct {
@@ -109,6 +106,28 @@ type RunConfig struct {
 	Sender string
 	Create AppRunConfig
 	Call   AppRunConfig
+}
+
+func prepareProgram(source []byte, sourceMap *map[string]interface{}) (program, error) {
+	var p program
+
+	lines := strings.Split(string(source), "\n")
+
+	sm, err := logic.DecodeSourceMap(*sourceMap)
+	if err != nil {
+		return p, errors.Wrap(err, "failed to decode source map")
+	}
+
+	p = program{
+		lines: lines,
+		sm:    sm,
+	}
+
+	return p, nil
+}
+
+func Replay(sr models.SimulateResponse) (Result, error) {
+	return Result{}, errors.New("not implemented")
 }
 
 func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {
@@ -200,18 +219,9 @@ func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {
 		return r, errors.Wrap(err, "failed to simulate transaction")
 	}
 
-	fmt.Println(string(json.Encode(sr)))
-
-	lines := strings.Split(string(approval), "\n")
-
-	sm, err := logic.DecodeSourceMap(*ar.Sourcemap)
+	p, err := prepareProgram(approval, ar.Sourcemap)
 	if err != nil {
-		return r, errors.Wrap(err, "failed to decode source map")
-	}
-
-	p := program{
-		lines: lines,
-		sm:    sm,
+		return r, errors.Wrap(err, "failed to prepare approval program")
 	}
 
 	res := sr.TxnGroups[0].TxnResults[1]
@@ -226,11 +236,11 @@ func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {
 	}
 
 	if len(t.Inner) > 0 {
-		r.Create = t.Inner[0]
+		r.Executions = append(r.Executions, t.Inner[0])
 	}
 
 	if len(t.Inner) > 1 {
-		r.Call = t.Inner[1]
+		r.Executions = append(r.Executions, t.Inner[1])
 	}
 
 	return r, nil
