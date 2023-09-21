@@ -803,6 +803,24 @@ func (e *BoxPutExpr) String() string {
 
 var BoxPut = &BoxPutExpr{}
 
+type BoxSpliceExpr struct {
+}
+
+func (e *BoxSpliceExpr) String() string {
+	return "box_splice"
+}
+
+var BoxSplice = &BoxSpliceExpr{}
+
+type BoxResizeExpr struct {
+}
+
+func (e *BoxResizeExpr) String() string {
+	return "box_resize"
+}
+
+var BoxResize = &BoxResizeExpr{}
+
 type BoxCreateExpr struct {
 }
 

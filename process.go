@@ -502,6 +502,8 @@ var opsList = []opListItem{
 	{"box_len", opBoxLen},
 	{"box_get", opBoxGet},
 	{"box_put", opBoxPut},
+	{"box_splice", opBoxSplice},
+	{"box_resize", opBoxResize},
 	{"txnas", opTxnas},
 	{"gtxnas", opGtxnas},
 	{"gtxnsas", opGtxnsas},
@@ -2498,6 +2500,18 @@ func opBoxPut(c ProcessContext) {
 	c.modeMinVersion(ModeApp, 8)
 	c.emit(BoxPut)
 }
+func opBoxSplice(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 10)
+	c.emit(BoxSplice)
+}
+
+func opBoxResize(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 10)
+	c.emit(BoxResize)
+}
+
 func opTxnas(c ProcessContext) {
 	c.minVersion(5)
 	f := c.mustReadTxnaField("f")
