@@ -159,6 +159,11 @@ type dapLaunchRequestParams struct {
 	Program string `json:"program"`
 }
 
+type dapThreadEventParams struct {
+	Reason   string `json:"reason"`
+	ThreadId *int   `json:"threadId"`
+}
+
 type dapStackTraceRequestParams struct {
 	ThreadId   int  `json:"threadId"`
 	StartFrame *int `json:"startFrame,omitempty"`
@@ -725,6 +730,12 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				return err
 			}
 
+			var tid *int
+			if l.vm.tvm.Branch != nil {
+				tid = new(int)
+				*tid = l.vm.tvm.Branch.Id
+			}
+
 			if l.vm != nil {
 				l.vm.tvm.Switch(nreq.Arguments.ThreadId)
 				l.vm.tvm.Step()
@@ -736,12 +747,6 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 						Description:       fmt.Sprintf("Error: %s", l.vm.tvm.Error),
 					})
 				}
-			}
-
-			var tid *int
-			if l.vm.tvm.Branch != nil {
-				tid = new(int)
-				*tid = l.vm.tvm.Branch.Id
 			}
 
 			return l.notify("stopped", dapStoppedEventParams{

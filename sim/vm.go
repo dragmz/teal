@@ -165,17 +165,6 @@ func (v *Vm) Step() bool {
 func (v *Vm) onLine(b *VmBranch) {
 	v.Triggered = map[int][]int{}
 
-	if b.i >= len(b.Trace) {
-		return
-	}
-
-	t := b.Trace[b.i]
-
-	b.Line = t.Line
-	if b.b[b.Line] {
-		v.Triggered[b.Id] = []int{b.Line}
-	}
-
 	pt := b.PrevTrace
 
 	if pt != nil {
@@ -195,6 +184,17 @@ func (v *Vm) onLine(b *VmBranch) {
 		for _, s := range pt.ScratchChanges {
 			b.Scratch.Items[s.Slot] = VmValue{s.NewValue}
 		}
+	}
+
+	if b.i >= len(b.Trace) {
+		return
+	}
+
+	t := b.Trace[b.i]
+
+	b.Line = t.Line
+	if b.b[b.Line] {
+		v.Triggered[b.Id] = []int{b.Line}
 	}
 
 	b.PrevTrace = &t
