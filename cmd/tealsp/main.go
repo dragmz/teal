@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"time"
 
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/common/models"
 	"github.com/dragmz/teal/dbg"
@@ -96,7 +95,7 @@ func runDbg(a dbgArgs) (int, error) {
 	if a.Algod != "" {
 		opts = append(opts, dbg.WithAlgod(a.Algod, a.AlgodToken))
 	}
-	<-time.After(5 * time.Second)
+
 	if a.Replay != "" {
 		bs, err := os.ReadFile(a.Replay)
 		if err != nil {
