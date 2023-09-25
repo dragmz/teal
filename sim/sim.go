@@ -126,8 +126,38 @@ func prepareProgram(source []byte, sourceMap *map[string]interface{}) (program, 
 	return p, nil
 }
 
-func Replay(sr models.SimulateResponse) (Result, error) {
-	return Result{}, errors.New("not implemented")
+type ReplayConfig struct {
+	Ac *algod.Client
+}
+
+func Replay(approval []byte, sr models.SimulateResponse, config ReplayConfig) (Result, error) {
+	var r Result
+
+	ac := config.Ac
+
+	ar, err := ac.TealCompile([]byte(approval)).Sourcemap(true).Do(context.Background())
+	if err != nil {
+		return Result{}, errors.Wrap(err, "failed to compile approval program")
+	}
+
+	p, err := prepareProgram(approval, ar.Sourcemap)
+	if err != nil {
+		return r, errors.Wrap(err, "failed to prepare approval program")
+	}
+
+	for _, tg := range sr.TxnGroups {
+		for _, tr := range tg.TxnResults {
+			t, err := p.translateTrace(tr.ExecTrace)
+			if err != nil {
+				return r, errors.Wrap(err, "failed to translate trace")
+			}
+
+			r.Executions = append(r.Executions, t)
+			r.Executions = append(r.Executions, t.Inner...)
+		}
+	}
+
+	return r, nil
 }
 
 func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {

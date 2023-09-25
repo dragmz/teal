@@ -6,7 +6,9 @@ import (
 	"io"
 	"net"
 	"os"
+	"time"
 
+	"github.com/algorand/go-algorand-sdk/v2/client/v2/common/models"
 	"github.com/dragmz/teal/dbg"
 	"github.com/dragmz/teal/lsp"
 
@@ -25,6 +27,7 @@ type dbgArgs struct {
 	Config     string
 	Algod      string
 	AlgodToken string
+	Replay     string
 }
 
 func runLsp(a lspArgs) (int, error) {
@@ -93,6 +96,20 @@ func runDbg(a dbgArgs) (int, error) {
 	if a.Algod != "" {
 		opts = append(opts, dbg.WithAlgod(a.Algod, a.AlgodToken))
 	}
+	<-time.After(5 * time.Second)
+	if a.Replay != "" {
+		bs, err := os.ReadFile(a.Replay)
+		if err != nil {
+			return -5, errors.Wrap(err, "failed to read replay file")
+		}
+
+		var rpl models.SimulateResponse
+		if err := json.Unmarshal(bs, &rpl); err != nil {
+			return -6, errors.Wrap(err, "failed to unmarshal replay file")
+		}
+
+		opts = append(opts, dbg.WithReplay(rpl))
+	}
 
 	l, err := dbg.New(r, w, opts...)
 	if err != nil {
@@ -110,6 +127,7 @@ func main() {
 		flag.StringVar(&a.Config, "config", "", "config file path")
 		flag.StringVar(&a.Algod, "algod", "https://testnet-api.algonode.cloud", "algod endpoint")
 		flag.StringVar(&a.AlgodToken, "algod-token", "", "algod token")
+		flag.StringVar(&a.Replay, "replay", "", "replay file path")
 
 		copy(os.Args[1:], os.Args[2:])
 		os.Args = os.Args[:len(os.Args)-1]

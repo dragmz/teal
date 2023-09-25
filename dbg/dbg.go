@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/algod"
+	"github.com/algorand/go-algorand-sdk/v2/client/v2/common/models"
+	"github.com/dragmz/teal"
 	"github.com/dragmz/teal/sim"
 	"github.com/pkg/errors"
 )
@@ -37,7 +39,8 @@ type dbg struct {
 	tp *textproto.Reader
 	w  *bufio.Writer
 
-	debug *bufio.Writer
+	debug  *bufio.Writer
+	replay *models.SimulateResponse
 
 	bid int
 	bs  []dbgBreakpoint
@@ -103,6 +106,13 @@ func WithAlgod(addr string, token string) DbgOption {
 			return errors.Wrap(err, "failed to make algod client")
 		}
 
+		return nil
+	}
+}
+
+func WithReplay(reply models.SimulateResponse) DbgOption {
+	return func(l *dbg) error {
+		l.replay = &reply
 		return nil
 	}
 }
@@ -492,13 +502,37 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 				return err
 			}
 
-			src := string(bs)
-			tvm, err := sim.NewVm(src, sim.RunConfig{
-				Ac:     l.ac,
-				Sender: "F77YBQEP4EAJYCQPS4GYEW2WWJXU6DQ4OJHRYSV74UXHOTRWXYRN7HNP3U",
-				Create: createConfig,
-				Call:   callConfig,
-			})
+			var r sim.Result
+			if l.replay != nil {
+				r, err = sim.Replay(bs, *l.replay, sim.ReplayConfig{
+					Ac: l.ac,
+				})
+				if err != nil {
+					return err
+				}
+			} else {
+				src := string(bs)
+
+				pr := teal.Process(src)
+
+				clear := "int 1"
+				if pr.Version > 1 {
+					clear = fmt.Sprintf("#pragma version %d\r\n", pr.Version) + clear
+				}
+
+				r, err = sim.Run([]byte(src), []byte(clear), sim.RunConfig{
+					Ac:     l.ac,
+					Sender: "F77YBQEP4EAJYCQPS4GYEW2WWJXU6DQ4OJHRYSV74UXHOTRWXYRN7HNP3U",
+					Create: createConfig,
+					Call:   callConfig,
+				})
+
+				if err != nil {
+					return err
+				}
+			}
+
+			tvm, err := sim.NewVm(r)
 			if err != nil {
 				return err
 			}

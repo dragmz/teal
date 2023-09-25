@@ -5,7 +5,6 @@ import (
 
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/algod"
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/common/models"
-	"github.com/dragmz/teal"
 )
 
 type VmValue struct {
@@ -72,17 +71,9 @@ type VmConfig struct {
 	Assets   []uint64
 }
 
-func NewVm(src string, config RunConfig) (*Vm, error) {
-	pr := teal.Process(src)
-
-	clear := "int 1"
-	if pr.Version > 1 {
-		clear = fmt.Sprintf("#pragma version %d\r\n", pr.Version) + clear
-	}
-
-	r, err := Run([]byte(src), []byte(clear), config)
-
+func NewVm(r Result) (*Vm, error) {
 	var branches []*VmBranch
+
 	for i, e := range r.Executions {
 		branch := &VmBranch{
 			Id:    i,
@@ -110,7 +101,6 @@ func NewVm(src string, config RunConfig) (*Vm, error) {
 	}
 
 	v := &Vm{
-		Error:     err,
 		Branch:    branch,
 		Branches:  branches,
 		Triggered: map[int][]int{},
