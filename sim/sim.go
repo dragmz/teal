@@ -156,6 +156,8 @@ func Replay(approval []byte, sr models.SimulateResponse, config ReplayConfig) (R
 		return r, errors.Wrap(err, "failed to prepare approval program")
 	}
 
+	// TODO: handle sr.InitialStates
+
 	for _, tg := range sr.TxnGroups {
 		for _, tr := range tg.TxnResults {
 			t, err := p.translateTrace(tr.ExecTrace)

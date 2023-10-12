@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/algorand/go-algorand-sdk/v2/client/v2/algod"
@@ -31,10 +32,40 @@ type VmFrame struct {
 	Name   string
 }
 
+type VmStateItemType int
+
+const (
+	VmStateItemTypeBytes VmStateItemType = iota
+	VmStateItemTypeUint
+)
+
+type VmStateItem struct {
+	Key   []byte
+	Type  VmStateItemType
+	Bytes []byte
+	Uint  uint64
+}
+
+type VmState struct {
+	Items []VmStateItem
+}
+
+type VmBox struct {
+	Key   []byte
+	Value []byte
+}
+
+type VmBoxes struct {
+	Items []VmBox
+}
+
 type VmBranch struct {
 	Id        int
 	Budget    int
 	Stack     VmStack
+	Local     map[string]VmState
+	Global    VmState
+	Boxes     VmBoxes
 	Scratch   VmScratch
 	PrevTrace *ProgramExecutionTrace
 	Line      int
@@ -83,6 +114,7 @@ func NewVm(r Result) (*Vm, error) {
 			Scratch: VmScratch{
 				Items: make([]VmValue, 256),
 			},
+			Local: map[string]VmState{},
 		}
 
 		branches = append(branches, branch)
@@ -184,6 +216,109 @@ func (v *Vm) onLine(b *VmBranch) {
 		for _, s := range pt.ScratchChanges {
 			b.Scratch.Items[s.Slot] = VmValue{s.NewValue}
 		}
+
+		for _, s := range pt.StateChanges {
+			switch s.AppStateType {
+			case "b":
+				switch s.Operation {
+				case "w":
+					var nv VmBox
+					nv.Key = s.Key
+					nv.Value = s.NewValue.Bytes
+
+					var found bool
+
+					for n, v := range b.Boxes.Items {
+						if bytes.Equal(v.Key, s.Key) {
+							b.Boxes.Items[n] = nv
+							found = true
+							break
+						}
+					}
+
+					if !found {
+						b.Boxes.Items = append(b.Boxes.Items, nv)
+					}
+				case "d":
+					for n, v := range b.Boxes.Items {
+						if bytes.Equal(v.Key, s.Key) {
+							b.Boxes.Items = append(b.Boxes.Items[:n], b.Boxes.Items[n+1:]...)
+							break
+						}
+					}
+				}
+			case "g":
+				switch s.Operation {
+				case "w":
+					nv := makeStateValue(s)
+
+					var found bool
+					for n, v := range b.Global.Items {
+						if bytes.Equal(v.Key, s.Key) {
+							b.Global.Items[n] = nv
+							found = true
+							break
+						}
+					}
+
+					if !found {
+						b.Global.Items = append(b.Global.Items, nv)
+					}
+
+				case "d":
+					for n, v := range b.Global.Items {
+						if bytes.Equal(v.Key, s.Key) {
+							b.Global.Items = append(b.Global.Items[:n], b.Global.Items[n+1:]...)
+							break
+						}
+					}
+				}
+			case "l":
+				switch s.Operation {
+				case "w":
+					nv := makeStateValue(s)
+
+					_, ok := b.Local[s.Account]
+					if !ok {
+						b.Local[s.Account] = VmState{}
+					}
+
+					as := b.Local[s.Account]
+
+					var found bool
+					for n, v := range as.Items {
+						if bytes.Equal(v.Key, s.Key) {
+							as.Items[n] = nv
+							found = true
+							break
+						}
+					}
+
+					if !found {
+						as.Items = append(as.Items, nv)
+					}
+
+					b.Local[s.Account] = as
+
+				case "d":
+					_, ok := b.Local[s.Account]
+					if !ok {
+						b.Local[s.Account] = VmState{}
+					}
+
+					as := b.Local[s.Account]
+
+					for n, v := range as.Items {
+						if bytes.Equal(v.Key, s.Key) {
+							as.Items = append(as.Items[:n], as.Items[n+1:]...)
+							break
+						}
+					}
+
+					b.Local[s.Account] = as
+				}
+			}
+		}
 	}
 
 	if b.i >= len(b.Trace) {
@@ -198,4 +333,19 @@ func (v *Vm) onLine(b *VmBranch) {
 	}
 
 	b.PrevTrace = &t
+}
+
+func makeStateValue(s models.ApplicationStateOperation) VmStateItem {
+	var nv VmStateItem
+	nv.Key = s.Key
+
+	switch s.NewValue.Type {
+	case 1:
+		nv.Type = VmStateItemTypeBytes
+		nv.Bytes = s.NewValue.Bytes
+	case 2:
+		nv.Type = VmStateItemTypeUint
+		nv.Uint = s.NewValue.Uint
+	}
+	return nv
 }

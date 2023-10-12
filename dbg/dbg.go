@@ -833,6 +833,32 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 										})
 									}
 								}
+							case 3:
+								for i := 0; i < len(b.Global.Items); i++ {
+									v := b.Global.Items[i]
+
+									var sv string
+									switch v.Type {
+									case sim.VmStateItemTypeBytes:
+										sv = string(v.Bytes)
+									case sim.VmStateItemTypeUint:
+										sv = strconv.FormatUint(v.Uint, 10)
+									}
+
+									vs = append(vs, dapVariable{
+										Name:  string(v.Key),
+										Value: sv,
+									})
+								}
+							case 4:
+								for i := 0; i < len(b.Boxes.Items); i++ {
+									v := b.Boxes.Items[i]
+
+									vs = append(vs, dapVariable{
+										Name:  string(v.Key),
+										Value: string(v.Value),
+									})
+								}
 							}
 						}
 					}
@@ -865,6 +891,22 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 							Name:               "Scratch",
 							VariablesReference: 3 + 10*b.Id,
 							IndexedVariables:   &scratchlen,
+						})
+
+						globallen := len(b.Global.Items)
+						ss = append(ss, dapScope{
+							Name:               "Global",
+							VariablesReference: 4 + 10*b.Id,
+							IndexedVariables:   &globallen,
+						})
+
+						// TODO: local
+
+						boxeslen := len(b.Boxes.Items)
+						ss = append(ss, dapScope{
+							Name:               "Boxes",
+							VariablesReference: 5 + 10*b.Id,
+							IndexedVariables:   &boxeslen,
 						})
 					}
 				}
