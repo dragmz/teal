@@ -92,6 +92,16 @@ type Result struct {
 	Executions []ProgramExecution
 }
 
+type AppRunConfigSchemaValues struct {
+	Bytes   uint8
+	Uint64s uint8
+}
+
+type AppRunConfigSchema struct {
+	Local  AppRunConfigSchemaValues
+	Global AppRunConfigSchemaValues
+}
+
 type AppRunConfig struct {
 	Debug bool
 
@@ -99,6 +109,7 @@ type AppRunConfig struct {
 	Accounts []string
 	Apps     []uint64
 	Assets   []uint64
+	Schema   AppRunConfigSchema
 }
 
 type RunConfig struct {
@@ -195,7 +206,7 @@ func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {
 		return r, errors.Wrap(err, "failed to decode clear program")
 	}
 
-	appId := uint64(366989729)
+	appId := uint64(430870138)
 	appAddr := crypto.GetApplicationAddress(appId)
 
 	paytx, err := transaction.MakePaymentTxn(addr.String(), appAddr.String(), 1000000, nil, "", sp)
@@ -212,7 +223,14 @@ func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {
 	}
 
 	metatx, err := transaction.MakeApplicationCreateTx(false, acbs, ccbs,
-		types.StateSchema{}, types.StateSchema{},
+		types.StateSchema{
+			NumUint:      uint64(config.Create.Schema.Global.Uint64s),
+			NumByteSlice: uint64(config.Create.Schema.Global.Bytes),
+		},
+		types.StateSchema{
+			NumUint:      uint64(config.Create.Schema.Local.Uint64s),
+			NumByteSlice: uint64(config.Create.Schema.Local.Bytes),
+		},
 		config.Create.Args, config.Create.Accounts, config.Create.Apps, config.Create.Assets, sp, addr, nil, types.Digest{}, [32]byte{}, types.ZeroAddress)
 	if err != nil {
 		return r, errors.Wrap(err, "failed to make meta transaction")

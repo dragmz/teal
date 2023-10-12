@@ -27,6 +27,22 @@ itxn_begin
     itxn_field TypeEnum
 
     load 0
+    gtxns LocalNumByteSlice
+    itxn_field LocalNumByteSlice
+
+    load 0
+    gtxns LocalNumUint
+    itxn_field LocalNumUint
+
+    load 0
+    gtxns GlobalNumByteSlice
+    itxn_field GlobalNumByteSlice
+
+    load 0
+    gtxns GlobalNumUint
+    itxn_field GlobalNumUint
+
+    load 0
     gtxns ApprovalProgram
     itxn_field ApprovalProgram
 

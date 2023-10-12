@@ -66,18 +66,30 @@ type dbgBreakpoint struct {
 type DbgOption func(l *dbg) error
 
 type DbgAppConfig struct {
-	Debug    *bool    `json:"debug,omitempty"`
-	Args     []string `json:"args,omitempty"`
-	Accounts []string `json:"accounts,omitempty"`
-	Apps     []uint64 `json:"apps,omitempty"`
-	Assets   []uint64 `json:"assets,omitempty"`
+	Debug    *bool            `json:"debug,omitempty"`
+	Args     []string         `json:"args,omitempty"`
+	Accounts []string         `json:"accounts,omitempty"`
+	Apps     []uint64         `json:"apps,omitempty"`
+	Assets   []uint64         `json:"assets,omitempty"`
+	Schema   *DbgConfigSchema `json:"schema,omitempty"`
+}
+
+type DbgConfigSchemaValues struct {
+	Bytes   uint8 `json:"bytes,omitempty"`
+	Uint64s uint8 `json:"uints,omitempty"`
+}
+
+type DbgConfigSchema struct {
+	Local  DbgConfigSchemaValues `json:"local,omitempty"`
+	Global DbgConfigSchemaValues `json:"global,omitempty"`
 }
 
 type DbgConfig struct {
-	Args     []string `json:"args,omitempty"`
-	Accounts []string `json:"accounts,omitempty"`
-	Apps     []uint64 `json:"apps,omitempty"`
-	Assets   []uint64 `json:"assets,omitempty"`
+	Args     []string         `json:"args,omitempty"`
+	Accounts []string         `json:"accounts,omitempty"`
+	Apps     []uint64         `json:"apps,omitempty"`
+	Assets   []uint64         `json:"assets,omitempty"`
+	Schema   *DbgConfigSchema `json:"schema,omitempty"`
 
 	Create DbgAppConfig `json:"create,omitempty"`
 	Call   DbgAppConfig `json:"call,omitempty"`
@@ -441,12 +453,32 @@ func makeRunConfig(config DbgConfig, dbg DbgAppConfig, debugDefault bool) (sim.A
 		assets = config.Assets
 	}
 
+	schema := dbg.Schema
+	if schema == nil {
+		schema = config.Schema
+	}
+
+	var appSchema sim.AppRunConfigSchema
+	if schema != nil {
+		appSchema = sim.AppRunConfigSchema{
+			Local: sim.AppRunConfigSchemaValues{
+				Bytes:   schema.Local.Bytes,
+				Uint64s: schema.Local.Uint64s,
+			},
+			Global: sim.AppRunConfigSchemaValues{
+				Bytes:   schema.Global.Bytes,
+				Uint64s: schema.Global.Uint64s,
+			},
+		}
+	}
+
 	run = sim.AppRunConfig{
 		Debug:    debug,
 		Args:     args,
 		Accounts: accounts,
 		Apps:     apps,
 		Assets:   assets,
+		Schema:   appSchema,
 	}
 
 	return run, nil
