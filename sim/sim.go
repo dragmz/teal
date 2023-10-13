@@ -252,7 +252,8 @@ func Run(approval []byte, clear []byte, config RunConfig) (Result, error) {
 	metastx := types.SignedTxn{Txn: metatx}
 
 	sr, err := ac.SimulateTransaction(models.SimulateRequest{
-		AllowEmptySignatures: true,
+		AllowEmptySignatures:  true,
+		AllowUnnamedResources: true,
 		ExecTraceConfig: models.SimulateTraceConfig{
 			Enable:        true,
 			ScratchChange: true,

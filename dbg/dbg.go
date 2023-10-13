@@ -484,6 +484,8 @@ func makeRunConfig(config DbgConfig, dbg DbgAppConfig, debugDefault bool) (sim.A
 	return run, nil
 }
 
+var StackNames = []string{"A", "B", "C", "D", "E"}
+
 func (l *dbg) handle(h dapHeader, b []byte) error {
 	switch h.Type {
 	case "request":
@@ -807,8 +809,14 @@ func (l *dbg) handle(h dapHeader, b []byte) error {
 							case 0:
 							case 1:
 								for i := len(b.Stack.Items) - 1; i >= 0; i-- {
+									name := strconv.Itoa(i)
+
+									if i < len(StackNames) {
+										name = fmt.Sprintf("%s (%s)", name, StackNames[i])
+									}
+
 									vs = append(vs, dapVariable{
-										Name:  strconv.Itoa(i),
+										Name:  name,
 										Value: b.Stack.Items[i].String(),
 									})
 								}
