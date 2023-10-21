@@ -1732,9 +1732,24 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			var ds []LspDiagnostic
 			if doc != nil {
 				if l.prepareDiagnostics != nil {
-					ds, err = l.prepareDiagnostics(doc.s)
-					if err != nil {
-						return err
+					var derr error
+					ds, derr = l.prepareDiagnostics(doc.s)
+					if derr != nil {
+						sev := teal.DiagErr
+						ds = append(ds, LspDiagnostic{
+							Range: LspRange{
+								Start: LspPosition{
+									Line:      0,
+									Character: 0,
+								},
+								End: LspPosition{
+									Line:      0,
+									Character: 0,
+								},
+							},
+							Severity: &sev,
+							Message:  derr.Error(),
+						})
 					}
 				} else {
 					ds = prepareDiagnostics(doc.Results())
