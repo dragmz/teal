@@ -80,7 +80,7 @@ func WithDebug(w io.Writer) LspOption {
 	}
 }
 
-type PrepareDiagnosticsHandler func(source string) ([]LspDiagnostic, error)
+type PrepareDiagnosticsHandler func(source string) []LspDiagnostic
 
 func WithPrepareDiagnosticsHandler(h PrepareDiagnosticsHandler) LspOption {
 	return func(l *lsp) error {
@@ -1732,26 +1732,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			ds := []LspDiagnostic{}
 			if doc != nil {
 				if l.prepareDiagnostics != nil {
-					pds, derr := l.prepareDiagnostics(doc.s)
-					if derr != nil {
-						sev := teal.DiagErr
-						ds = append(ds, LspDiagnostic{
-							Range: LspRange{
-								Start: LspPosition{
-									Line:      0,
-									Character: 0,
-								},
-								End: LspPosition{
-									Line:      0,
-									Character: 0,
-								},
-							},
-							Severity: &sev,
-							Message:  derr.Error(),
-						})
-					}
-
-					ds = append(ds, pds...)
+					ds = append(ds, l.prepareDiagnostics(doc.s)...)
 				} else {
 					ds = prepareDiagnostics(doc.Results())
 				}
