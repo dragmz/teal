@@ -1729,7 +1729,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			doc := l.docs[req.Params.TextDocument.Uri]
-			var ds []LspDiagnostic
+			ds := []LspDiagnostic{}
 			if doc != nil {
 				if l.prepareDiagnostics != nil {
 					var derr error
@@ -1754,8 +1754,6 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				} else {
 					ds = prepareDiagnostics(doc.Results())
 				}
-			} else {
-				ds = []LspDiagnostic{}
 			}
 
 			return l.success(h.Id, lspFullDocumentDiagnosticReport{
