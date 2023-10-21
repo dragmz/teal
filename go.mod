@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/algorand/go-algorand-sdk/v2 v2.3.0
-	github.com/dragmz/abs v0.0.0-20230914211128-178bcb773f36
 	github.com/joe-p/tealfmt v0.0.0-20221219211223-cec2ea891d52
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.38.1
@@ -16,7 +15,7 @@ require (
 	github.com/algorand/avm-abi v0.2.0 // indirect
 	github.com/algorand/go-codec/codec v1.1.10 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/crypto v0.13.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 //indirect
