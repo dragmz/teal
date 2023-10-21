@@ -2936,6 +2936,14 @@ func (r ProcessResult) ArgVals(arg opItemArg) []opItemArgVal {
 		}
 	}
 
+	for k := range r.Defines {
+		res = append(res, opItemArgVal{
+			NoValue: true,
+			Name:    k,
+			Docs:    "defined with #define",
+		})
+	}
+
 	return res
 }
 
