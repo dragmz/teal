@@ -67,7 +67,8 @@ type lsp struct {
 	tp *textproto.Reader
 	w  *bufio.Writer
 
-	debug *bufio.Writer
+	debug              *bufio.Writer
+	prepareDiagnostics PrepareDiagnosticsHandler
 }
 
 type LspOption func(l *lsp) error
@@ -75,6 +76,15 @@ type LspOption func(l *lsp) error
 func WithDebug(w io.Writer) LspOption {
 	return func(l *lsp) error {
 		l.debug = bufio.NewWriter(w)
+		return nil
+	}
+}
+
+type PrepareDiagnosticsHandler func(source string) ([]LspDiagnostic, error)
+
+func WithPrepareDiagnosticsHandler(h PrepareDiagnosticsHandler) LspOption {
+	return func(l *lsp) error {
+		l.prepareDiagnostics = h
 		return nil
 	}
 }
@@ -129,7 +139,7 @@ type jsonRpcResponse struct {
 
 type lspFullDocumentDiagnosticReport struct {
 	Kind  string          `json:"kind"`
-	Items []lspDiagnostic `json:"items"`
+	Items []LspDiagnostic `json:"items"`
 }
 
 type lspRequest[T any] struct {
@@ -444,7 +454,7 @@ type lspCodeActionTextDocument struct {
 }
 
 type lspCodeActionContext struct {
-	Diagnosticts []lspDiagnostic `json:"diagnostics"`
+	Diagnosticts []LspDiagnostic `json:"diagnostics"`
 	Only         []string        `json:"only,omitempty"`
 	TriggerKind  *int            `json:"triggerKind,omitempty"`
 }
@@ -538,7 +548,7 @@ type lspShowMessageParams struct {
 type lspCodeAction struct {
 	Title       string            `json:"title"`
 	Kind        *string           `json:"kind,omitempty"`
-	Diagnostics []lspDiagnostic   `json:"diagnostics,omitempty"`
+	Diagnostics []LspDiagnostic   `json:"diagnostics,omitempty"`
 	IsPreferred *bool             `json:"isPreferred,omitempty"`
 	Edit        *lspWorkspaceEdit `json:"edit,omitempty"`
 	Command     *lspCommand       `json:"command,omitempty"`
@@ -594,7 +604,7 @@ func (r lspRange) EndCharacter() int {
 	return r.End.Character
 }
 
-type lspDiagnostic struct {
+type LspDiagnostic struct {
 	Range    lspRange `json:"range"`
 	Severity *int     `json:"severity,omitempty"`
 	Message  string   `json:"message"`
@@ -602,7 +612,7 @@ type lspDiagnostic struct {
 
 type lspPublishDiagnostic struct {
 	Uri         string          `json:"uri"`
-	Diagnostics []lspDiagnostic `json:"diagnostics"`
+	Diagnostics []LspDiagnostic `json:"diagnostics"`
 }
 
 type lspNotification struct {
@@ -790,7 +800,7 @@ func (l *lsp) notify(method string, params interface{}) error {
 	})
 }
 
-func (l *lsp) notifyDiagnostics(uri string, lds []lspDiagnostic) error {
+func (l *lsp) notifyDiagnostics(uri string, lds []LspDiagnostic) error {
 	return l.notify("textDocument/publishDiagnostics", lspPublishDiagnostic{
 		Uri:         uri,
 		Diagnostics: lds,
@@ -1719,12 +1729,18 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			doc := l.docs[req.Params.TextDocument.Uri]
-
-			var ds []lspDiagnostic
+			var ds []LspDiagnostic
 			if doc != nil {
-				ds = prepareDiagnostics(doc.Results())
+				if l.prepareDiagnostics != nil {
+					ds, err = l.prepareDiagnostics(doc.s)
+					if err != nil {
+						return err
+					}
+				} else {
+					ds = prepareDiagnostics(doc.Results())
+				}
 			} else {
-				ds = []lspDiagnostic{}
+				ds = []LspDiagnostic{}
 			}
 
 			return l.success(h.Id, lspFullDocumentDiagnosticReport{
@@ -2158,13 +2174,13 @@ func prepareSymbolHighlight(sym teal.Symbol) lspDocumentHighlight {
 	}
 }
 
-func prepareDiagnostics(res *teal.ProcessResult) []lspDiagnostic {
-	lds := []lspDiagnostic{}
+func prepareDiagnostics(res *teal.ProcessResult) []LspDiagnostic {
+	lds := []LspDiagnostic{}
 
 	for _, d := range res.Diagnostics {
 		sev := int(d.Severity())
 
-		lds = append(lds, lspDiagnostic{
+		lds = append(lds, LspDiagnostic{
 			Range: lspRange{
 				Start: lspPosition{
 					Line:      d.Line(),
