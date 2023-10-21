@@ -1734,8 +1734,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			ds := []LspDiagnostic{}
 			if doc != nil {
 				if l.prepareDiagnostics != nil {
-					var derr error
-					ds, derr = l.prepareDiagnostics(doc.s)
+					pds, derr := l.prepareDiagnostics(doc.s)
 					if derr != nil {
 						sev := teal.DiagErr
 						ds = append(ds, LspDiagnostic{
@@ -1753,6 +1752,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							Message:  derr.Error(),
 						})
 					}
+
+					ds = append(ds, pds...)
 				} else {
 					ds = prepareDiagnostics(doc.Results())
 				}
