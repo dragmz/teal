@@ -285,8 +285,8 @@ const (
 type lspDocumentSymbol struct {
 	Name           string        `json:"name"`
 	Kind           lspSymbolKind `json:"kind"`
-	Range          lspRange      `json:"range"`
-	SelectionRange lspRange      `json:"selectionRange"`
+	Range          LspRange      `json:"range"`
+	SelectionRange LspRange      `json:"selectionRange"`
 }
 
 type lspInitializeClientInfo struct {
@@ -404,7 +404,7 @@ type tealUpdateVersion struct {
 
 type tealReplaceValueCommandArgs struct {
 	Uri   string   `json:"uri"`
-	Range lspRange `json:"range"`
+	Range LspRange `json:"range"`
 	Value string   `json:"name"`
 }
 
@@ -461,7 +461,7 @@ type lspCodeActionContext struct {
 
 type lspCodeActionRequestParams struct {
 	TextDocument lspCodeActionTextDocument `json:"textDocument"`
-	Range        lspRange                  `json:"range"`
+	Range        LspRange                  `json:"range"`
 	Context      lspCodeActionContext      `json:"context"`
 }
 
@@ -471,7 +471,7 @@ type lspRenameRequestTextDocument struct {
 
 type lspRenameRequestParams struct {
 	TextDocument lspRenameRequestTextDocument `json:"textDocument"`
-	Position     lspPosition
+	Position     LspPosition
 	NewName      string `json:"newName"`
 }
 
@@ -481,7 +481,7 @@ type lspPrepareRenameRequestTextDocument struct {
 
 type lspPrepareRenameRequestParams struct {
 	TextDocument lspPrepareRenameRequestTextDocument `json:"textDocument"`
-	Position     lspPosition
+	Position     LspPosition
 }
 
 type lspDocumentColorRequestTextDocument struct {
@@ -496,7 +496,7 @@ type lspColor struct {
 }
 
 type lspColorInformation struct {
-	Range lspRange `json:"range"`
+	Range LspRange `json:"range"`
 	Color lspColor `json:"color"`
 }
 
@@ -505,7 +505,7 @@ type lspDocumentColorRequestParams struct {
 }
 
 type lspPrepareRenameResponse struct {
-	Range       lspRange `json:"range"`
+	Range       LspRange `json:"range"`
 	Placeholder string   `json:"placeholder"`
 }
 
@@ -516,7 +516,7 @@ type lspCommand struct {
 }
 
 type lspTextEdit struct {
-	Range   lspRange `json:"range"`
+	Range   LspRange `json:"range"`
 	NewText string   `json:"newText"`
 }
 
@@ -562,50 +562,50 @@ type lspDidCloseRequestParams struct {
 	TextDocument *lspDidCloseTextDocument `json:"textDocument"`
 }
 
-type lspPosition struct {
+type LspPosition struct {
 	Line      int `json:"line"`
 	Character int `json:"character"`
 }
 
-func (p lspPosition) StartLine() int {
+func (p LspPosition) StartLine() int {
 	return p.Line
 }
 
-func (p lspPosition) StartCharacter() int {
+func (p LspPosition) StartCharacter() int {
 	return p.Character
 }
 
-func (p lspPosition) EndLine() int {
+func (p LspPosition) EndLine() int {
 	return p.Line
 }
 
-func (p lspPosition) EndCharacter() int {
+func (p LspPosition) EndCharacter() int {
 	return p.Character
 }
 
-type lspRange struct {
-	Start lspPosition `json:"start"`
-	End   lspPosition `json:"end"`
+type LspRange struct {
+	Start LspPosition `json:"start"`
+	End   LspPosition `json:"end"`
 }
 
-func (r lspRange) StartLine() int {
+func (r LspRange) StartLine() int {
 	return r.Start.Line
 }
 
-func (r lspRange) StartCharacter() int {
+func (r LspRange) StartCharacter() int {
 	return r.Start.Character
 }
 
-func (r lspRange) EndLine() int {
+func (r LspRange) EndLine() int {
 	return r.End.Line
 }
 
-func (r lspRange) EndCharacter() int {
+func (r LspRange) EndCharacter() int {
 	return r.End.Character
 }
 
 type LspDiagnostic struct {
-	Range    lspRange `json:"range"`
+	Range    LspRange `json:"range"`
 	Severity *int     `json:"severity,omitempty"`
 	Message  string   `json:"message"`
 }
@@ -631,11 +631,11 @@ type lspDocumentHighlightRequestTextDocument struct {
 
 type lspDocumentHighlightRequestParams struct {
 	TextDocument lspDocumentHighlightRequestTextDocument `json:"textDocument"`
-	Position     lspPosition                             `json:"position"`
+	Position     LspPosition                             `json:"position"`
 }
 
 type lspDocumentHighlight struct {
-	Range lspRange `json:"range"`
+	Range LspRange `json:"range"`
 	Kind  *int     `json:"kind"`
 }
 
@@ -649,7 +649,7 @@ type lspSemanticTokensFullRequestParams struct {
 
 type lspCompletionRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
-	Position     lspPosition               `json:"position"`
+	Position     LspPosition               `json:"position"`
 }
 
 type lspDocumentFormattingRequestParams struct {
@@ -658,12 +658,12 @@ type lspDocumentFormattingRequestParams struct {
 
 type lspDefinitionRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
-	Position     lspPosition               `json:"position"`
+	Position     LspPosition               `json:"position"`
 }
 
 type lspLocation struct {
 	Uri   string   `json:"uri"`
-	Range lspRange `json:"range"`
+	Range LspRange `json:"range"`
 }
 
 type lspMarkupContent struct {
@@ -673,26 +673,26 @@ type lspMarkupContent struct {
 
 type lspHover struct {
 	Contents lspMarkupContent `json:"contents"`
-	Range    lspRange         `json:"range,omitempty"`
+	Range    LspRange         `json:"range,omitempty"`
 }
 
 type lspHoverRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
-	Position     lspPosition               `json:"position"`
+	Position     LspPosition               `json:"position"`
 }
 
 type lspSignatureHelpRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
-	Position     lspPosition               `json:"position"`
+	Position     LspPosition               `json:"position"`
 }
 
 type lspInlayHintRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
-	Range        lspRange                  `json:"range,omitempty"`
+	Range        LspRange                  `json:"range,omitempty"`
 }
 
 type lspInlayHint struct {
-	Position    lspPosition `json:"position"`
+	Position    LspPosition `json:"position"`
 	Label       string      `json:"label"`
 	Kind        *int        `json:"kind,omitempty"`
 	Tooltip     string      `json:"tooltip,omitempty"`
@@ -701,11 +701,11 @@ type lspInlayHint struct {
 
 type lspInlineValueRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
-	Range        lspRange                  `json:"range,omitempty"`
+	Range        LspRange                  `json:"range,omitempty"`
 }
 
 type lspInlineValueText struct {
-	Range lspRange `json:"range"`
+	Range LspRange `json:"range"`
 	Text  string   `json:"text"`
 }
 
@@ -714,7 +714,7 @@ type lspCodeLensRequestParams struct {
 }
 
 type lspCodeLens struct {
-	Range   lspRange    `json:"range"`
+	Range   LspRange    `json:"range"`
 	Command *lspCommand `json:"command,omitempty"`
 	Data    any         `json:"data,omitempty"`
 }
@@ -1122,12 +1122,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			for _, sym := range res.SymbolsWithin(req.Params.Position) {
 				return l.success(h.Id, lspPrepareRenameResponse{
-					Range: lspRange{
-						Start: lspPosition{
+					Range: LspRange{
+						Start: LspPosition{
 							Line:      sym.Line(),
 							Character: sym.Begin(),
 						},
-						End: lspPosition{
+						End: LspPosition{
 							Line:      sym.Line(),
 							Character: sym.Begin() + len(sym.Name()),
 						},
@@ -1138,12 +1138,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			for _, ref := range res.SymbolRefsWithin(req.Params.Position) {
 				return l.success(h.Id, lspPrepareRenameResponse{
-					Range: lspRange{
-						Start: lspPosition{
+					Range: LspRange{
+						Start: LspPosition{
 							Line:      ref.Line(),
 							Character: ref.Begin(),
 						},
-						End: lspPosition{
+						End: LspPosition{
 							Line:      ref.Line(),
 							Character: ref.Begin() + len(ref.String()),
 						},
@@ -1226,11 +1226,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					count := res.RefCounts[sym.Name()]
 					if count > 0 {
 						cls = append(cls, lspCodeLens{
-							Range: lspRange{
-								Start: lspPosition{
+							Range: LspRange{
+								Start: LspPosition{
 									Line: sym.StartLine(),
 								},
-								End: lspPosition{
+								End: LspPosition{
 									Line: sym.EndLine(),
 								},
 							},
@@ -1267,7 +1267,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			if l.config.InlayNamed {
 				for _, named := range hs.Named {
 					ihs = append(ihs, lspInlayHint{
-						Position: lspPosition{
+						Position: LspPosition{
 							Line:      named.T.Line(),
 							Character: named.T.End(),
 						},
@@ -1281,7 +1281,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			if l.config.InlayDecoded {
 				for _, decoded := range hs.Decoded {
 					ihs = append(ihs, lspInlayHint{
-						Position: lspPosition{
+						Position: LspPosition{
 							Line:      decoded.T.Line(),
 							Character: decoded.T.End(),
 						},
@@ -1498,12 +1498,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			for _, sym := range res.SymbolsForRefWithin(req.Params.Position) {
 				ls = append(ls, lspLocation{
 					Uri: req.Params.TextDocument.Uri,
-					Range: lspRange{
-						Start: lspPosition{
+					Range: LspRange{
+						Start: LspPosition{
 							Line:      sym.Line(),
 							Character: sym.Begin(),
 						},
-						End: lspPosition{
+						End: LspPosition{
 							Line:      sym.Line(),
 							Character: sym.Begin() + len(sym.Name()),
 						},
@@ -1657,12 +1657,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						Arguments: []interface{}{
 							tealReplaceValueCommandArgs{
 								Uri: req.Params.TextDocument.Uri,
-								Range: lspRange{
-									Start: lspPosition{
+								Range: LspRange{
+									Start: LspPosition{
 										Line:      named.T.Line(),
 										Character: named.T.Begin(),
 									},
-									End: lspPosition{
+									End: LspPosition{
 										Line:      named.T.Line(),
 										Character: named.T.End(),
 									},
@@ -1685,12 +1685,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						Arguments: []interface{}{
 							tealReplaceValueCommandArgs{
 								Uri: req.Params.TextDocument.Uri,
-								Range: lspRange{
-									Start: lspPosition{
+								Range: LspRange{
+									Start: LspPosition{
 										Line:      named.T.Line(),
 										Character: named.T.Begin(),
 									},
-									End: lspPosition{
+									End: LspPosition{
 										Line:      named.T.Line(),
 										Character: named.T.End(),
 									},
@@ -1960,12 +1960,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 func prepareReplaceAllTextEdit(lines int, formatted string) lspTextEdit {
 	return lspTextEdit{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      0,
 				Character: 0,
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      lines,
 				Character: 0,
 			},
@@ -1976,12 +1976,12 @@ func prepareReplaceAllTextEdit(lines int, formatted string) lspTextEdit {
 
 func prepareRenameSymbolRefEdit(ref teal.Token, newName string) lspTextEdit {
 	return lspTextEdit{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      ref.Line(),
 				Character: ref.Begin(),
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      ref.Line(),
 				Character: ref.End(),
 			},
@@ -1992,12 +1992,12 @@ func prepareRenameSymbolRefEdit(ref teal.Token, newName string) lspTextEdit {
 
 func prepareRenameSymbolEdit(sym teal.Symbol, newName string) lspTextEdit {
 	return lspTextEdit{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      sym.Line(),
 				Character: sym.Begin(),
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      sym.Line(),
 				Character: sym.Begin() + len(sym.Name()),
 			},
@@ -2010,12 +2010,12 @@ func prepareCreateSymbolEdit(lines int, name string) lspTextEdit {
 	s := fmt.Sprintf("\r\n%s:\r\n", name)
 
 	return lspTextEdit{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      lines,
 				Character: 0,
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      lines,
 				Character: len(s),
 			},
@@ -2026,12 +2026,12 @@ func prepareCreateSymbolEdit(lines int, name string) lspTextEdit {
 
 func prepareRemoveSymbolEdit(sym teal.Symbol) lspTextEdit {
 	return lspTextEdit{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      sym.Line(),
 				Character: sym.Begin(),
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      sym.Line(),
 				Character: sym.End(),
 			},
@@ -2121,12 +2121,12 @@ func prepareMacroSemToken(m teal.Token) teal.SemanticToken {
 }
 
 func prepareSymbol(s teal.Symbol) lspDocumentSymbol {
-	r := lspRange{
-		Start: lspPosition{
+	r := LspRange{
+		Start: LspPosition{
 			Line:      s.Line(),
 			Character: s.Begin(),
 		},
-		End: lspPosition{
+		End: LspPosition{
 			Line:      s.Line(),
 			Character: s.End(),
 		},
@@ -2144,12 +2144,12 @@ func prepareSymbol(s teal.Symbol) lspDocumentSymbol {
 
 func prepareSymbolRefHighlight(ref teal.Token) lspDocumentHighlight {
 	return lspDocumentHighlight{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      ref.Line(),
 				Character: ref.Begin(),
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      ref.Line(),
 				Character: ref.End(),
 			},
@@ -2162,12 +2162,12 @@ var symbolHighlightKind = 1
 
 func prepareSymbolHighlight(sym teal.Symbol) lspDocumentHighlight {
 	return lspDocumentHighlight{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      sym.Line(),
 				Character: sym.Begin(),
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      sym.Line(),
 				Character: sym.Begin() + len(sym.Name()),
 			},
@@ -2183,12 +2183,12 @@ func prepareDiagnostics(res *teal.ProcessResult) []LspDiagnostic {
 		sev := int(d.Severity())
 
 		lds = append(lds, LspDiagnostic{
-			Range: lspRange{
-				Start: lspPosition{
+			Range: LspRange{
+				Start: LspPosition{
 					Line:      d.Line(),
 					Character: d.Begin(),
 				},
-				End: lspPosition{
+				End: LspPosition{
 					Line:      d.Line(),
 					Character: d.End(),
 				},
@@ -2203,12 +2203,12 @@ func prepareDiagnostics(res *teal.ProcessResult) []LspDiagnostic {
 
 func prepareRemoveLineEdit(line int) lspTextEdit {
 	return lspTextEdit{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      line,
 				Character: 0,
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      line + 1,
 				Character: 0,
 			},
@@ -2222,12 +2222,12 @@ func prepareRemoveSublineEdit(res *teal.ProcessResult, line int, subline int) ls
 	e := res.Lines[line].SublineEnd(subline)
 
 	return lspTextEdit{
-		Range: lspRange{
-			Start: lspPosition{
+		Range: LspRange{
+			Start: LspPosition{
 				Line:      line,
 				Character: b,
 			},
-			End: lspPosition{
+			End: LspPosition{
 				Line:      line,
 				Character: e,
 			},
@@ -2239,12 +2239,12 @@ func prepareRemoveSublineEdit(res *teal.ProcessResult, line int, subline int) ls
 func prepareVersionEdit(rg teal.Range, version uint64) lspTextEdit {
 	if rg != nil {
 		return lspTextEdit{
-			Range: lspRange{
-				Start: lspPosition{
+			Range: LspRange{
+				Start: LspPosition{
 					Line:      rg.StartLine(),
 					Character: rg.StartCharacter(),
 				},
-				End: lspPosition{
+				End: LspPosition{
 					Line:      rg.EndLine(),
 					Character: rg.EndCharacter(),
 				},
@@ -2253,12 +2253,12 @@ func prepareVersionEdit(rg teal.Range, version uint64) lspTextEdit {
 		}
 	} else {
 		return lspTextEdit{
-			Range: lspRange{
-				Start: lspPosition{
+			Range: LspRange{
+				Start: LspPosition{
 					Line:      0,
 					Character: 0,
 				},
-				End: lspPosition{
+				End: LspPosition{
 					Line:      0,
 					Character: 0,
 				},
