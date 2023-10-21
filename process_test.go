@@ -92,6 +92,24 @@ func TestIntArgVals(t *testing.T) {
 	}
 }
 
+func TestDefineArgVals(t *testing.T) {
+	res := Process(`#define VALUE 1
+	int
+	`)
+
+	vals := res.ArgValsAt(1, 4)
+
+	found := false
+	for _, v := range vals {
+		if v.Name == "VALUE" {
+			found = true
+			break
+		}
+	}
+
+	assert.True(t, found)
+}
+
 func TestSymOrRefAt(t *testing.T) {
 	res := Process(`test_label:
 test_label2:
