@@ -278,8 +278,32 @@ type lspInitializeResult struct {
 type lspSymbolKind int
 
 const (
-	lspSymbolKindMethod   = 6
-	lspSymbolKindOperator = 25
+	LspSymbolKindFile          = 1
+	LspSymbolKindModule        = 2
+	LspSymbolKindNamespace     = 3
+	LspSymbolKindPackage       = 4
+	LspSymbolKindClass         = 5
+	LspSymbolKindMethod        = 6
+	LspSymbolKindProperty      = 7
+	LspSymbolKindField         = 8
+	LspSymbolKindConstructor   = 9
+	LspSymbolKindEnum          = 10
+	LspSymbolKindInterface     = 11
+	LspSymbolKindFunction      = 12
+	LspSymbolKindVariable      = 13
+	LspSymbolKindConstant      = 14
+	LspSymbolKindString        = 15
+	LspSymbolKindNumber        = 16
+	LspSymbolKindBoolean       = 17
+	LspSymbolKindArray         = 18
+	LspSymbolKindObject        = 19
+	LspSymbolKindKey           = 20
+	LspSymbolKindNull          = 21
+	LspSymbolKindEnumMember    = 22
+	LspSymbolKindStruct        = 23
+	LspSymbolKindEvent         = 24
+	LspSymbolKindOperator      = 25
+	LspSymbolKindTypeParameter = 26
 )
 
 type lspDocumentSymbol struct {
@@ -2129,7 +2153,7 @@ func prepareSymbol(s teal.Symbol) lspDocumentSymbol {
 
 	ds := lspDocumentSymbol{
 		Name:           s.Name(),
-		Kind:           lspSymbolKindMethod,
+		Kind:           LspSymbolKindMethod,
 		Range:          r,
 		SelectionRange: r,
 	}
