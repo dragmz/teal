@@ -2529,8 +2529,8 @@ func opGtxnsas(c ProcessContext) {
 	c.emit(&GtxnsasExpr{Field: f})
 }
 func opArgs(c ProcessContext) {
-	c.modeMinVersion(ModeSig, 0)
-	c.modeMinVersion(ModeApp, 5)
+	c.modeMinVersion(ModeSig, 5)
+	c.modeMinVersion(ModeApp, 0)
 
 	c.emit(Args)
 }
