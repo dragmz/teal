@@ -1397,43 +1397,45 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					})
 				}
 
-				for name, info := range teal.Ops.Items {
-					if info.AppVersion <= res.Version && strings.HasPrefix(name, prefix) {
-						var insert string
-						var format *int
-						if len(info.Args) > 0 {
-							var placeholders string
-							for i, arg := range info.Args {
-								if i > 0 {
-									placeholders += " "
-								}
+				for _, info := range res.AvailableOps() {
+					if !strings.HasPrefix(info.Name, prefix) {
+						continue
+					}
 
-								placeholders += fmt.Sprintf("${%d:%s}", i+1, arg.Name)
+					var insert string
+					var format *int
+					if len(info.Args) > 0 {
+						var placeholders string
+						for i, arg := range info.Args {
+							if i > 0 {
+								placeholders += " "
 							}
 
-							insert = fmt.Sprintf("%s %s", name, placeholders)
-							format = snippetFormat
-						} else {
-							insert = ""
-							format = nil
+							placeholders += fmt.Sprintf("${%d:%s}", i+1, arg.Name)
 						}
 
-						ld := fmt.Sprintf("v%d", info.AppVersion)
-						ccs = append(ccs, lspCompletionItem{
-							Label: name,
-							Documentation: lspMarkupContent{
-								Kind:  "markdown",
-								Value: info.Doc,
-							},
-							Kind:             operator,
-							InsertText:       insert,
-							InsertTextFormat: format,
-							LabelDetails: &lspCompletionItemLabelDetails{
-								Description: ld,
-								Detail:      " " + info.ArgsSig,
-							},
-						})
+						insert = fmt.Sprintf("%s %s", info.Name, placeholders)
+						format = snippetFormat
+					} else {
+						insert = ""
+						format = nil
 					}
+
+					ld := fmt.Sprintf("v%d", info.AppVersion)
+					ccs = append(ccs, lspCompletionItem{
+						Label: info.Name,
+						Documentation: lspMarkupContent{
+							Kind:  "markdown",
+							Value: info.Doc,
+						},
+						Kind:             operator,
+						InsertText:       insert,
+						InsertTextFormat: format,
+						LabelDetails: &lspCompletionItemLabelDetails{
+							Description: ld,
+							Detail:      " " + info.ArgsSig,
+						},
+					})
 				}
 			}
 

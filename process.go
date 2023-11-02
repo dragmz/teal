@@ -2705,6 +2705,27 @@ type ProcessResult struct {
 	Defines   map[string]bool
 }
 
+func (r ProcessResult) AvailableOps() []opItem {
+	var res []opItem
+
+	for _, info := range Ops.Items {
+		var availableSinceVersion uint64
+
+		switch r.Mode {
+		case ModeApp:
+			availableSinceVersion = info.AppVersion
+		case ModeSig:
+			availableSinceVersion = info.SigVersion
+		}
+
+		if availableSinceVersion > 0 && availableSinceVersion <= r.Version {
+			res = append(res, info)
+		}
+	}
+
+	return res
+}
+
 func (r ProcessResult) SymbolsForRefWithin(rg Range) []Symbol {
 	var res []Symbol
 

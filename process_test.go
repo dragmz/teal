@@ -269,3 +269,38 @@ func TestAppMode(t *testing.T) {
 	req := Process(``)
 	assert.Equal(t, ModeApp, req.Mode)
 }
+
+func getAvailableOps(source string) []string {
+	res := Process(source)
+
+	available := []string{}
+
+	for _, item := range res.AvailableOps() {
+		available = append(available, item.Name)
+	}
+
+	return available
+}
+
+func TestCompletion(t *testing.T) {
+	defaultVApp := getAvailableOps(``)
+
+	assert.NotContains(t, defaultVApp, "args")
+	assert.NotContains(t, defaultVApp, "addw")
+	assert.Contains(t, defaultVApp, "err")
+
+	v2App := getAvailableOps(`#pragma version 2`)
+
+	assert.Contains(t, v2App, "addw")
+
+	defaultVSig := getAvailableOps(`//#pragma mode logicsig`)
+	v4Sig := getAvailableOps(`#pragma version 4; //#pragma mode logicsig`)
+
+	assert.NotContains(t, v4Sig, "args")
+
+	assert.NotContains(t, defaultVSig, "args")
+
+	v5Sig := getAvailableOps(`#pragma version 5; //#pragma mode logicsig`)
+
+	assert.Contains(t, v5Sig, "args")
+}
