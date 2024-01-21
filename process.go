@@ -235,6 +235,14 @@ func init() {
 	OpValFieldNames = res2
 }
 
+func OpDocByName(name string) string {
+	return opDocByName[name]
+}
+
+func OpDocExtraByName(name string) string {
+	return opDocExtras[name]
+}
+
 func (t NewOpArgType) String() string {
 	switch t {
 	default:
@@ -309,9 +317,6 @@ type opItem struct {
 	FullSig string
 
 	Parse processFunc
-
-	Doc     string
-	FullDoc string
 }
 
 type opListItem struct {
@@ -1489,6 +1494,20 @@ func (d opItems) Get(c OpContext) (opItem, bool) {
 	return item, ok
 }
 
+func MakeFullDoc(short string, extra string) string {
+	full := short
+	if extra != "" {
+		if full != "" {
+			full += "\n"
+		}
+
+		full += extra
+	}
+
+	return full
+
+}
+
 var Ops = func() *opItems {
 	d := &opItems{
 		Items: map[string]opItem{},
@@ -1502,18 +1521,6 @@ var Ops = func() *opItems {
 		}
 
 		info.Parse(c)
-
-		doc := opDocByName[info.Name]
-		extra := opDocExtras[info.Name]
-
-		full := doc
-		if extra != "" {
-			if full != "" {
-				full += "\n"
-			}
-
-			full += extra
-		}
 
 		var fullnames []string
 		{
@@ -1579,9 +1586,6 @@ var Ops = func() *opItems {
 			Args: c.args,
 
 			Parse: info.Parse,
-
-			Doc:     doc,
-			FullDoc: full,
 		}
 	}
 
@@ -3061,7 +3065,7 @@ func (r ProcessResult) ArgValsAt(l int, ch int) []opItemArgVal {
 	return res
 }
 
-func (r ProcessResult) DocAt(l int, ch int) string {
+func (r ProcessResult) DocAt(l int, ch int, opDocShort func(string) string, opDocExtra func(string) string) string {
 	if l >= len(r.Lines) {
 		return ""
 	}
@@ -3077,7 +3081,7 @@ func (r ProcessResult) DocAt(l int, ch int) string {
 		if i == 0 {
 			info, ok := r.getOp(tok.String())
 			if ok {
-				return info.FullDoc
+				return MakeFullDoc(opDocShort(info.Name), opDocExtra(info.Name))
 			}
 		} else {
 			tok, idx, ok := sln.ImmAt(ch)

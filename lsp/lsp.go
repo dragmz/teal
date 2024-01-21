@@ -69,6 +69,9 @@ type lsp struct {
 
 	debug              *bufio.Writer
 	prepareDiagnostics PrepareDiagnosticsHandler
+
+	opDocShort OpDocHandler
+	opDocExtra OpDocHandler
 }
 
 type LspOption func(l *lsp) error
@@ -76,6 +79,22 @@ type LspOption func(l *lsp) error
 func WithDebug(w io.Writer) LspOption {
 	return func(l *lsp) error {
 		l.debug = bufio.NewWriter(w)
+		return nil
+	}
+}
+
+type OpDocHandler func(op string) string
+
+func WithOpDocShortHandler(h OpDocHandler) LspOption {
+	return func(l *lsp) error {
+		l.opDocShort = h
+		return nil
+	}
+}
+
+func WithOpDocExtraHandler(h OpDocHandler) LspOption {
+	return func(l *lsp) error {
+		l.opDocExtra = h
 		return nil
 	}
 }
@@ -106,6 +125,18 @@ func New(r io.Reader, w io.Writer, opts ...LspOption) (*lsp, error) {
 		err := opt(l)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to set lsp option")
+		}
+	}
+
+	if l.opDocShort == nil {
+		l.opDocShort = func(op string) string {
+			return teal.OpDocByName(op)
+		}
+	}
+
+	if l.opDocExtra == nil {
+		l.opDocExtra = func(op string) string {
+			return teal.OpDocExtraByName(op)
 		}
 	}
 
@@ -1455,12 +1486,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						format = nil
 					}
 
+					doc := l.opDocShort(info.Name)
+
 					ld := fmt.Sprintf("v%d", info.AppVersion)
 					ccs = append(ccs, lspCompletionItem{
 						Label: info.Name,
 						Documentation: lspMarkupContent{
 							Kind:  "markdown",
-							Value: info.Doc,
+							Value: doc,
 						},
 						Kind:             operator,
 						InsertText:       insert,
@@ -1494,7 +1527,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			var c interface{} = struct{}{}
 
-			s := res.DocAt(req.Params.Position.Line, req.Params.Position.Character)
+			s := res.DocAt(req.Params.Position.Line, req.Params.Position.Character, l.opDocShort, l.opDocExtra)
 			if s != "" {
 				c = lspHover{
 					Contents: lspMarkupContent{
@@ -1578,10 +1611,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 						var doc interface{}
 
-						if info.FullDoc != "" {
+						fullDoc := teal.MakeFullDoc(l.opDocShort(info.Name), l.opDocExtra(info.Name))
+
+						if fullDoc != "" {
 							doc = lspMarkupContent{
 								Kind:  "markdown",
-								Value: info.FullDoc,
+								Value: fullDoc,
 							}
 						}
 
