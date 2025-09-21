@@ -14,7 +14,7 @@ func TestPrepareVersionEditForNil(t *testing.T) {
 		version uint64
 
 		text string
-		rg   lspRange
+		rg   LspRange
 	}
 
 	tests := []test{
@@ -24,24 +24,24 @@ func TestPrepareVersionEditForNil(t *testing.T) {
 			text:    "#pragma version 8\r\n",
 		},
 		{
-			token: lspRange{
-				Start: lspPosition{
+			token: LspRange{
+				Start: LspPosition{
 					Line:      1,
 					Character: 10,
 				},
-				End: lspPosition{
+				End: LspPosition{
 					Line:      1,
 					Character: 11,
 				},
 			},
 			version: 9,
 			text:    "9",
-			rg: lspRange{
-				Start: lspPosition{
+			rg: LspRange{
+				Start: LspPosition{
 					Line:      1,
 					Character: 10,
 				},
-				End: lspPosition{
+				End: LspPosition{
 					Line:      1,
 					Character: 11,
 				},
@@ -62,8 +62,8 @@ func TestPrepareVersionEditForNil(t *testing.T) {
 func TestPrepareRemoveLineEdit(t *testing.T) {
 	e := prepareRemoveLineEdit(123)
 	assert.Equal(t, "", e.NewText)
-	assert.Equal(t, lspRange{
-		Start: lspPosition{Line: 123},
-		End:   lspPosition{Line: 124},
+	assert.Equal(t, LspRange{
+		Start: LspPosition{Line: 123},
+		End:   LspPosition{Line: 124},
 	}, e.Range)
 }
