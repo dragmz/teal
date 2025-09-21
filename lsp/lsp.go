@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/dragmz/teal"
-	"github.com/joe-p/tealfmt"
 	"github.com/pkg/errors"
 )
 
@@ -1514,9 +1513,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			formatted := tealfmt.Format(strings.NewReader(doc.s))
-
-			return l.success(h.Id, []lspTextEdit{prepareReplaceAllTextEdit(len(res.Lines), formatted)})
+			return l.success(h.Id, []lspTextEdit{prepareReplaceAllTextEdit(len(res.Lines), doc.s)})
 
 		case "textDocument/signatureHelp":
 			req, err := read[lspSignatureHelpRequest](b)
