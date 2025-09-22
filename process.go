@@ -2326,7 +2326,7 @@ func opSumHash512(c ProcessContext) {
 	c.emit(SumHash512)
 }
 func opFalconVerify(c ProcessContext) {
-	c.minVersion(10)
+	c.minVersion(12)
 	c.emit(FalconVerify)
 }
 func opEcAdd(c ProcessContext) {
