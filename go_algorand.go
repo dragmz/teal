@@ -992,6 +992,24 @@ const (
 	// AssetOptInMinBalance is the additional minimum balance required to opt in to an asset
 	AssetOptInMinBalance
 
+	// GenesisHash is the genesis hash for the network
+	GenesisHash
+
+	// PayoutsEnabled is whether block proposal payouts are enabled
+	PayoutsEnabled
+
+	// PayoutsGoOnlineFee is the fee required in a keyreg transaction to make an account incentive eligible
+	PayoutsGoOnlineFee
+
+	// PayoutsPercent is the percentage of transaction fees in a block that can be paid to the block proposer.
+	PayoutsPercent
+
+	// PayoutsMinBalance is the minimum algo balance an account must have to receive block payouts (in the agreement round).
+	PayoutsMinBalance
+
+	// PayoutsMaxBalance is the maximum algo balance an account can have to receive block payouts (in the agreement round).
+	PayoutsMaxBalance
+
 	invalidGlobalField // compile-time constant for number of fields
 )
 
@@ -1027,6 +1045,8 @@ func (fs globalFieldSpec) Note() string {
 	return note
 }
 
+const incentiveVersion = 11 // block fields, heartbeat
+
 var globalFieldSpecs = [...]globalFieldSpec{
 	// version 0 is the same as v1 (initial release)
 	{MinTxnFee, StackUint64, ModeAny, 0, "microalgos"},
@@ -1056,6 +1076,18 @@ var globalFieldSpecs = [...]globalFieldSpec{
 		"The additional minimum balance required to create (and opt-in to) an asset."},
 	{AssetOptInMinBalance, StackUint64, ModeAny, 10,
 		"The additional minimum balance required to opt-in to an asset."},
+	{GenesisHash, StackBytes32, ModeAny, 10, "The Genesis Hash for the network."},
+
+	{PayoutsEnabled, StackBoolean, ModeAny, incentiveVersion,
+		"Whether block proposal payouts are enabled."},
+	{PayoutsGoOnlineFee, StackUint64, ModeAny, incentiveVersion,
+		"The fee required in a keyreg transaction to make an account incentive eligible."},
+	{PayoutsPercent, StackUint64, ModeAny, incentiveVersion,
+		"The percentage of transaction fees in a block that can be paid to the block proposer."},
+	{PayoutsMinBalance, StackUint64, ModeAny, incentiveVersion,
+		"The minimum balance an account must have in the agreement round to receive block payouts in the proposal round."},
+	{PayoutsMaxBalance, StackUint64, ModeAny, incentiveVersion,
+		"The maximum balance an account can have in the agreement round to receive block payouts in the proposal round."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {
@@ -2045,12 +2077,18 @@ func _() {
 	_ = x[CallerApplicationAddress-14]
 	_ = x[AssetCreateMinBalance-15]
 	_ = x[AssetOptInMinBalance-16]
-	_ = x[invalidGlobalField-17]
+	_ = x[GenesisHash-17]
+	_ = x[PayoutsEnabled-18]
+	_ = x[PayoutsGoOnlineFee-19]
+	_ = x[PayoutsPercent-20]
+	_ = x[PayoutsMinBalance-21]
+	_ = x[PayoutsMaxBalance-22]
+	_ = x[invalidGlobalField-23]
 }
 
-const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceinvalidGlobalField"
+const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceGenesisHashPayoutsEnabledPayoutsGoOnlineFeePayoutsPercentPayoutsMinBalancePayoutsMaxBalanceinvalidGlobalField"
 
-var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 264}
+var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 257, 271, 289, 303, 320, 337, 355}
 
 func (i GlobalField) String() string {
 	if i >= GlobalField(len(_GlobalField_index)-1) {
