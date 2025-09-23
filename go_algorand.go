@@ -446,6 +446,8 @@ const (
 	StackBytes32
 
 	StackBoolean
+
+	StackBytes64
 )
 
 // StackTypes is an alias for a list of StackType with syntactic sugar
@@ -1450,6 +1452,35 @@ const (
 	BlkSeed BlockField = iota
 	// BlkTimestamp is the Block's timestamp, seconds from epoch
 	BlkTimestamp
+	// BlkProposer is the Block's proposer, or ZeroAddress, pre Payouts.Enabled
+	BlkProposer
+	// BlkFeesCollected is the sum of fees for the block, or 0, pre Payouts.Enabled
+	BlkFeesCollected
+	// BlkBonus is the extra amount to be paid for the given block (from FeeSink)
+	BlkBonus
+	// BlkBranch is the hash of the previous block
+	BlkBranch
+	// BlkFeeSink is the fee sink for the given round
+	BlkFeeSink
+	// BlkProtocol is the ConsensusVersion of the block.
+	BlkProtocol
+	// BlkTxnCounter is the number of the next transaction after the block
+	BlkTxnCounter
+	// BlkProposerPayout is the actual amount moved from feesink to proposer
+	BlkProposerPayout
+
+	// BlkBranch512 is the wider, sha-512 hash of the previous block
+	BlkBranch512
+
+	// BlkSha512_256TxnCommitment is "Algorand Native" txn merkle root
+	BlkSha512_256TxnCommitment
+
+	// BlkSha256TxnCommitment is the sha256 txn merkle root
+	BlkSha256TxnCommitment
+
+	// BlkSha512TxnCommitment is the sha512 txn merkle root
+	BlkSha512TxnCommitment
+
 	invalidBlockField // compile-time constant for number of fields
 )
 
@@ -1462,8 +1493,20 @@ type blockFieldSpec struct {
 }
 
 var blockFieldSpecs = [...]blockFieldSpec{
-	{BlkSeed, StackBytes, randomnessVersion},
+	{BlkSeed, StackBytes32, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
+	{BlkProposer, StackAddress, incentiveVersion},
+	{BlkFeesCollected, StackUint64, incentiveVersion},
+	{BlkBonus, StackUint64, incentiveVersion},
+	{BlkBranch, StackBytes32, incentiveVersion},
+	{BlkFeeSink, StackAddress, incentiveVersion},
+	{BlkProtocol, StackBytes, incentiveVersion},
+	{BlkTxnCounter, StackUint64, incentiveVersion},
+	{BlkProposerPayout, StackUint64, incentiveVersion},
+	{BlkBranch512, StackBytes64, 13},
+	{BlkSha512_256TxnCommitment, StackBytes32, 13},
+	{BlkSha256TxnCommitment, StackBytes32, 13},
+	{BlkSha512TxnCommitment, StackBytes64, 13},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
@@ -2339,12 +2382,24 @@ func _() {
 	var x [1]struct{}
 	_ = x[BlkSeed-0]
 	_ = x[BlkTimestamp-1]
-	_ = x[invalidBlockField-2]
+	_ = x[BlkProposer-2]
+	_ = x[BlkFeesCollected-3]
+	_ = x[BlkBonus-4]
+	_ = x[BlkBranch-5]
+	_ = x[BlkFeeSink-6]
+	_ = x[BlkProtocol-7]
+	_ = x[BlkTxnCounter-8]
+	_ = x[BlkProposerPayout-9]
+	_ = x[BlkBranch512-10]
+	_ = x[BlkSha512_256TxnCommitment-11]
+	_ = x[BlkSha256TxnCommitment-12]
+	_ = x[BlkSha512TxnCommitment-13]
+	_ = x[invalidBlockField-14]
 }
 
-const _BlockField_name = "BlkSeedBlkTimestampinvalidBlockField"
+const _BlockField_name = "BlkSeedBlkTimestampBlkProposerBlkFeesCollectedBlkBonusBlkBranchBlkFeeSinkBlkProtocolBlkTxnCounterBlkProposerPayoutBlkBranch512BlkSha512_256TxnCommitmentBlkSha256TxnCommitmentBlkSha512TxnCommitmentinvalidBlockField"
 
-var _BlockField_index = [...]uint8{0, 7, 19, 36}
+var _BlockField_index = [...]uint8{0, 7, 19, 30, 46, 54, 63, 73, 84, 97, 114, 126, 152, 174, 196, 213}
 
 func (i BlockField) String() string {
 	if i < 0 || i >= BlockField(len(_BlockField_index)-1) {
