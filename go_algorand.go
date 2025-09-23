@@ -672,6 +672,8 @@ const (
 	// NumClearStateProgramPages = len(ClearStateProgramPages) // 4096
 	NumClearStateProgramPages
 
+	RejectVersion
+
 	invalidTxnField // compile-time constant for number of fields
 )
 
@@ -811,6 +813,8 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{NumApprovalProgramPages, StackUint64, false, 7, 0, false, "Number of Approval Program pages"},
 	{ClearStateProgramPages, StackBytes, true, 7, 7, false, "ClearState Program as an array of pages"},
 	{NumClearStateProgramPages, StackUint64, false, 7, 0, false, "Number of ClearState Program pages"},
+
+	{RejectVersion, StackUint64, false, 12, 12, false, "Application version for which the txn must reject"},
 }
 
 // TxnFields contains info on the arguments to the txn* family of opcodes
@@ -1742,6 +1746,9 @@ const (
 	// AppAddress is also not *in* the Params, but can be derived
 	AppAddress
 
+	// AppVersion begins at 0 and increasing each time either program changes
+	AppVersion
+
 	invalidAppParamsField // compile-time constant for number of fields
 )
 
@@ -1780,6 +1787,7 @@ var appParamsFieldSpecs = [...]appParamsFieldSpec{
 	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
 	{AppCreator, StackAddress, 5, "Creator address"},
 	{AppAddress, StackAddress, 5, "Address for which this application has authority"},
+	{AppVersion, StackUint64, 12, "Version of the app, incremented each time the approval or clear program changes"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {
@@ -2185,12 +2193,13 @@ func _() {
 	_ = x[NumApprovalProgramPages-65]
 	_ = x[ClearStateProgramPages-66]
 	_ = x[NumClearStateProgramPages-67]
-	_ = x[invalidTxnField-68]
+	_ = x[RejectVersion-68]
+	_ = x[invalidTxnField-69]
 }
 
-const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDApplicationIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsApprovalProgramClearStateProgramRekeyToConfigAssetConfigAssetTotalConfigAssetDecimalsConfigAssetDefaultFrozenConfigAssetUnitNameConfigAssetNameConfigAssetURLConfigAssetMetadataHashConfigAssetManagerConfigAssetReserveConfigAssetFreezeConfigAssetClawbackFreezeAssetFreezeAssetAccountFreezeAssetFrozenAssetsNumAssetsApplicationsNumApplicationsGlobalNumUintGlobalNumByteSliceLocalNumUintLocalNumByteSliceExtraProgramPagesNonparticipationLogsNumLogsCreatedAssetIDCreatedApplicationIDLastLogStateProofPKApprovalProgramPagesNumApprovalProgramPagesClearStateProgramPagesNumClearStateProgramPagesinvalidTxnField"
+const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDApplicationIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsApprovalProgramClearStateProgramRekeyToConfigAssetConfigAssetTotalConfigAssetDecimalsConfigAssetDefaultFrozenConfigAssetUnitNameConfigAssetNameConfigAssetURLConfigAssetMetadataHashConfigAssetManagerConfigAssetReserveConfigAssetFreezeConfigAssetClawbackFreezeAssetFreezeAssetAccountFreezeAssetFrozenAssetsNumAssetsApplicationsNumApplicationsGlobalNumUintGlobalNumByteSliceLocalNumUintLocalNumByteSliceExtraProgramPagesNonparticipationLogsNumLogsCreatedAssetIDCreatedApplicationIDLastLogStateProofPKApprovalProgramPagesNumApprovalProgramPagesClearStateProgramPagesNumClearStateProgramPagesRejectVersioninvalidTxnField"
 
-var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 225, 237, 252, 262, 270, 281, 296, 313, 320, 331, 347, 366, 390, 409, 424, 438, 461, 479, 497, 514, 533, 544, 562, 579, 585, 594, 606, 621, 634, 652, 664, 681, 698, 714, 718, 725, 739, 759, 766, 778, 798, 821, 843, 868, 883}
+var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 225, 237, 252, 262, 270, 281, 296, 313, 320, 331, 347, 366, 390, 409, 424, 438, 461, 479, 497, 514, 533, 544, 562, 579, 585, 594, 606, 621, 634, 652, 664, 681, 698, 714, 718, 725, 739, 759, 766, 778, 798, 821, 843, 868, 881, 896}
 
 func (i TxnField) String() string {
 	if i < 0 || i >= TxnField(len(_TxnField_index)-1) {
@@ -2280,12 +2289,13 @@ func _() {
 	_ = x[AppExtraProgramPages-6]
 	_ = x[AppCreator-7]
 	_ = x[AppAddress-8]
-	_ = x[invalidAppParamsField-9]
+	_ = x[AppVersion-9]
+	_ = x[invalidAppParamsField-10]
 }
 
-const _AppParamsField_name = "AppApprovalProgramAppClearStateProgramAppGlobalNumUintAppGlobalNumByteSliceAppLocalNumUintAppLocalNumByteSliceAppExtraProgramPagesAppCreatorAppAddressinvalidAppParamsField"
+const _AppParamsField_name = "AppApprovalProgramAppClearStateProgramAppGlobalNumUintAppGlobalNumByteSliceAppLocalNumUintAppLocalNumByteSliceAppExtraProgramPagesAppCreatorAppAddressAppVersioninvalidAppParamsField"
 
-var _AppParamsField_index = [...]uint8{0, 18, 38, 54, 75, 90, 110, 130, 140, 150, 171}
+var _AppParamsField_index = [...]uint8{0, 18, 38, 54, 75, 90, 110, 130, 140, 150, 160, 181}
 
 func (i AppParamsField) String() string {
 	if i < 0 || i >= AppParamsField(len(_AppParamsField_index)-1) {

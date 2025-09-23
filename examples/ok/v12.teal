@@ -1,0 +1,4 @@
+#pragma version 12
+txn RejectVersion
+app_params_get AppVersion
+falcon_verify
