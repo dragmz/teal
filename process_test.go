@@ -304,3 +304,22 @@ func TestCompletion(t *testing.T) {
 
 	assert.Contains(t, v5Sig, "args")
 }
+
+func TestPragmaTypetrackTrue(t *testing.T) {
+	res := Process(`#pragma typetrack true`)
+
+	assert.Len(t, res.Macros, 2)
+	assert.Equal(t, 1, len(res.Bools))
+}
+
+func TestPragmaTypetrackFalse(t *testing.T) {
+	res := Process(`#pragma typetrack false`)
+
+	assert.Len(t, res.Macros, 2)
+	assert.Equal(t, 1, len(res.Bools))
+}
+
+func TestPragmaTypetrackInvalid(t *testing.T) {
+	res := Process(`#pragma typetrack test`)
+	assert.Empty(t, res.Bools)
+}

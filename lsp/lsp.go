@@ -1859,6 +1859,10 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			st := teal.SemanticTokens{}
 
+			for _, v := range res.Bools {
+				st = append(st, prepareValueSemToken(v))
+			}
+
 			for _, m := range res.Macros {
 				st = append(st, prepareMacroSemToken(m))
 			}
@@ -2170,6 +2174,16 @@ func prepareMacroSemToken(m teal.Token) teal.SemanticToken {
 		Index:     m.Begin(),
 		Length:    m.End() - m.Begin(),
 		Type:      semanticTokenMacro,
+		Modifiers: 0,
+	}
+}
+
+func prepareValueSemToken(v teal.Token) teal.SemanticToken {
+	return teal.SemanticToken{
+		Line:      v.Line(),
+		Index:     v.Begin(),
+		Length:    v.End() - v.Begin(),
+		Type:      semanticTokenValue,
 		Modifiers: 0,
 	}
 }

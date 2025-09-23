@@ -83,6 +83,15 @@ func readInt8(s string) (int8, error) {
 	return int8(v), nil
 }
 
+func readBool(s string) (bool, error) {
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		return false, err
+	}
+
+	return v, nil
+}
+
 func readUint8(s string) (uint8, error) {
 	v, err := strconv.ParseUint(s, 10, 8)
 	if err != nil {

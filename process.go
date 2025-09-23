@@ -17,6 +17,7 @@ type NewOpArgType int
 const (
 	OpArgTypeNone = iota
 	OpArgTypeConstInt
+	OpArgTypeBool
 	OpArgTypeUint64
 	OpArgTypeUint8
 	OpArgTypeInt8
@@ -247,6 +248,8 @@ func (t NewOpArgType) String() string {
 	switch t {
 	default:
 		return "(none)"
+	case OpArgTypeBool:
+		return "bool"
 	case OpArgTypeConstInt:
 		return "uint64"
 	case OpArgTypeUint64:
@@ -615,10 +618,18 @@ func (c *docContext) mustReadPragma(name string) (v uint64) {
 		Type: OpArgTypePragmaName,
 	})
 
-	c.arg(opItemArg{
-		Name: name,
-		Type: OpArgTypeUint64,
-	})
+	switch strings.ToLower(name) {
+	case "version":
+		c.arg(opItemArg{
+			Name: "version",
+			Type: OpArgTypeUint64,
+		})
+	case "typetrack":
+		c.arg(opItemArg{
+			Name: "typetrack",
+			Type: OpArgTypeBool,
+		})
+	}
 
 	return
 }
@@ -732,6 +743,16 @@ func (c *docContext) readUint64Array(name string) (v []uint64) {
 
 	return
 }
+
+func (c *docContext) mustReadBool(name string) (v []int64) {
+	c.arg(opItemArg{
+		Name: name,
+		Type: OpArgTypeBool,
+	})
+
+	return
+}
+
 func (c *docContext) mustReadUint8(name string) (v uint8) {
 	c.arg(opItemArg{
 		Name: name,
@@ -890,11 +911,12 @@ type parserContext struct {
 	args     *arguments
 	diag     []Diagnostic
 
-	nums []Token
-	strs []Token
-	keys []Token
-	mcrs []Token
-	refs []Token
+	bools []Token
+	nums  []Token
+	strs  []Token
+	keys  []Token
+	mcrs  []Token
+	refs  []Token
 
 	vtok   *Token
 	protos map[string]*ProtoExpr
@@ -988,6 +1010,12 @@ func (c *parserContext) mustReadPragma(argName string) uint64 {
 
 	name := c.mustRead("name")
 	switch name {
+	case "typetrack":
+		c.mcrs = append(c.mcrs, c.args.Curr())
+		c.mustReadBool("typetrack value")
+
+		tok := c.args.Curr()
+		c.vtok = &tok
 	case "version":
 		c.mcrs = append(c.mcrs, c.args.Curr())
 		v := c.mustReadInt("version value")
@@ -1225,6 +1253,17 @@ func (c *parserContext) parseConstUint64(name string) uint64 {
 	return v
 }
 
+func (c *parserContext) parseBool(name string) bool {
+	v, err := readBool(c.args.Text())
+	if err != nil {
+		c.failCurr(errors.Wrapf(err, "failed to parse bool: %s", name))
+	}
+
+	c.bools = append(c.bools, c.args.Curr())
+
+	return v
+}
+
 func (c *parserContext) parseUint8(name string) uint8 {
 	v, err := readUint8(c.args.Text())
 	if err != nil {
@@ -1429,6 +1468,11 @@ func (c *parserContext) mustReadUint8(name string) uint8 {
 	return c.parseUint8(name)
 }
 
+func (c *parserContext) mustReadBool(name string) bool {
+	c.mustReadArg(name)
+	return c.parseBool(name)
+}
+
 func (c *parserContext) maybeReadUint8(name string) (uint8, bool) {
 	ok := c.maybeReadArg()
 	if !ok {
@@ -1611,26 +1655,6 @@ var Ops = func() *opItems {
 }()
 
 type processFunc func(c ProcessContext)
-
-type asmType int
-
-const (
-	asmNone = iota
-	asmInt
-	asmByte
-	asmIntC
-	asmArg
-	asmAddr
-	asmMethod
-)
-
-var typeLoads = []interface{}{}
-var typeStores = []interface{}{}
-
-var asmByteCBlock = []interface{}{}
-var checkByteImmArgs = []interface{}{}
-var immBytess = []interface{}{}
-var typeTxField = []interface{}{}
 
 func opPragma(c ProcessContext) {
 	version := c.mustReadPragma("version")
@@ -2716,6 +2740,7 @@ type ProcessResult struct {
 
 	Ops []Token
 
+	Bools    []Token
 	Numbers  []Token
 	Strings  []Token
 	Keywords []Token
@@ -3587,6 +3612,7 @@ func Process(source string) *ProcessResult {
 		Sublisting:   c.lops,
 		Ops:          ops,
 		Numbers:      c.nums,
+		Bools:        c.bools,
 		Strings:      c.strs,
 		Keywords:     c.keys,
 		Macros:       c.mcrs,
