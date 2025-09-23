@@ -1794,6 +1794,14 @@ const (
 	// AcctTotalBoxBytes is the number of bytes in all boxes of this app account
 	AcctTotalBoxBytes
 
+	// AcctIncentiveEligible is whether this account opted into block payouts by
+	// paying extra in `keyreg`. Does not reflect eligibility based on balance.
+	AcctIncentiveEligible
+	// AcctLastProposed is the last time this account proposed. Does not include _this_ round.
+	AcctLastProposed
+	// AcctLastHeartbeat is the last heartbeat from this account.
+	AcctLastHeartbeat
+
 	// AcctTotalAppSchema - consider how to expose
 
 	invalidAcctParamsField // compile-time constant for number of fields
@@ -1838,6 +1846,10 @@ var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account (including ASAs this account created)."},
 	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
 	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes used by this account's app's box keys and values."},
+
+	{AcctIncentiveEligible, StackBoolean, incentiveVersion, "Has this account opted into block payouts"},
+	{AcctLastProposed, StackUint64, incentiveVersion, "The round number of the last block this account proposed."},
+	{AcctLastHeartbeat, StackUint64, incentiveVersion, "The round number of the last block this account sent a heartbeat."},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {
@@ -2167,12 +2179,15 @@ func _() {
 	_ = x[AcctTotalAssets-9]
 	_ = x[AcctTotalBoxes-10]
 	_ = x[AcctTotalBoxBytes-11]
-	_ = x[invalidAcctParamsField-12]
+	_ = x[AcctIncentiveEligible-12]
+	_ = x[AcctLastProposed-13]
+	_ = x[AcctLastHeartbeat-14]
+	_ = x[invalidAcctParamsField-15]
 }
 
-const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalNumUintAcctTotalNumByteSliceAcctTotalExtraAppPagesAcctTotalAppsCreatedAcctTotalAppsOptedInAcctTotalAssetsCreatedAcctTotalAssetsAcctTotalBoxesAcctTotalBoxBytesinvalidAcctParamsField"
+const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalNumUintAcctTotalNumByteSliceAcctTotalExtraAppPagesAcctTotalAppsCreatedAcctTotalAppsOptedInAcctTotalAssetsCreatedAcctTotalAssetsAcctTotalBoxesAcctTotalBoxBytesAcctIncentiveEligibleAcctLastProposedAcctLastHeartbeatinvalidAcctParamsField"
 
-var _AcctParamsField_index = [...]uint8{0, 11, 25, 37, 53, 74, 96, 116, 136, 158, 173, 187, 204, 226}
+var _AcctParamsField_index = [...]uint16{0, 11, 25, 37, 53, 74, 96, 116, 136, 158, 173, 187, 204, 225, 241, 258, 280}
 
 func (i AcctParamsField) String() string {
 	if i < 0 || i >= AcctParamsField(len(_AcctParamsField_index)-1) {
