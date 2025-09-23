@@ -323,3 +323,17 @@ func TestPragmaTypetrackInvalid(t *testing.T) {
 	res := Process(`#pragma typetrack test`)
 	assert.Empty(t, res.Bools)
 }
+
+func TestDefineRef(t *testing.T) {
+	res := Process(`#pragma version 8
+	#define VALUE 123
+	VALUE`)
+
+	assert.Len(t, res.Symbols, 1)
+	assert.Equal(t, "VALUE", res.Symbols[0].Name())
+	assert.Equal(t, 1, res.Symbols[0].Line())
+
+	assert.Len(t, res.SymbolRefs, 1)
+	assert.Equal(t, "VALUE", res.SymbolRefs[0].String())
+	assert.Equal(t, 2, res.SymbolRefs[0].Line())
+}

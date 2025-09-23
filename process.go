@@ -924,6 +924,8 @@ type parserContext struct {
 
 	defines map[string]bool
 
+	syms []*labelSymbol
+
 	// current state
 	lintline []Op // current line ops for linting; may differ from actual ops (e.g. due to no linting for #define)
 	line     []Op // current line ops
@@ -990,7 +992,15 @@ func (c *parserContext) mustReadDefine() string {
 	name := c.mustRead("name")
 
 	c.defines[name] = true
-	c.refs = append(c.refs, c.args.Curr())
+
+	t := c.args.Curr()
+	c.syms = append(c.syms, &labelSymbol{
+		n:    name,
+		l:    t.l,
+		b:    t.b,
+		e:    t.e,
+		docs: strings.Join(c.comments, "\n"),
+	})
 
 	c.end = true
 	c.lintline = c.line
@@ -3395,6 +3405,7 @@ func Process(source string) *ProcessResult {
 		protos:   map[string]*ProtoExpr{},
 		refc:     map[string]int{},
 		defines:  map[string]bool{},
+		syms:     []*labelSymbol{},
 	}
 
 	var ts []Token
@@ -3576,6 +3587,10 @@ func Process(source string) *ProcessResult {
 		symm[sym.Name()] = true
 	}
 
+	for _, sym := range c.syms {
+		symm[sym.n] = true
+	}
+
 	var mrefs []Token
 	for _, ref := range c.refs {
 		if _, ok := symm[ref.String()]; !ok {
@@ -3592,10 +3607,14 @@ func Process(source string) *ProcessResult {
 		}
 	}
 
-	syms := make([]Symbol, len(lsyms))
+	syms := make([]Symbol, len(lsyms)+len(c.syms))
 
 	for i := 0; i < len(lsyms); i++ {
 		syms[i] = lsyms[i]
+	}
+
+	for i := 0; i < len(c.syms); i++ {
+		syms[i+len(lsyms)] = c.syms[i]
 	}
 
 	result := &ProcessResult{
