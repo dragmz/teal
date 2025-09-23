@@ -1564,6 +1564,14 @@ func (e *AppParamsGetExpr) String() string {
 	return fmt.Sprintf("app_params_get %s", e.Field)
 }
 
+type MimcExpr struct {
+	Field MimcConfig
+}
+
+func (e *MimcExpr) String() string {
+	return fmt.Sprintf("mimc %s", e.Field)
+}
+
 type VoterParamsGetExpr struct {
 	Field VoterParamsField
 }

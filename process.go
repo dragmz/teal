@@ -42,6 +42,7 @@ const (
 	OpArgTypeBlockField
 	OpArgTypeEcGroupField
 	OpArgTypeVoterParamsField
+	OpArgTypeMimcField
 )
 
 var OpArgTypes = []NewOpArgType{
@@ -60,6 +61,7 @@ var OpArgTypes = []NewOpArgType{
 	OpArgTypeBlockField,
 	OpArgTypeEcGroupField,
 	OpArgTypeVoterParamsField,
+	OpArgTypeMimcField,
 }
 
 var OpArgVals map[NewOpArgType][]opItemArgVal
@@ -137,6 +139,16 @@ func init() {
 					Name:    name,
 					Docs:    spec.Note(),
 					Version: spec.version,
+				})
+				vals2[int(spec.field)] = spec.field.String()
+			}
+		case OpArgTypeMimcField:
+			for name, spec := range mimcConfigSpecByName {
+				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
+					Name:    name,
+					Docs:    spec.Note(),
+					Version: spec.Version(),
 				})
 				vals2[int(spec.field)] = spec.field.String()
 			}
@@ -313,6 +325,8 @@ func (t NewOpArgType) String() string {
 		return "EC group field index"
 	case OpArgTypeVoterParamsField:
 		return "voter params field index"
+	case OpArgTypeMimcField:
+		return "MiMC field index"
 	}
 }
 
@@ -541,6 +555,7 @@ var opsList = []opListItem{
 	{"block", opBlock},
 	{"voter_params_get", opVoterParamsGet},
 	{"online_stake", opOnlineStake},
+	{"mimc", opMimc},
 }
 
 type recoverable struct{}
@@ -582,6 +597,7 @@ type ProcessContext interface {
 	mustReadVrfVerifyField(name string) VrfStandard
 	mustReadBlockField(name string) BlockField
 	mustReadVoterParamsField(name string) VoterParamsField
+	mustReadMimcField(name string) MimcConfig
 }
 
 type docContext struct {
@@ -867,6 +883,15 @@ func (c *docContext) mustReadAppParamsField(name string) (v AppParamsField) {
 	return
 }
 
+func (c *docContext) mustReadMimcField(name string) (v MimcConfig) {
+	c.arg(opItemArg{
+		Name: name,
+		Type: OpArgTypeMimcField,
+	})
+
+	return
+}
+
 func (c *docContext) mustReadVoterParamsField(name string) (v VoterParamsField) {
 	c.arg(opItemArg{
 		Name: name,
@@ -1118,6 +1143,22 @@ func (c *parserContext) maybeReadArg() bool {
 	}
 
 	return result
+}
+
+func (c *parserContext) mustReadMimcField(name string) MimcConfig {
+	c.mustReadArg(name)
+
+	f, isconst, err := readMimcField(c.version, c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
+	}
+	return f
 }
 
 func (c *parserContext) mustReadVoterParamsField(name string) VoterParamsField {
@@ -2299,6 +2340,11 @@ func opVoterParamsGet(c ProcessContext) {
 	f := c.mustReadVoterParamsField("f")
 	c.emit(&VoterParamsGetExpr{Field: f})
 }
+func opMimc(c ProcessContext) {
+	c.minVersion(11)
+	f := c.mustReadMimcField("f")
+	c.emit(&MimcExpr{Field: f})
+}
 func opOnlineStake(c ProcessContext) {
 	c.modeMinVersion(ModeSig, 0)
 	c.modeMinVersion(ModeApp, 11)
@@ -3277,6 +3323,19 @@ func (r ProcessResult) DocAt(l int, ch int, opDocShort func(string) string, opDo
 							v, err := strconv.Atoi(tok.String())
 							if err == nil {
 								spec, ok = voterParamsFieldSpecByField(VoterParamsField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeMimcField:
+							spec, ok := mimcConfigSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = mimcConfigSpecByField(MimcConfig(v))
 								if ok {
 									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
 								}

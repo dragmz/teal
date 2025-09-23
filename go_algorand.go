@@ -1048,6 +1048,7 @@ func (fs globalFieldSpec) Note() string {
 }
 
 const incentiveVersion = 11 // block fields, heartbeat
+const mimcVersion = 11
 
 var globalFieldSpecs = [...]globalFieldSpec{
 	// version 0 is the same as v1 (initial release)
@@ -2088,6 +2089,13 @@ func init() {
 		voterParamsFieldSpecByName[s.field.String()] = s
 	}
 
+	equal(len(mimcConfigSpecs), len(mimcConfigNames))
+	for i, s := range mimcConfigSpecs {
+		equal(int(s.field), i)
+		mimcConfigNames[i] = s.field.String()
+		mimcConfigSpecByName[s.field.String()] = s
+	}
+
 	txnTypeMap = make(map[string]uint64)
 	for i, tt := range TxnTypeNames {
 		txnTypeMap[tt] = uint64(i)
@@ -2518,4 +2526,86 @@ func (i VoterParamsField) String() string {
 		return "VoterParamsField(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _VoterParamsField_name[_VoterParamsField_index[i]:_VoterParamsField_index[i+1]]
+}
+
+// MimcConfig is an enum for the `mimc` opcode
+type MimcConfig int
+
+const (
+	// BN254Mp110 is the default MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed "seed"
+	BN254Mp110 MimcConfig = iota
+	// BLS12_381Mp111 is the default MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed "seed"
+	BLS12_381Mp111
+	invalidMimcConfig // compile-time constant for number of fields
+)
+
+var mimcConfigNames [invalidMimcConfig]string
+
+type mimcConfigSpec struct {
+	field MimcConfig
+	doc   string
+}
+
+func (fs mimcConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs mimcConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs mimcConfigSpec) OpVersion() uint64 {
+	return mimcVersion
+}
+func (fs mimcConfigSpec) Version() uint64 {
+	return mimcVersion
+}
+func (fs mimcConfigSpec) Note() string {
+	return fs.doc
+}
+
+var mimcConfigSpecs = [...]mimcConfigSpec{
+	{BN254Mp110, "MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed \"seed\""},
+	{BLS12_381Mp111, "MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed \"seed\""},
+}
+
+func mimcConfigSpecByField(c MimcConfig) (mimcConfigSpec, bool) {
+	if int(c) >= len(mimcConfigSpecs) {
+		return mimcConfigSpec{}, false
+	}
+	return mimcConfigSpecs[c], true
+}
+
+var mimcConfigSpecByName = make(mimcConfigNameSpecMap, len(mimcConfigNames))
+
+type mimcConfigNameSpecMap map[string]mimcConfigSpec
+
+func (s mimcConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// MimcConfigs collects details about the constants used to describe MimcConfigs
+var MimcConfigs = FieldGroup{
+	"Mimc Configurations", "Parameters",
+	mimcConfigNames[:],
+	mimcConfigSpecByName,
+}
+
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[BN254Mp110-0]
+	_ = x[BLS12_381Mp111-1]
+	_ = x[invalidMimcConfig-2]
+}
+
+const _MimcConfig_name = "BN254Mp110BLS12_381Mp111invalidMimcConfig"
+
+var _MimcConfig_index = [...]uint8{0, 10, 24, 41}
+
+func (i MimcConfig) String() string {
+	if i < 0 || i >= MimcConfig(len(_MimcConfig_index)-1) {
+		return "MimcConfig(" + strconv.FormatInt(int64(i), 10) + ")"
+	}
+	return _MimcConfig_name[_MimcConfig_index[i]:_MimcConfig_index[i+1]]
 }
