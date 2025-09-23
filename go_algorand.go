@@ -1918,6 +1918,78 @@ var AcctParamsFields = FieldGroup{
 	acctParamsFieldSpecByName,
 }
 
+// VoterParamsField is an enum for `voter_params_get` opcode
+type VoterParamsField int
+
+const (
+	// VoterBalance is the balance, with pending rewards, from the balance
+	// round.  It is 0 if the account was offline then.
+	VoterBalance VoterParamsField = iota
+
+	// expose voter keys?
+
+	// VoterIncentiveEligible is whether this account opted into block payouts
+	// by paying extra in `keyreg`. Does not reflect eligibility based on
+	// balance. The value is returned for the balance round and is _false_ if
+	// the account was offline then.
+	VoterIncentiveEligible
+
+	invalidVoterParamsField // compile-time constant for number of fields
+)
+
+var voterParamsFieldNames [invalidVoterParamsField]string
+
+type voterParamsFieldSpec struct {
+	field   VoterParamsField
+	ftype   StackType
+	version uint64
+	doc     string
+}
+
+func (fs voterParamsFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs voterParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs voterParamsFieldSpec) OpVersion() uint64 {
+	return incentiveVersion
+}
+func (fs voterParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs voterParamsFieldSpec) Note() string {
+	return fs.doc
+}
+
+var voterParamsFieldSpecs = [...]voterParamsFieldSpec{
+	{VoterBalance, StackUint64, incentiveVersion, "Online stake in microalgos"},
+	{VoterIncentiveEligible, StackBoolean, incentiveVersion, "Had this account opted into block payouts"},
+}
+
+func voterParamsFieldSpecByField(f VoterParamsField) (voterParamsFieldSpec, bool) {
+	if int(f) >= len(voterParamsFieldSpecs) {
+		return voterParamsFieldSpec{}, false
+	}
+	return voterParamsFieldSpecs[f], true
+}
+
+var voterParamsFieldSpecByName = make(voterNameSpecMap, len(voterParamsFieldNames))
+
+type voterNameSpecMap map[string]voterParamsFieldSpec
+
+func (s voterNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// VoterParamsFields describes voter_params_get's immediates
+var VoterParamsFields = FieldGroup{
+	"voter_params", "Fields",
+	voterParamsFieldNames[:],
+	voterParamsFieldSpecByName,
+}
+
 func init() {
 	equal := func(x int, y int) {
 		if x != y {
@@ -2007,6 +2079,13 @@ func init() {
 		equal(int(s.field), i)
 		acctParamsFieldNames[i] = s.field.String()
 		acctParamsFieldSpecByName[s.field.String()] = s
+	}
+
+	equal(len(voterParamsFieldSpecs), len(voterParamsFieldNames))
+	for i, s := range voterParamsFieldSpecs {
+		equal(int(s.field), i)
+		voterParamsFieldNames[i] = s.field.String()
+		voterParamsFieldSpecByName[s.field.String()] = s
 	}
 
 	txnTypeMap = make(map[string]uint64)
@@ -2419,4 +2498,24 @@ var TypeNameDescriptions = map[string]string{
 	string(protocol.AssetTransferTx):   "AssetTransfer",
 	string(protocol.AssetFreezeTx):     "AssetFreeze",
 	string(protocol.ApplicationCallTx): "ApplicationCall",
+}
+
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[VoterBalance-0]
+	_ = x[VoterIncentiveEligible-1]
+	_ = x[invalidVoterParamsField-2]
+}
+
+const _VoterParamsField_name = "VoterBalanceVoterIncentiveEligibleinvalidVoterParamsField"
+
+var _VoterParamsField_index = [...]uint8{0, 12, 34, 57}
+
+func (i VoterParamsField) String() string {
+	if i < 0 || i >= VoterParamsField(len(_VoterParamsField_index)-1) {
+		return "VoterParamsField(" + strconv.FormatInt(int64(i), 10) + ")"
+	}
+	return _VoterParamsField_name[_VoterParamsField_index[i]:_VoterParamsField_index[i+1]]
 }

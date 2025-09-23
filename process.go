@@ -41,6 +41,7 @@ const (
 	OpArgTypeBase64EncodingField
 	OpArgTypeBlockField
 	OpArgTypeEcGroupField
+	OpArgTypeVoterParamsField
 )
 
 var OpArgTypes = []NewOpArgType{
@@ -58,6 +59,7 @@ var OpArgTypes = []NewOpArgType{
 	OpArgTypeBase64EncodingField,
 	OpArgTypeBlockField,
 	OpArgTypeEcGroupField,
+	OpArgTypeVoterParamsField,
 }
 
 var OpArgVals map[NewOpArgType][]opItemArgVal
@@ -119,6 +121,17 @@ func init() {
 
 		case OpArgTypeAppParamsField:
 			for name, spec := range appParamsFieldSpecByName {
+				vals = append(vals, opItemArgVal{
+					Value:   uint64(spec.field),
+					Name:    name,
+					Docs:    spec.Note(),
+					Version: spec.version,
+				})
+				vals2[int(spec.field)] = spec.field.String()
+			}
+
+		case OpArgTypeVoterParamsField:
+			for name, spec := range voterParamsFieldSpecByName {
 				vals = append(vals, opItemArgVal{
 					Value:   uint64(spec.field),
 					Name:    name,
@@ -298,6 +311,8 @@ func (t NewOpArgType) String() string {
 		return "block field"
 	case OpArgTypeEcGroupField:
 		return "EC group field index"
+	case OpArgTypeVoterParamsField:
+		return "voter params field index"
 	}
 }
 
@@ -524,6 +539,8 @@ var opsList = []opListItem{
 	{"gitxnas", opGitxnas},
 	{"vrf_verify", opVrfVerify},
 	{"block", opBlock},
+	{"voter_params_get", opVoterParamsGet},
+	{"online_stake", opOnlineStake},
 }
 
 type recoverable struct{}
@@ -564,6 +581,7 @@ type ProcessContext interface {
 	mustReadBytes(name string) []byte
 	mustReadVrfVerifyField(name string) VrfStandard
 	mustReadBlockField(name string) BlockField
+	mustReadVoterParamsField(name string) VoterParamsField
 }
 
 type docContext struct {
@@ -848,6 +866,15 @@ func (c *docContext) mustReadAppParamsField(name string) (v AppParamsField) {
 
 	return
 }
+
+func (c *docContext) mustReadVoterParamsField(name string) (v VoterParamsField) {
+	c.arg(opItemArg{
+		Name: name,
+		Type: OpArgTypeVoterParamsField,
+	})
+	return
+}
+
 func (c *docContext) mustReadAcctParamsField(name string) (v AcctParamsField) {
 	c.arg(opItemArg{
 		Name: name,
@@ -1091,6 +1118,22 @@ func (c *parserContext) maybeReadArg() bool {
 	}
 
 	return result
+}
+
+func (c *parserContext) mustReadVoterParamsField(name string) VoterParamsField {
+	c.mustReadArg(name)
+
+	f, isconst, err := readVoterParamsField(c.version, c.args.Text())
+	if err != nil {
+		c.failCurr(err)
+	}
+
+	if isconst {
+		c.strs = append(c.strs, c.args.Curr())
+	} else {
+		c.nums = append(c.nums, c.args.Curr())
+	}
+	return f
 }
 
 func (c *parserContext) mustReadAcctParamsField(name string) AcctParamsField {
@@ -2250,6 +2293,17 @@ func opAcctParamsGet(c ProcessContext) {
 	f := c.mustReadAcctParamsField("f")
 	c.emit(&AcctParamsGetExpr{Field: f})
 }
+func opVoterParamsGet(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 11)
+	f := c.mustReadVoterParamsField("f")
+	c.emit(&VoterParamsGetExpr{Field: f})
+}
+func opOnlineStake(c ProcessContext) {
+	c.modeMinVersion(ModeSig, 0)
+	c.modeMinVersion(ModeApp, 11)
+	c.emit(OnlineStakeOp)
+}
 func opMinBalance(c ProcessContext) {
 	c.modeMinVersion(ModeSig, 0)
 	c.modeMinVersion(ModeApp, 3)
@@ -3210,6 +3264,19 @@ func (r ProcessResult) DocAt(l int, ch int, opDocShort func(string) string, opDo
 							v, err := strconv.Atoi(tok.String())
 							if err == nil {
 								spec, ok = appParamsFieldSpecByField(AppParamsField(v))
+								if ok {
+									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+								}
+							}
+
+						case OpArgTypeVoterParamsField:
+							spec, ok := voterParamsFieldSpecByName[tok.String()]
+							if ok {
+								return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
+							}
+							v, err := strconv.Atoi(tok.String())
+							if err == nil {
+								spec, ok = voterParamsFieldSpecByField(VoterParamsField(v))
 								if ok {
 									return fmt.Sprintf("%s = %d\r\n%s", spec.field.String(), spec.field, spec.Note())
 								}

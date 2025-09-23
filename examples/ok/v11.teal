@@ -1,0 +1,3 @@
+#pragma version 11
+voter_params_get VoterIncentiveEligible
+online_stake

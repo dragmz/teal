@@ -1564,6 +1564,14 @@ func (e *AppParamsGetExpr) String() string {
 	return fmt.Sprintf("app_params_get %s", e.Field)
 }
 
+type VoterParamsGetExpr struct {
+	Field VoterParamsField
+}
+
+func (e *VoterParamsGetExpr) String() string {
+	return fmt.Sprintf("voter_params_get %s", e.Field)
+}
+
 type AcctParamsGetExpr struct {
 	Field AcctParamsField
 }
@@ -1635,6 +1643,14 @@ func (e *MinBalanceExpr) String() string {
 }
 
 var MinBalanceOp = &MinBalanceExpr{}
+
+type OnlineStakeExpr struct{}
+
+func (e *OnlineStakeExpr) String() string {
+	return "online_stake"
+}
+
+var OnlineStakeOp = &OnlineStakeExpr{}
 
 type GitxnExpr struct {
 	Index uint8

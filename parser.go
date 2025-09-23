@@ -158,6 +158,44 @@ func readBlockField(v uint64, s string) (BlockField, bool, error) {
 	return BlockField(value), false, nil
 }
 
+func readVoterParams(v uint64, s string) (VoterParamsField, bool, error) {
+	spec, ok := voterParamsFieldSpecByName[s]
+	if ok {
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
+	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return VoterParamsField(value), false, nil
+}
+
+func readVoterParamsField(v uint64, s string) (VoterParamsField, bool, error) {
+	spec, ok := voterParamsFieldSpecByName[s]
+	if ok {
+		needed := spec.version
+		if needed > v {
+			return 0, true, errors.Errorf("not available in this version (need >= %d, got: %d)", needed, v)
+		}
+
+		return spec.field, true, nil
+	}
+
+	value, err := readUint8(s)
+	if err != nil {
+		return 0, false, errors.Wrap(err, "failed to parse txn field")
+	}
+
+	return VoterParamsField(value), false, nil
+}
+
 func readAcctParams(v uint64, s string) (AcctParamsField, bool, error) {
 	spec, ok := acctParamsFieldSpecByName[s]
 	if ok {
