@@ -527,6 +527,7 @@ var opsList = []opListItem{
 }
 
 type recoverable struct{}
+type define struct{}
 
 type ProcessContext interface {
 	comment(text string)
@@ -924,7 +925,7 @@ type parserContext struct {
 
 	defines map[string]bool
 
-	syms []*labelSymbol
+	defs []*labelSymbol
 
 	// current state
 	lintline []Op // current line ops for linting; may differ from actual ops (e.g. due to no linting for #define)
@@ -994,7 +995,7 @@ func (c *parserContext) mustReadDefine() string {
 	c.defines[name] = true
 
 	t := c.args.Curr()
-	c.syms = append(c.syms, &labelSymbol{
+	c.defs = append(c.defs, &labelSymbol{
 		n:    name,
 		l:    t.l,
 		b:    t.b,
@@ -1011,6 +1012,10 @@ func (c *parserContext) mustReadDefine() string {
 func (c *parserContext) mustReadArg(name string) {
 	if !c.args.Scan() {
 		c.failPrev(errors.Errorf("missing arg: %s", name))
+	}
+
+	if c.defines[c.args.Text()] {
+		panic(define{})
 	}
 }
 
@@ -1078,7 +1083,14 @@ func (c *parserContext) mustReadSignature(name string) string {
 }
 
 func (c *parserContext) maybeReadArg() bool {
-	return c.args.Scan()
+	result := c.args.Scan()
+	if result {
+		if c.defines[c.args.Text()] {
+			panic(define{})
+		}
+	}
+
+	return result
 }
 
 func (c *parserContext) mustReadAcctParamsField(name string) AcctParamsField {
@@ -3405,7 +3417,7 @@ func Process(source string) *ProcessResult {
 		protos:   map[string]*ProtoExpr{},
 		refc:     map[string]int{},
 		defines:  map[string]bool{},
-		syms:     []*labelSymbol{},
+		defs:     []*labelSymbol{},
 	}
 
 	var ts []Token
@@ -3431,6 +3443,8 @@ func Process(source string) *ProcessResult {
 			func() {
 				defer func() {
 					switch v := recover().(type) {
+					case define:
+						c.refs = append(c.refs, c.args.Curr())
 					case recoverable:
 						c.emit(Empty) // consider replacing with Raw string expr
 					case nil:
@@ -3537,6 +3551,7 @@ func Process(source string) *ProcessResult {
 						}
 					} else {
 						if c.defines[c.args.Text()] {
+							// the opcode is a defined macro
 							c.refs = append(c.refs, c.args.Curr())
 						} else {
 							c.failCurr(errors.Errorf("unknown opcode: %s", c.args.Text()))
@@ -3587,7 +3602,7 @@ func Process(source string) *ProcessResult {
 		symm[sym.Name()] = true
 	}
 
-	for _, sym := range c.syms {
+	for _, sym := range c.defs {
 		symm[sym.n] = true
 	}
 
@@ -3607,14 +3622,14 @@ func Process(source string) *ProcessResult {
 		}
 	}
 
-	syms := make([]Symbol, len(lsyms)+len(c.syms))
+	syms := make([]Symbol, len(lsyms)+len(c.defs))
 
 	for i := 0; i < len(lsyms); i++ {
 		syms[i] = lsyms[i]
 	}
 
-	for i := 0; i < len(c.syms); i++ {
-		syms[i+len(lsyms)] = c.syms[i]
+	for i := 0; i < len(c.defs); i++ {
+		syms[i+len(lsyms)] = c.defs[i]
 	}
 
 	result := &ProcessResult{

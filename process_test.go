@@ -337,3 +337,27 @@ func TestDefineRef(t *testing.T) {
 	assert.Equal(t, "VALUE", res.SymbolRefs[0].String())
 	assert.Equal(t, 2, res.SymbolRefs[0].Line())
 }
+
+func TestDefineValueRef(t *testing.T) {
+	res := Process(`#pragma version 8
+	#define VALUE 123
+	int VALUE`)
+
+	assert.Len(t, res.Symbols, 1)
+	assert.Equal(t, "VALUE", res.Symbols[0].Name())
+	assert.Equal(t, 1, res.Symbols[0].Line())
+
+	assert.Len(t, res.SymbolRefs, 1)
+	assert.Equal(t, "VALUE", res.SymbolRefs[0].String())
+	assert.Equal(t, 2, res.SymbolRefs[0].Line())
+}
+
+func TestStringDoesConflictWithDefine(t *testing.T) {
+	res := Process(`#pragma version 8
+	#define VALUE "test"
+	byte "VALUE"`)
+
+	assert.Len(t, res.Strings, 1)
+	assert.Len(t, res.Symbols, 1)
+	assert.Empty(t, res.SymbolRefs)
+}
