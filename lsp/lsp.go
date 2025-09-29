@@ -66,8 +66,11 @@ type lsp struct {
 	tp *textproto.Reader
 	w  *bufio.Writer
 
-	debug              *bufio.Writer
+	debug *bufio.Writer
+
 	prepareDiagnostics PrepareDiagnosticsHandler
+	prepareCodeLens    PrepareCodeLensHandler
+	prepareInlayHints  PrepareInlayHintsHandler
 
 	opDocShort OpDocHandler
 	opDocExtra OpDocHandler
@@ -103,6 +106,24 @@ type PrepareDiagnosticsHandler func(source string) []LspDiagnostic
 func WithPrepareDiagnosticsHandler(h PrepareDiagnosticsHandler) LspOption {
 	return func(l *lsp) error {
 		l.prepareDiagnostics = h
+		return nil
+	}
+}
+
+type PrepareCodeLensHandler func(source string) []lspCodeLens
+
+func WithPrepareCodeLensHandler(h PrepareCodeLensHandler) LspOption {
+	return func(l *lsp) error {
+		l.prepareCodeLens = h
+		return nil
+	}
+}
+
+type PrepareInlayHintsHandler func(source string) []lspInlayHint
+
+func WithPrepareInlayHintsHandler(h PrepareInlayHintsHandler) LspOption {
+	return func(l *lsp) error {
+		l.prepareInlayHints = h
 		return nil
 	}
 }
@@ -1354,7 +1375,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			doc, res, err := l.prepare(req.Params.TextDocument.Uri)
 			if err != nil {
 				return err
 			}
@@ -1382,6 +1403,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				}
 			}
 
+			if l.prepareCodeLens != nil {
+				more := l.prepareCodeLens(doc.s)
+				cls = append(cls, more...)
+			}
+
 			return l.success(h.Id, cls)
 
 		case "textDocument/inlayHint":
@@ -1390,7 +1416,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			doc, res, err := l.prepare(req.Params.TextDocument.Uri)
 			if err != nil {
 				return err
 			}
@@ -1431,6 +1457,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					})
 
 				}
+			}
+
+			if l.prepareInlayHints != nil {
+				more := l.prepareInlayHints(doc.s)
+				ihs = append(ihs, more...)
 			}
 
 			return l.success(h.Id, ihs)
