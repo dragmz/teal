@@ -497,6 +497,11 @@ type lspDocumentSymbolParams struct {
 	TextDocument *lspDocumentSymbolTextDocument `json:"textDocument"`
 }
 
+type tealGotoPcCommandArgs struct {
+	Uri string `json:"uri"`
+	Pc  int    `json:"pc"`
+}
+
 type tealUpdateVersion struct {
 	Uri     string `json:"uri"`
 	Version uint64 `json:"version"`
@@ -1060,6 +1065,45 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			}
 
 			switch req.Params.Command {
+			case "teal.pc.resolve":
+				var body lspWorkspaceExecuteCommandBody[tealGotoPcCommandArgs]
+				err := readInto(b, &body)
+				if err != nil {
+					return err
+				}
+
+				if l.prepareOffsets == nil {
+					return l.fail(h.Id, lspError{
+						Code:    2,
+						Message: "prepare offsets handler is not set",
+					})
+				}
+
+				doc := l.docs[body.Params.Arguments.Uri]
+				if doc == nil {
+					return errors.New("doc not found")
+				}
+
+				offsets := l.prepareOffsets(doc.s)
+
+				loc, ok := offsets[body.Params.Arguments.Pc]
+				if !ok {
+					return l.fail(h.Id, lspError{
+						Code:    3,
+						Message: "pc not found",
+					})
+				}
+
+				return l.request("textDocument/definition", lspDefinitionRequestParams{
+					TextDocument: lspTextDocumentIdentifier{
+						Uri: body.Params.Arguments.Uri,
+					},
+					Position: LspPosition{
+						Line:      loc.Line,
+						Character: loc.Column,
+					},
+				})
+
 			case "teal.version.update":
 				var body lspWorkspaceExecuteCommandBody[[]tealUpdateVersion]
 				err := readInto(b, &body)
@@ -2137,6 +2181,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 							"teal.value.replace",
 							"teal.call.remove",
 							"teal.version.update",
+							"teal.pc.resolve",
 						},
 					},
 					RenameProvider: &lspRenameOptions{
