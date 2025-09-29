@@ -71,6 +71,7 @@ type lsp struct {
 	prepareDiagnostics PrepareDiagnosticsHandler
 	prepareCodeLens    PrepareCodeLensHandler
 	prepareInlayHints  PrepareInlayHintsHandler
+	prepareSymbols     PrepareSymbolsHandler
 
 	opDocShort OpDocHandler
 	opDocExtra OpDocHandler
@@ -124,6 +125,15 @@ type PrepareInlayHintsHandler func(source string) []LspInlayHint
 func WithPrepareInlayHintsHandler(h PrepareInlayHintsHandler) LspOption {
 	return func(l *lsp) error {
 		l.prepareInlayHints = h
+		return nil
+	}
+}
+
+type PrepareSymbolsHandler func(source string) []LspDocumentSymbol
+
+func WithPrepareSymbolsHandler(h PrepareSymbolsHandler) LspOption {
+	return func(l *lsp) error {
+		l.prepareSymbols = h
 		return nil
 	}
 }
@@ -326,7 +336,7 @@ type lspInitializeResult struct {
 	Capabilities *lspServerCapabilities `json:"capabilities"`
 }
 
-type lspSymbolKind int
+type LspSymbolKind int
 
 const (
 	LspSymbolKindFile          = 1
@@ -357,9 +367,9 @@ const (
 	LspSymbolKindTypeParameter = 26
 )
 
-type lspDocumentSymbol struct {
+type LspDocumentSymbol struct {
 	Name           string        `json:"name"`
-	Kind           lspSymbolKind `json:"kind"`
+	Kind           LspSymbolKind `json:"kind"`
 	Range          LspRange      `json:"range"`
 	SelectionRange LspRange      `json:"selectionRange"`
 }
@@ -1951,14 +1961,19 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			_, res, err := l.prepare(req.Params.TextDocument.Uri)
+			doc, res, err := l.prepare(req.Params.TextDocument.Uri)
 			if err != nil {
 				return err
 			}
 
-			syms := []lspDocumentSymbol{}
+			syms := []LspDocumentSymbol{}
 			for _, s := range res.Symbols {
 				syms = append(syms, prepareSymbol(s))
+			}
+
+			if l.prepareSymbols != nil {
+				more := l.prepareSymbols(doc.s)
+				syms = append(syms, more...)
 			}
 
 			return l.success(h.Id, syms)
@@ -2306,7 +2321,7 @@ func prepareValueSemToken(v teal.Token) teal.SemanticToken {
 	}
 }
 
-func prepareSymbol(s teal.Symbol) lspDocumentSymbol {
+func prepareSymbol(s teal.Symbol) LspDocumentSymbol {
 	r := LspRange{
 		Start: LspPosition{
 			Line:      s.Line(),
@@ -2318,7 +2333,7 @@ func prepareSymbol(s teal.Symbol) lspDocumentSymbol {
 		},
 	}
 
-	ds := lspDocumentSymbol{
+	ds := LspDocumentSymbol{
 		Name:           s.Name(),
 		Kind:           LspSymbolKindMethod,
 		Range:          r,
