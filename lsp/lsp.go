@@ -110,7 +110,7 @@ func WithPrepareDiagnosticsHandler(h PrepareDiagnosticsHandler) LspOption {
 	}
 }
 
-type PrepareCodeLensHandler func(source string) []lspCodeLens
+type PrepareCodeLensHandler func(source string) []LspCodeLens
 
 func WithPrepareCodeLensHandler(h PrepareCodeLensHandler) LspOption {
 	return func(l *lsp) error {
@@ -119,7 +119,7 @@ func WithPrepareCodeLensHandler(h PrepareCodeLensHandler) LspOption {
 	}
 }
 
-type PrepareInlayHintsHandler func(source string) []lspInlayHint
+type PrepareInlayHintsHandler func(source string) []LspInlayHint
 
 func WithPrepareInlayHintsHandler(h PrepareInlayHintsHandler) LspOption {
 	return func(l *lsp) error {
@@ -231,7 +231,7 @@ type lspCompletionItem struct {
 	TextEditText        string        `json:"textEditText,omitempty"`
 	AdditionalTextEdits []lspTextEdit `json:"additionalTextEdits,omitempty"`
 	CommitCharacters    []string      `json:"commitCharacters,omitempty"`
-	Command             *lspCommand   `json:"command,omitempty"`
+	Command             *LspCommand   `json:"command,omitempty"`
 	Data                interface{}   `json:"data,omitempty"`
 }
 
@@ -586,7 +586,7 @@ type lspPrepareRenameResponse struct {
 	Placeholder string   `json:"placeholder"`
 }
 
-type lspCommand struct {
+type LspCommand struct {
 	Title     string        `json:"title"`
 	Command   string        `json:"command"`
 	Arguments []interface{} `json:"arguments,omitempty"`
@@ -628,7 +628,7 @@ type lspCodeAction struct {
 	Diagnostics []LspDiagnostic   `json:"diagnostics,omitempty"`
 	IsPreferred *bool             `json:"isPreferred,omitempty"`
 	Edit        *lspWorkspaceEdit `json:"edit,omitempty"`
-	Command     *lspCommand       `json:"command,omitempty"`
+	Command     *LspCommand       `json:"command,omitempty"`
 }
 
 type lspDidCloseTextDocument struct {
@@ -794,7 +794,7 @@ type lspInlayHintRequestParams struct {
 	Range        LspRange                  `json:"range,omitempty"`
 }
 
-type lspInlayHint struct {
+type LspInlayHint struct {
 	Position    LspPosition `json:"position"`
 	Label       string      `json:"label"`
 	Kind        *int        `json:"kind,omitempty"`
@@ -816,9 +816,9 @@ type lspCodeLensRequestParams struct {
 	TextDocument lspTextDocumentIdentifier `json:"textDocument"`
 }
 
-type lspCodeLens struct {
+type LspCodeLens struct {
 	Range   LspRange    `json:"range"`
-	Command *lspCommand `json:"command,omitempty"`
+	Command *LspCommand `json:"command,omitempty"`
 	Data    any         `json:"data,omitempty"`
 }
 
@@ -1380,13 +1380,13 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			var cls []lspCodeLens
+			var cls []LspCodeLens
 
 			if l.config.LensRefs {
 				for _, sym := range res.Symbols {
 					count := res.RefCounts[sym.Name()]
 					if count > 0 {
-						cls = append(cls, lspCodeLens{
+						cls = append(cls, LspCodeLens{
 							Range: LspRange{
 								Start: LspPosition{
 									Line: sym.StartLine(),
@@ -1395,7 +1395,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 									Line: sym.EndLine(),
 								},
 							},
-							Command: &lspCommand{
+							Command: &LspCommand{
 								Title: fmt.Sprintf("refs: %d", count),
 							},
 						})
@@ -1421,7 +1421,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
-			ihs := []lspInlayHint{}
+			ihs := []LspInlayHint{}
 			parameter := new(int)
 			*parameter = 2
 
@@ -1432,7 +1432,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			if l.config.InlayNamed {
 				for _, named := range hs.Named {
-					ihs = append(ihs, lspInlayHint{
+					ihs = append(ihs, LspInlayHint{
 						Position: LspPosition{
 							Line:      named.T.Line(),
 							Character: named.T.End(),
@@ -1446,7 +1446,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 
 			if l.config.InlayDecoded {
 				for _, decoded := range hs.Decoded {
-					ihs = append(ihs, lspInlayHint{
+					ihs = append(ihs, LspInlayHint{
 						Position: LspPosition{
 							Line:      decoded.T.Line(),
 							Character: decoded.T.End(),
@@ -1783,7 +1783,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					cas = append(cas, lspCodeAction{
 						Title: title,
 						Kind:  &kind,
-						Command: &lspCommand{
+						Command: &LspCommand{
 							Title:   title,
 							Command: "teal.call.remove",
 							Arguments: []interface{}{
@@ -1807,7 +1807,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				cas = append(cas, lspCodeAction{
 					Title: fmt.Sprintf("Create label '%s'", ref.String()),
 					Kind:  &kind,
-					Command: &lspCommand{
+					Command: &LspCommand{
 						Title:   "Create label",
 						Command: "teal.label.create",
 						Arguments: []interface{}{
@@ -1827,7 +1827,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				cas = append(cas, lspCodeAction{
 					Title: fmt.Sprintf("Replace with '%s'", named.Name),
 					Kind:  &kind,
-					Command: &lspCommand{
+					Command: &LspCommand{
 						Title:   "Replace with named const",
 						Command: "teal.value.replace",
 						Arguments: []interface{}{
@@ -1855,7 +1855,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				cas = append(cas, lspCodeAction{
 					Title: fmt.Sprintf("Replace with literal '%s'", named.Value),
 					Kind:  &kind,
-					Command: &lspCommand{
+					Command: &LspCommand{
 						Title:   "Replace with literal",
 						Command: "teal.value.replace",
 						Arguments: []interface{}{
@@ -1885,7 +1885,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						cas = append(cas, lspCodeAction{
 							Title: fmt.Sprintf("Update version to %d", v.Version),
 							Kind:  &kind,
-							Command: &lspCommand{
+							Command: &LspCommand{
 								Title:   "Update version",
 								Command: "teal.version.update",
 								Arguments: []interface{}{
