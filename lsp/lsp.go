@@ -399,6 +399,8 @@ type tealInitializationOptions struct {
 	InlayNamed     *bool `json:"inlayNamed,omitempty"`
 	InlayDecoded   *bool `json:"inlayDecoded,omitempty"`
 	LensRefs       *bool `json:"lensRefs,omitempty"`
+	PcLens         *bool `json:"pcLens,omitempty"`
+	PcInlay        *bool `json:"pcInlay,omitempty"`
 }
 
 type tealConfig struct {
@@ -406,6 +408,8 @@ type tealConfig struct {
 	InlayNamed     bool
 	InlayDecoded   bool
 	LensRefs       bool
+	PcLens         bool
+	PcInlay        bool
 }
 
 type lspCompletionCompletionItemClientCapabilities struct {
@@ -1471,6 +1475,29 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				cls = append(cls, more...)
 			}
 
+			if l.prepareOffsets != nil {
+				if l.config.PcLens {
+					offsets := l.prepareOffsets(doc.s)
+					for pc, loc := range offsets {
+						cls = append(cls, LspCodeLens{
+							Range: LspRange{
+								Start: LspPosition{
+									Line:      loc.Line,
+									Character: loc.Column,
+								},
+								End: LspPosition{
+									Line:      loc.Line,
+									Character: loc.Column,
+								},
+							},
+							Command: &LspCommand{
+								Title: fmt.Sprintf("pc: %d", pc),
+							},
+						})
+					}
+				}
+			}
+
 			return l.success(h.Id, cls)
 
 		case "textDocument/inlayHint":
@@ -1525,6 +1552,22 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 			if l.prepareInlayHints != nil {
 				more := l.prepareInlayHints(doc.s)
 				ihs = append(ihs, more...)
+			}
+
+			if l.prepareOffsets != nil {
+				if l.config.PcInlay {
+					offsets := l.prepareOffsets(doc.s)
+					for pc, loc := range offsets {
+						ihs = append(ihs, LspInlayHint{
+							Position: LspPosition{
+								Line:      loc.Line,
+								Character: loc.Column,
+							},
+							Label: fmt.Sprintf("pc: %d", pc),
+							Kind:  parameter,
+						})
+					}
+				}
 			}
 
 			return l.success(h.Id, ihs)
