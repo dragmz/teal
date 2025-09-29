@@ -72,6 +72,7 @@ type lsp struct {
 	prepareCodeLens    PrepareCodeLensHandler
 	prepareInlayHints  PrepareInlayHintsHandler
 	prepareSymbols     PrepareSymbolsHandler
+	prepareOffsets     PrepareOffsetsHandler
 
 	opDocShort OpDocHandler
 	opDocExtra OpDocHandler
@@ -134,6 +135,20 @@ type PrepareSymbolsHandler func(source string) []LspDocumentSymbol
 func WithPrepareSymbolsHandler(h PrepareSymbolsHandler) LspOption {
 	return func(l *lsp) error {
 		l.prepareSymbols = h
+		return nil
+	}
+}
+
+type SourceLocation struct {
+	Line   int
+	Column int
+}
+
+type PrepareOffsetsHandler func(source string) map[int]SourceLocation
+
+func WithPrepareOffsetsHandler(h PrepareOffsetsHandler) LspOption {
+	return func(l *lsp) error {
+		l.prepareOffsets = h
 		return nil
 	}
 }
