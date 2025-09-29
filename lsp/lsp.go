@@ -524,9 +524,10 @@ type lspRenameRequestTextDocument struct {
 }
 
 type lspRenameRequestParams struct {
-	TextDocument lspRenameRequestTextDocument `json:"textDocument"`
-	Position     LspPosition
-	NewName      string `json:"newName"`
+	TextDocument  lspRenameRequestTextDocument `json:"textDocument"`
+	Position      LspPosition
+	NewName       string      `json:"newName"`
+	WorkDoneToken interface{} `json:"workDoneToken,omitempty"`
 }
 
 type lspPrepareRenameRequestTextDocument struct {
@@ -534,8 +535,9 @@ type lspPrepareRenameRequestTextDocument struct {
 }
 
 type lspPrepareRenameRequestParams struct {
-	TextDocument lspPrepareRenameRequestTextDocument `json:"textDocument"`
-	Position     LspPosition
+	TextDocument  lspPrepareRenameRequestTextDocument `json:"textDocument"`
+	Position      LspPosition
+	WorkDoneToken interface{} `json:"workDoneToken,omitempty"`
 }
 
 type lspDocumentColorRequestTextDocument struct {
@@ -675,8 +677,34 @@ type lspNotification struct {
 	Params  interface{} `json:"params"`
 }
 
+type lspProgressParams struct {
+	Token interface{} `json:"token"`
+	Value interface{} `json:"value"`
+}
+
+type lspWorkDoneProgressBegin struct {
+	Kind        string `json:"kind"`
+	Title       string `json:"title"`
+	Cancellable *bool  `json:"cancellable,omitempty"`
+	Message     string `json:"message,omitempty"`
+	Percentage  *int   `json:"percentage,omitempty"`
+}
+
+type lspWorkDoneProgressReport struct {
+	Kind        string `json:"kind"`
+	Cancellable *bool  `json:"cancellable,omitempty"`
+	Message     string `json:"message,omitempty"`
+	Percentage  *int   `json:"percentage,omitempty"`
+}
+
+type lspWorkDoneProgressEnd struct {
+	Kind    string `json:"kind"`
+	Message string `json:"message,omitempty"`
+}
+
 type lspRenameOptions struct {
-	PrepareProvider *bool `json:"prepareProvider,omitempty"`
+	PrepareProvider  *bool `json:"prepareProvider,omitempty"`
+	WorkDoneProgress *bool `json:"workDoneProgress,omitempty"`
 }
 
 type lspDocumentHighlightRequestTextDocument struct {
@@ -858,6 +886,31 @@ func (l *lsp) notifyDiagnostics(uri string, lds []LspDiagnostic) error {
 	return l.notify("textDocument/publishDiagnostics", lspPublishDiagnostic{
 		Uri:         uri,
 		Diagnostics: lds,
+	})
+}
+
+func (l *lsp) notifyProgress(token interface{}, value interface{}) error {
+	if token == nil {
+		return nil
+	}
+	return l.notify("$/progress", lspProgressParams{
+		Token: token,
+		Value: value,
+	})
+}
+
+func (l *lsp) reportProgressBegin(token interface{}, title string, message string) error {
+	return l.notifyProgress(token, lspWorkDoneProgressBegin{
+		Kind:    "begin",
+		Title:   title,
+		Message: message,
+	})
+}
+
+func (l *lsp) reportProgressEnd(token interface{}, message string) error {
+	return l.notifyProgress(token, lspWorkDoneProgressEnd{
+		Kind:    "end",
+		Message: message,
 	})
 }
 
@@ -1169,12 +1222,26 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
+			err = l.reportProgressBegin(req.Params.WorkDoneToken, "Preparing Rename", "Checking symbol for rename")
+			if err != nil {
+				l.trace(fmt.Sprintf("Failed to report progress begin: %s", err))
+			}
+
 			_, res, err := l.prepare(req.Params.TextDocument.Uri)
 			if err != nil {
+				l.reportProgressEnd(req.Params.WorkDoneToken, "Prepare rename failed")
 				return err
 			}
 
-			for _, sym := range res.SymbolsWithin(req.Params.Position) {
+			symbols := res.SymbolsWithin(req.Params.Position)
+			if len(symbols) > 0 {
+				sym := symbols[0]
+
+				err = l.reportProgressEnd(req.Params.WorkDoneToken, "Symbol ready for rename")
+				if err != nil {
+					l.trace(fmt.Sprintf("Failed to report progress end: %s", err))
+				}
+
 				return l.success(h.Id, lspPrepareRenameResponse{
 					Range: LspRange{
 						Start: LspPosition{
@@ -1190,7 +1257,9 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				})
 			}
 
-			for _, ref := range res.SymbolRefsWithin(req.Params.Position) {
+			references := res.SymbolRefsWithin(req.Params.Position)
+			if len(references) > 0 {
+				ref := references[0]
 				return l.success(h.Id, lspPrepareRenameResponse{
 					Range: LspRange{
 						Start: LspPosition{
@@ -1206,6 +1275,11 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				})
 			}
 
+			err = l.reportProgressEnd(req.Params.WorkDoneToken, "No symbol found for rename")
+			if err != nil {
+				l.trace(fmt.Sprintf("Failed to report progress end: %s", err))
+			}
+
 			return l.success(h.Id, struct{}{})
 
 		case "textDocument/rename":
@@ -1214,8 +1288,14 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				return err
 			}
 
+			err = l.reportProgressBegin(req.Params.WorkDoneToken, "Renaming Symbol", fmt.Sprintf("Renaming to '%s'", req.Params.NewName))
+			if err != nil {
+				l.trace(fmt.Sprintf("Failed to report progress begin: %s", err))
+			}
+
 			_, res, err := l.prepare(req.Params.TextDocument.Uri)
 			if err != nil {
+				l.reportProgressEnd(req.Params.WorkDoneToken, "Rename failed")
 				return err
 			}
 
@@ -1239,6 +1319,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				for _, ref := range res.SymRefByName(edited.String()) {
 					chs = append(chs, prepareRenameSymbolRefEdit(ref, req.Params.NewName))
 				}
+			}
+
+			message := fmt.Sprintf("Renamed %d locations", len(chs))
+			err = l.reportProgressEnd(req.Params.WorkDoneToken, message)
+			if err != nil {
+				l.trace(fmt.Sprintf("Failed to report progress end: %s", err))
 			}
 
 			return l.success(h.Id, lspWorkspaceEdit{
@@ -1827,7 +1913,7 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 				hs = append(hs, prepareSymbolRefHighlight(ref))
 			}
 
-			l.success(h.Id, hs)
+			return l.success(h.Id, hs)
 		case "textDocument/documentSymbol":
 			req, err := read[lspDocumentSymbolRequest](b)
 			if err != nil {
@@ -1993,7 +2079,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 						},
 					},
 					RenameProvider: &lspRenameOptions{
-						PrepareProvider: rename,
+						PrepareProvider:  rename,
+						WorkDoneProgress: rename,
 					},
 					SemanticTokensProvider: semanticTokensProvider,
 					CompletionProvider: &lspCompletionProvider{
