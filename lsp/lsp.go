@@ -2154,6 +2154,12 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					if req.Params.InitializationOptions.LensRefs != nil {
 						l.config.LensRefs = *req.Params.InitializationOptions.LensRefs
 					}
+					if req.Params.InitializationOptions.PcInlay != nil {
+						l.config.PcInlay = *req.Params.InitializationOptions.PcInlay
+					}
+					if req.Params.InitializationOptions.PcLens != nil {
+						l.config.PcLens = *req.Params.InitializationOptions.PcLens
+					}
 				}
 			}
 
