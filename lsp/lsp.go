@@ -1094,14 +1094,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					})
 				}
 
-				return l.request("textDocument/definition", lspDefinitionRequestParams{
-					TextDocument: lspTextDocumentIdentifier{
-						Uri: body.Params.Arguments.Uri,
-					},
-					Position: LspPosition{
-						Line:      loc.Line,
-						Character: loc.Column,
-					},
+				return l.success(h.Id, []LspPosition{
+					{Line: loc.Line, Character: loc.Column},
 				})
 
 			case "teal.version.update":
