@@ -1094,8 +1094,8 @@ func (l *lsp) handle(h jsonRpcHeader, b []byte) error {
 					})
 				}
 
-				return l.success(h.Id, []LspPosition{
-					{Line: loc.Line, Character: loc.Column},
+				return l.success(h.Id, LspPosition{
+					Line: loc.Line, Character: loc.Column,
 				})
 
 			case "teal.version.update":
