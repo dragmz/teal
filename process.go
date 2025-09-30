@@ -1078,9 +1078,6 @@ func (c *parserContext) mustReadPragma(argName string) uint64 {
 	case "typetrack":
 		c.mcrs = append(c.mcrs, c.args.Curr())
 		c.mustReadBool("typetrack value")
-
-		tok := c.args.Curr()
-		c.vtok = &tok
 	case "version":
 		c.mcrs = append(c.mcrs, c.args.Curr())
 		v := c.mustReadInt("version value")
