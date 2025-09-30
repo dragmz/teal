@@ -68,6 +68,20 @@ func (e *Sha256Expr) Name() string {
 
 var Sha256 = &Sha256Expr{}
 
+// sha512
+
+type Sha512Expr struct{}
+
+func (e *Sha512Expr) String() string {
+	return e.Name()
+}
+
+func (e *Sha512Expr) Name() string {
+	return "sha512"
+}
+
+var Sha512 = &Sha512Expr{}
+
 // keccak256
 
 type Keccak256Expr struct{}

@@ -1,0 +1,4 @@
+#pragma version 13
+byte "test"
+sha512
+sumhash512

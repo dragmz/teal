@@ -367,9 +367,7 @@ var opsList = []opListItem{
 	{"addr", opAddr},
 	{"err", opErr},
 	{"sha256", opSHA256},
-	{"keccak256", opKeccak256},
-	{"sha512_256", opSHA512_256},
-	{"sha256", opSHA256},
+	{"sha512", opSHA512},
 	{"keccak256", opKeccak256},
 	{"sha512_256", opSHA512_256},
 	{"ed25519verify", opEd25519Verify},
@@ -1802,6 +1800,11 @@ func opSHA256(c ProcessContext) {
 	c.emit(Sha256)
 }
 
+func opSHA512(c ProcessContext) {
+	c.minVersion(13)
+	c.emit(Sha512)
+}
+
 func opKeccak256(c ProcessContext) {
 	c.minVersion(1)
 	c.emit(Keccak256)
@@ -2468,7 +2471,7 @@ func opSHA3_256(c ProcessContext) {
 	c.emit(Sha3256)
 }
 func opSumHash512(c ProcessContext) {
-	c.minVersion(10)
+	c.minVersion(13)
 	c.emit(SumHash512)
 }
 func opFalconVerify(c ProcessContext) {
